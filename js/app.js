@@ -412,9 +412,9 @@ async function showFavStops(){focusRoutes=null;rtFocus=false;syncVehVis();backSt
   await refreshFavStops();clearInterval(favTimer);favTimer=setInterval(()=>{if(view==="favs"&&panel.style.display!=="none")refreshFavStops();else clearInterval(favTimer)},30000)}
 async function refreshFavStops(){let d=null;try{d=await getTrips()}catch(e){}
   for(const id of FAV.stops){const box=document.getElementById("fv_"+id);if(!box||!ST[id])continue;let tile;try{tile=await loadTT(ST[id])}catch(e){continue}
-    const {rows,nowMin}=buildRows(id,tile[id]||[]);const soon=rows.filter(r=>r.up.length).sort((a,b)=>a.up[0]-b.up[0]).slice(0,5);
-    if(!soon.length){box.innerHTML=`<div class="sub">No more departures today.</div>`;continue}
-    box.innerHTML=soon.map((r,k)=>rowHTML(r,nowMin,k)).join("");
+    const {rows,nowMin}=buildRows(id,tile[id]||[]);const soon=rows;
+    if(!soon.length){box.innerHTML=`<div class="sub">No scheduled departures from this stop.</div>`;continue}
+    const sc=box.scrollTop;box.innerHTML=`<div class="th"><div>Route (${new Set(rows.map(r=>r.ri)).size})</div><div>Next</div><div>Later departures</div></div>`+soon.map((r,k)=>rowHTML(r,nowMin,k)).join("");box.scrollTop=sc;
     box.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,false));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,false));
     if(d)computeLive(id,soon,d).forEach((v,k)=>{const c=box.querySelector(`[data-live="${k}"]`);if(c&&v){c.className=v.cls;c.innerHTML=v.html;c.title=v.title}})}}
 // ---------- saved routes

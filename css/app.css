@@ -188,3 +188,6 @@ body:not(.light) .rtdirs button.on{background:var(--accent);border-color:var(--a
 .sbox{z-index:5}
 .results{z-index:30}
 #chips{position:relative;z-index:1}
+
+.favtt{max-height:340px;overflow-y:auto;scrollbar-width:thin}
+.favtt .th{position:sticky;top:0;background:var(--panel);z-index:1}
