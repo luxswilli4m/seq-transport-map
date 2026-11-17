@@ -184,3 +184,7 @@ body:not(.light) .rtdirs button.on{background:var(--accent);border-color:var(--a
 .lvo{color:#16a34a}.lvl{color:#d97706}.lvx{color:#dc2626}
 .rtlive .lvrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--hover);cursor:pointer;font-size:13.5px;min-height:44px}
 .rtlive .lvrow span:last-child{margin-left:auto;font-weight:600}
+
+.sbox{z-index:5}
+.results{z-index:30}
+#chips{position:relative;z-index:1}
