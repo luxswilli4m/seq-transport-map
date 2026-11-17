@@ -2,7 +2,8 @@
 "use strict";
 const BASE = new URL(".", location.href).href;
 const net = await (await fetch(BASE + "data/network.json")).json();
-const DATA = net.data, ZONES = net.zones, BUSWAY = net.busway, BWS = net.bwStations;
+const DATA = net.data, ZONES = net.zones, BUSWAY = net.busway, BWS = net.bwStations, KIDS = net.kids || {};
+const RELAY = "https://seq-transport-live.luc4swilli4ms.workers.dev";
 const R = DATA.routes, ST = DATA.stops;
 
 const ZCOL = {1:"#9B5DE5",2:"#2F86F5",3:"#2FBF5F",4:"#F28C1A",5:"#E53935",6:"#17B5D6",7:"#E8B800"};
@@ -89,7 +90,7 @@ function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
 src("bwlines",FC(bwLineF));src("trainl",FC(net2.train));src("ferryl",FC(net2.ferry));src("traml",FC(net2.tram));
 ["busway","busstn","train","ferry","tram","bus"].forEach(k=>src("pt_"+k,FC(ptF(k))));
-src("hl",FC([]));src("arrows",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
+src("veh",FC([]));src("hl",FC([]));src("arrows",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
 
 // ---------- overlay layers
 const L = [];
@@ -115,6 +116,8 @@ add({id:"zlabels",type:"symbol",source:"zlabels",maxzoom:12.5,layout:{"text-fiel
 add({id:"hl-case",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":["case",["==",["get","mode"],"web"],6,10],"line-opacity":.95}});
 add({id:"hl-line",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["case",["==",["get","mode"],"web"],3.4,6]}});
 add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"loopArrow","icon-size":["interpolate",["linear"],["zoom"],9,1,15,1.2],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
+add({id:"veh-dot",type:"circle",source:"veh",paint:{"circle-color":["get","c"],"circle-radius":["interpolate",["linear"],["zoom"],9,2.6,12,4.5,13.3,8,16,10],"circle-stroke-color":"#0b0f17","circle-stroke-width":["interpolate",["linear"],["zoom"],9,1.2,14,2.2],"circle-opacity":["case",["get","dim"],.25,1],"circle-stroke-opacity":["case",["get","dim"],.25,1]}});
+add({id:"veh-lbl",type:"symbol",source:"veh",minzoom:13.3,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":10.5,"text-allow-overlap":true,"text-ignore-placement":true},paint:{"text-color":["get","tc"],"text-opacity":["case",["get","dim"],.3,1]}});
 // stops & stations
 add({id:"stops",type:"circle",source:"pt_bus",minzoom:13.5,paint:{"circle-color":"#E463A4","circle-radius":["interpolate",["linear"],["zoom"],14,3.6,17,6.5],"circle-stroke-color":THEME[theme].stopStroke,"circle-stroke-width":1.4}});
 add({id:"hlstops",type:"circle",source:"hlstops",paint:{"circle-color":"#ffffff","circle-radius":4.5,"circle-stroke-color":["get","c"],"circle-stroke-width":2.5}});
@@ -152,7 +155,8 @@ const GROUPS=[
  ["stops","Bus stops","#E463A4",["stops"]],
  ["train","Trains","#4778B2",["train-case","train-line","train-pt","train-lbl"]],
  ["ferry","Ferries","#36A9B4",["ferry-line","ferry-pt"]],
- ["tram","Tram","#FFD400",["tram-case","tram-line","tram-pt"]]];
+ ["tram","Tram","#FFD400",["tram-case","tram-line","tram-pt"]],
+ ["live","Live vehicles","#16a34a",["veh-dot","veh-lbl"]]];
 const chipBox=document.getElementById("chips");const chipState={};const chipEl={};let soloSnap=null,soloKey=null;
 function setGroup(k,vis){GROUPS.find(g=>g[0]===k)[3].forEach(id=>map.setLayoutProperty(id,"visibility",vis?"visible":"none"))}
 function renderChip(k){const el=chipEl[k],st=chipState[k];el.classList.toggle("on",st!=="off");el.classList.toggle("only",st==="only");el.title=st==="on"?"Click to hide":st==="off"?"Click to show only this layer":"Click to show all layers again"}
@@ -183,7 +187,7 @@ function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRou
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
-function closePanel(){const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
+function closePanel(){focusRoutes=null;drawVehicles();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 document.getElementById("pClose").onclick=closePanel;
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";map.jumpTo(b.cam);openStop(b.id,false,b.web,true,true)};
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
@@ -224,15 +228,15 @@ async function renderTT(id){const box=document.getElementById("ttBox");if(!box)r
   const {rows,nowMin}=buildRows(id,tile[id]||[]);ctx.rows=rows;
   if(!rows.length){box.innerHTML=`<div class="sub">No scheduled departures from this stop in the current timetable.</div>`;return}
   const f=(document.getElementById("ttFilter")||{}).value||"";const q=f.trim().toLowerCase();
-  box.innerHTML=`<div class="th"><div>Route</div><div>Next</div><div>Later departures</div></div>`+rows.map((r,k)=>{const lab=(r.kind==="train"?r.line+" "+TNAME[r.line]:R[r.ri].n)+" "+TT.cal.hs[r.hi];return (!q||lab.toLowerCase().includes(q))?rowHTML(r,nowMin,k):""}).join("");
+  box.innerHTML=`<div class="th"><div>Route</div><div title="Green = live, amber = running late, grey = scheduled">Next</div><div>Later departures (scheduled)</div></div>`+rows.map((r,k)=>{const lab=(r.kind==="train"?r.line+" "+TNAME[r.line]:R[r.ri].n)+" "+TT.cal.hs[r.hi];return (!q||lab.toLowerCase().includes(q))?rowHTML(r,nowMin,k):""}).join("");
   box.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,true));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,true));
   if(typeof applyLive==="function")applyLive(id)}
 
-function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
+function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;focusRoutes=null;drawVehicles();if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
   if(fly)map.flyTo({center:[s[2],s[1]],zoom:Math.max(map.getZoom(),s[3]==="bus"?16:15),duration:600});
-  const near=[];for(const [oid,o] of Object.entries(ST)){if(oid===id||o[3]==="bus")continue;const d=dist(s,o);if(d<500)near.push([d,oid,o])}near.sort((a,b)=>a[0]-b[0]);
+  const near=[];for(const [oid,o] of Object.entries(ST)){if(oid===id||o[3]==="bus")continue;const d=dist(s,o);if(d<1000)near.push([d,oid,o])}near.sort((a,b)=>a[0]-b[0]);
   let h="";
-  if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,12).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
+  if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,25).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
   if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
     h+=`<div id="ttBox" class="tt"><div class="sub">Loading timetable…</div></div>`}
   else h+=`<div class="sub">No scheduled services in this timetable.</div>`;
@@ -241,6 +245,7 @@ function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;if(!keep
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
   const tf=document.getElementById("ttFilter");if(tf)tf.oninput=()=>renderTT(id);
   if(s[5].length)renderTT(id);
+  insertAlerts([id,...(KIDS[id]||[])],s[5]);
   clearInterval(ttTimer);ttTimer=setInterval(()=>{if(ctx&&ctx.id===id&&panel.style.display!=="none")renderTT(id);else clearInterval(ttTimer)},30000);
   if(web)drawWeb(id,noFit)}
 
@@ -274,7 +279,7 @@ function drawWeb(id,noFit){const s=ST[id];const lines=[],arrows=[],ends=[];const
   if(bb&&!noFit)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
 
 // single route view
-let curRoute=null;
+let curRoute=null;let focusRoutes=null;
 function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows();return}const p=path(i,di);let leg=p;
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
@@ -286,24 +291,61 @@ function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{c
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
   webLegs=[];map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
-function showRoute(i,fromStop){const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
+function showRoute(i,fromStop){focusRoutes=new Set([i]);drawVehicles();const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   let di0=0;if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
-  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,routeBody(i,di0));wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
-function showLine(nm,fromStop){rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=lineMain(nm);drawPaths(ids,TCOL[nm]);
+  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,routeBody(i,di0));insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
+function showLine(nm,fromStop){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);let h=routeBody(main,0);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
-  openPanel(`${nm} ${TNAME[nm]}`,`Train line`,h);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
+  openPanel(`${nm} ${TNAME[nm]}`,`Train line`,h);insertAlerts([],ids);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
+
+// ---------- live data (via relay)
+const nameIdx={};R.forEach((r,i)=>{nameIdx[r.n]=i});
+const riOfRoute=id=>{if(!id)return -1;const n=id.replace(/-\d+$/,"");return n in nameIdx?nameIdx[n]:-1};
+const LIVE={veh:[],vehAt:0,trips:null,tripsAt:0,alerts:[],alertsAt:0};
+async function getFeed(name){const r=await fetch(RELAY+"/"+name,{cache:"no-store"});if(!r.ok)throw new Error(name+" "+r.status);return decodeGTFSRT(await r.arrayBuffer())}
+function drawVehicles(){if(!map.getSource("veh"))return;const f=[];const now=Date.now()/1000;
+  for(const v of LIVE.veh){const r=R[v.ri];const dim=!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
+    f.push({type:"Feature",properties:{c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
+  if(focusRoutes)f.sort((a,b)=>a.properties.dim-b.properties.dim).reverse();
+  map.getSource("veh").setData(FC(f))}
+async function pollVehicles(){if(document.hidden||map.getLayoutProperty("veh-dot","visibility")==="none")return;
+  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();drawVehicles()}catch(e){console.warn(e)}}
+async function getTrips(){if(LIVE.trips&&Date.now()-LIVE.tripsAt<25000)return LIVE.trips;const d=await getFeed("trips");LIVE.trips=d;LIVE.tripsAt=Date.now();return d}
+const bneMin=sec=>Math.floor(((sec+36000)%86400)/60);
+async function applyLive(id){const box=document.getElementById("ttBox");if(!box||!ctx||ctx.id!==id||!ctx.rows)return;let d;
+  try{d=await getTrips()}catch(e){return}
+  if(!ctx||ctx.id!==id)return;const ids=new Set([id,...(KIDS[id]||[])]);const preds=[];const nowS=Date.now()/1000;
+  for(const e of d.entity){const tu=e.tu;if(!tu||!tu.stu)continue;const ri=riOfRoute(tu.trip&&tu.trip.route);if(ri<0)continue;const tripCx=tu.trip.sr===3;
+    for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time){if(tripCx||u.sr===1)preds.push({ri,cx:true,seq:u.seq});continue}
+      const delay=ev.delay||0;preds.push({ri,pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
+  ctx.rows.forEach((row,k)=>{const cell=box.querySelector(`[data-live="${k}"]`);if(!cell||!row.up.length)return;
+    const same=p=>row.kind==="train"?(lineOf[p.ri]||[])[0]===row.line&&R[p.ri]:p.ri===row.ri;
+    const t0=row.up[0]%1440;const p=preds.find(x=>same(x)&&x.sched!==undefined&&x.sched===t0);if(!p)return;
+    if(p.cx){cell.className="nx cx";cell.innerHTML="Cancelled";return}
+    const mins=Math.round((p.pred-nowS)/60);const late=p.delay>=120,early=p.delay<=-60;
+    cell.className="nx "+(late?"late":"live");cell.title=late?`${Math.round(p.delay/60)} min late (scheduled ${clock(row.up[0])})`:early?`${Math.round(-p.delay/60)} min early`:"On time (live)";
+    cell.innerHTML=`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")})}
+// alerts
+async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
+  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al).filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(!p.start||p.start<=now)&&(!p.end||now<=p.end)));LIVE.alertsAt=Date.now()}catch(e){console.warn(e)}}
+function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(a=>(a.sel||[]).some(x=>(x.stop&&sset.has(x.stop))||(x.route&&rset.has(riOfRoute(x.route)))))}
+function alertHTML(list){if(!list.length)return"";return `<details class="alerts"><summary>⚠ ${list.length} service alert${list.length>1?"s":""}</summary>`+list.slice(0,20).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</div>`).join("")+`</details>`}
+function insertAlerts(stopIds,routeIdxs){const html=alertHTML(alertsFor(stopIds,routeIdxs));if(!html)return;const old=pB.querySelector(".alerts");if(old)old.remove();pB.insertAdjacentHTML("afterbegin",html)}
+setInterval(pollVehicles,20000);setInterval(pollAlerts,120000);pollVehicles();pollAlerts();
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){pollVehicles();if(ctx&&ctx.id)renderTT(ctx.id)}});
 
 // ---------- map clicks
-const CLICK=["busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line"];
+const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line"];
 map.on("click",e=>{const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];
   const f=map.queryRenderedFeatures(box,{layers:CLICK.filter(id=>map.getLayer(id)&&map.getLayoutProperty(id,"visibility")!=="none")});if(!f.length)return;
   f.sort((a,b)=>CLICK.indexOf(a.layer.id)-CLICK.indexOf(b.layer.id));const top=f[0];
+  if(top.layer.id==="veh-dot"){const ri=+top.properties.ri;if(R[ri]){webCam=null;if(R[ri].t==="train")showLine((lineOf[ri]||["T1"])[0],false);else showRoute(ri,false)}return}
   if(["hl-line","ends","ends-dot"].includes(top.layer.id)){const ri=+top.properties.ri;if(ctx&&ctx.web)showRoute(ri,true);return}
   openStop(top.properties.id,false)});
 const pop=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:10});
-CLICK.forEach(id=>{map.on("mouseenter",id,e=>{map.getCanvas().style.cursor="pointer";const p=e.features[0].properties;if(p.n)pop.setLngLat(e.lngLat).setText(p.n).addTo(map)});map.on("mouseleave",id,()=>{map.getCanvas().style.cursor="";pop.remove()})});
+CLICK.forEach(id=>{map.on("mouseenter",id,e=>{map.getCanvas().style.cursor="pointer";const p=e.features[0].properties;const t=id==="veh-dot"?p.tip:p.n;if(t)pop.setLngLat(e.lngLat).setText(t).addTo(map)});map.on("mouseleave",id,()=>{map.getCanvas().style.cursor="";pop.remove()})});
 
 // ---------- search
 function norm(s){return String(s).toLowerCase().replace(/\bstation\b/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim()}
