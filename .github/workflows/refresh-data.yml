@@ -5,14 +5,20 @@ on:
   schedule:
     - cron: "17 17 * * 0"
   workflow_dispatch:
+    inputs:
+      force_zones:
+        description: "Accept bus zone / busway changes even if the safety check held them back"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install tools
-        run: pip install pandas shapely
+        run: pip install pandas shapely scipy pillow contourpy
 
       - name: Download Translink SEQ GTFS
         run: |
@@ -33,9 +39,28 @@ jobs:
           python tools/build_network.py gtfs .
           python tools/build_timetables.py gtfs .
 
+      - name: Rebuild bus zones and busways (with safety check)
+        run: |
+          python tools/build_zones.py gtfs . ${{ inputs.force_zones && '--force' || '' }}
+
+      - name: Rebuild school routes list
+        continue-on-error: true
+        run: |
+          curl -fsSL --retry 3 -o school.zip https://gtfsrt.api.translink.com.au/GTFS/SEQ_SCH_GTFS.zip
+          unzip -q school.zip -d school
+          python tools/build_school.py school gtfs .
+
+      - name: Notify if parts of the map were held back
+        if: hashFiles('zone_check.txt') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "Map refresh $(date +%d-%m-%Y): some map changes held back" --body-file zone_check.txt
+          rm zone_check.txt
+
       - name: Commit if anything changed
         run: |
-          rm -rf gtfs gtfs.zip
+          rm -rf gtfs gtfs.zip school school.zip
           if git diff --quiet -- data; then
             echo "No changes in Translink data."
           else

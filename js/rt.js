@@ -11,7 +11,7 @@ Reader.prototype.skip=function(wt){if(wt===0)this.varint();else if(wt===1)this.p
 const td=new TextDecoder();
 function msg(buf,h){const r=new Reader(buf),o={};while(r.p<r.n){const t=r.uint(),f=Math.floor(t/8),wt=t&7;const fn=h[f];if(fn)fn(r,o,wt);else r.skip(wt)}return o}
 const str=r=>td.decode(r.bytes());
-const TripDesc={1:(r,o)=>o.trip=str(r),5:(r,o)=>o.route=str(r),6:(r,o)=>o.dir=r.uint(),4:(r,o)=>o.sr=r.uint()};
+const TripDesc={1:(r,o)=>o.trip=str(r),5:(r,o)=>o.route=str(r),6:(r,o)=>o.dir=r.uint(),4:(r,o)=>o.sr=r.uint(),2:(r,o)=>o.start=str(r),3:(r,o)=>o.date=str(r)};
 const StopTimeEvent={1:(r,o)=>o.delay=r.int32(),2:(r,o)=>o.time=r.uint()};
 const STU={1:(r,o)=>o.seq=r.uint(),4:(r,o)=>o.stop=str(r),2:(r,o)=>o.arr=msg(r.bytes(),StopTimeEvent),3:(r,o)=>o.dep=msg(r.bytes(),StopTimeEvent),5:(r,o)=>o.sr=r.uint()};
 const TripUpdate={1:(r,o)=>o.trip=msg(r.bytes(),TripDesc),2:(r,o)=>(o.stu=o.stu||[]).push(msg(r.bytes(),STU)),5:(r,o)=>o.delay=r.int32()};

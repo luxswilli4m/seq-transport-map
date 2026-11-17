@@ -80,11 +80,12 @@ chevF.forEach(f=>{const rings=f.geometry.coordinates[0];const area=r=>{let a=0;f
 const zoneLbl = (ZONES.labels||[]).map(l=>({type:"Feature",properties:{t:l.s+"xx"},geometry:{type:"Point",coordinates:ll(l.p)}}));
 const dotF = ZONES.dots.map(d=>({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:d.map(ll)}}));
 const loopF = ZONES.loop?[{type:"Feature",properties:{},geometry:{type:"LineString",coordinates:ZONES.loop.map(ll)}}]:[];
-const bwLineF = BUSWAY.pairs.map(([key,a,b,seg])=>({type:"Feature",properties:{c:BWCOL[key],road:(a==="Truro Street station"&&b==="Federation Street station")||(a==="Federation Street station"&&b==="RBWH station")?1:0},geometry:{type:"LineString",coordinates:seg.map(ll)}}));
+const bwLineF = BUSWAY.pairs.map(([key,a,b,seg,road])=>({type:"Feature",properties:{c:(BUSWAY.colours&&BUSWAY.colours[key])||BWCOL[key],road:road?1:0},geometry:{type:"LineString",coordinates:seg.map(ll)}}));
 const net2 = {train:[],ferry:[],tram:[]};const seen=new Set();
 R.forEach((r,i)=>{if(r.t==="bus")return;r.d.forEach((d,di)=>{if(seen.has(d.p))return;seen.add(d.p);net2[r.t].push({type:"Feature",properties:{c:r.c},geometry:{type:"LineString",coordinates:path(i,di)}})})});
 const shortName = n => n.replace(/ busway station$| bus station$| station$/i,"");
-const ptF = kind => Object.entries(ST).filter(([,s])=>s[3]===kind).map(([id,s])=>{const p={id,n:s[0],sn:shortName(s[0])};if(kind==="busway"){const b=BWS[id]||{b:["SE"],road:false};p.icon=ringIcon(b.b.map(k=>BWCOL[k]),b.road)}return {type:"Feature",properties:p,geometry:{type:"Point",coordinates:[s[2],s[1]]}}});
+const bwc=k=>(BUSWAY.colours&&BUSWAY.colours[k])||BWCOL[k]||"#888";if(BUSWAY.names)Object.assign(BWNAME,BUSWAY.names);
+const ptF = kind => Object.entries(ST).filter(([,s])=>s[3]===kind).map(([id,s])=>{const p={id,n:s[0],sn:shortName(s[0])};if(kind==="busway"){const b=BWS[id]||{b:["SE"],road:false};p.icon=ringIcon(b.b.map(bwc),b.road)}return {type:"Feature",properties:p,geometry:{type:"Point",coordinates:[s[2],s[1]]}}});
 
 function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
@@ -189,7 +190,7 @@ function openPanel(t,s,html,opt){opt=opt||{};view=opt.view||"";panel.classList.t
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
-function saveFav(){try{localStorage.setItem("seqmap_favs",JSON.stringify(FAV))}catch(e){}updateFavBtns()}
+function saveFav(){try{localStorage.setItem("seqmap_favs",JSON.stringify(FAV))}catch(e){}updateFavBtns();if(typeof pollCancellations==="function")pollCancellations()}
 const pStar=document.getElementById("pStar");let starTarget=null;
 function setStar(t){starTarget=t;if(!t){pStar.style.display="none";return}pStar.style.display="block";const on=FAV[t.list].includes(t.key);pStar.textContent=on?"★":"☆";pStar.classList.toggle("on",on);pStar.title=on?"Remove from saved":"Save to favourites"}
 pStar.onclick=()=>{if(!starTarget)return;const L=FAV[starTarget.list];const k=L.indexOf(starTarget.key);if(k>=0)L.splice(k,1);else L.push(starTarget.key);saveFav();setStar(starTarget)};
@@ -348,7 +349,7 @@ async function applyLive(id){const box=document.getElementById("ttBox");if(!box|
   if(!ctx||ctx.id!==id)return;computeLive(id,ctx.rows,d).forEach((v,k)=>{const cell=box.querySelector(`[data-live="${k}"]`);if(!cell||!v)return;cell.className=v.cls;cell.innerHTML=v.html;cell.title=v.title})}
 // alerts
 async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
-  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn()}catch(e){console.warn(e)}}
+  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn();if(typeof applyFavStatus==="function")applyFavStatus()}catch(e){console.warn(e)}}
 const fmtDay=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});
 function todaysAlerts(){const now=Date.now()/1000;const bneMid=Math.floor((now+36000)/86400)*86400-36000,end=bneMid+86400;
   return LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<end&&(!p.end||p.end>bneMid)))}
@@ -366,7 +367,7 @@ function alertTags(a){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/864
       else if(k==="ferry"){modes.add("ferry");where.add("Station")}else if(k==="tram"){modes.add("tram");where.add("Tram stop")}else if(k==="bus"){modes.add("bus");where.add("Bus stop")}}}
   const h=a.header||"";if(/\bstation\b|lift|escalator|platform/i.test(h)&&where.has("Bus stop")&&!/bus stop/i.test(h)){where.delete("Bus stop");where.add("Station")}
   if(/\bline\b|track/i.test(h))modes.add("train");if(/\btram\b|g:link/i.test(h))modes.add("tram");if(/ferry/i.test(h))modes.add("ferry");
-  const kind=DISRUPT.has(a.cause)||a.effect===3?"Disruption":PLANNED.has(a.cause)?"Planned works":null;
+  const kind=DISRUPT.has(a.cause)||a.effect===3||/cancel/i.test(a.header||"")?"Disruption":PLANNED.has(a.cause)?"Planned works":null;
   const M={train:"Train",bus:"Bus",ferry:"Ferry",tram:"Tram"};
   return {timing,type:EFFECT[a.effect]||"Other",modes:["train","bus","ferry","tram"].filter(m=>modes.has(m)).map(m=>M[m]),where:["Station","Train line","Bus route","Ferry route","Tram line","Bus stop","Tram stop"].filter(w=>where.has(w)),kind}}
 let alertFilter="All";
@@ -407,10 +408,10 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden){pollVehic
 let favTimer=null;
 async function showFavStops(){focusRoutes=null;rtFocus=false;syncVehVis();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
   if(!FAV.stops.length){openPanel("Saved stops","Saved on this device",`<div class="sub">No saved stops yet. Open any stop or station and tap ☆ next to its name to save it here.</div>`,{view:"favs"});return}
-  openPanel("Saved stops",`${FAV.stops.length} saved on this device`,FAV.stops.map(id=>ST[id]?`<div class="fav" data-fav="${id}"><div class="favh"><a data-open="${id}">${esc(ST[id][0])}</a><span>${KIND[ST[id][3]]}${ST[id][4]?" · "+esc(ST[id][4]):""}</span><button class="favx" data-unfav="${id}" title="Remove">✕</button></div><div class="tt favtt" id="fv_${id}"><div class="sub">Loading…</div></div></div>`:"").join(""),{view:"favs"});
+  openPanel("Saved stops",`${FAV.stops.length} saved on this device`,FAV.stops.map(id=>ST[id]?`<div class="fav" data-fav="${id}"><div class="favh"><a data-open="${id}">${esc(ST[id][0])}</a><span>${KIND[ST[id][3]]}${ST[id][4]?" · "+esc(ST[id][4]):""}</span><span class="favst"></span><button class="favx" data-unfav="${id}" title="Remove">✕</button></div><div class="tt favtt" id="fv_${id}"><div class="sub">Loading…</div></div></div>`:"").join(""),{view:"favs"});
   pB.querySelectorAll("[data-open]").forEach(a=>a.onclick=()=>{const cam={center:map.getCenter(),zoom:map.getZoom()};openStop(a.dataset.open,true);setBack({kind:"favs",cam})});
   pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=()=>{FAV.stops=FAV.stops.filter(x=>x!==b.dataset.unfav);saveFav();showFavStops()});
-  await refreshFavStops();clearInterval(favTimer);favTimer=setInterval(()=>{if(view==="favs"&&panel.style.display!=="none")refreshFavStops();else clearInterval(favTimer)},30000)}
+  await refreshFavStops();applyFavStatus();clearInterval(favTimer);favTimer=setInterval(()=>{if(view==="favs"&&panel.style.display!=="none")refreshFavStops();else clearInterval(favTimer)},30000)}
 async function refreshFavStops(){let d=null;try{d=await getTrips()}catch(e){}
   for(const id of FAV.stops){const box=document.getElementById("fv_"+id);if(!box||!ST[id])continue;let tile;try{tile=await loadTT(ST[id])}catch(e){continue}
     const {rows,nowMin}=buildRows(id,tile[id]||[]);const soon=rows;
@@ -427,9 +428,9 @@ function showFavRoutes(){focusRoutes=null;rtFocus=false;syncVehVis();backState=n
   const now=Date.now()/1000;
   openPanel("Saved routes",`${FAV.routes.length} saved on this device`,FAV.routes.map(k=>{const ids=new Set(keyIds(k));const nv=LIVE.veh.filter(v=>ids.has(v.ri)).length;
     const na=LIVE.alerts.filter(a=>(a.sel||[]).some(x=>x.route&&ids.has(riOfRoute(x.route)))&&(!a.periods||!a.periods.length||a.periods.some(p=>!p.end||p.end>=now))).length;
-    return `<div class="favr" data-rt="${esc(k)}">${keyBadge(k)}<div class="favrn"><b>${esc(keyName(k))}</b><span>${LIVE.vehAt?nv+" running now":""}${na?` · <em>⚠ ${na} alert${na>1?"s":""}</em>`:""}</span></div><button class="favx" data-unfav="${esc(k)}" title="Remove">✕</button></div>`}).join(""),{view:"favr"});
+    return `<div class="favr" data-rt="${esc(k)}">${keyBadge(k)}<div class="favrn"><b>${esc(keyName(k))}</b><span>${LIVE.vehAt?nv+" running now":""}</span><span class="favst"></span></div><button class="favx" data-unfav="${esc(k)}" title="Remove">✕</button></div>`}).join(""),{view:"favr"});
   pB.querySelectorAll("[data-rt]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-unfav]"))return;e.stopPropagation();openRouteTable(el.dataset.rt,null,{kind:"favr",cam:{center:map.getCenter(),zoom:map.getZoom()}})});
-  pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=e=>{e.stopPropagation();FAV.routes=FAV.routes.filter(x=>x!==b.dataset.unfav);saveFav();showFavRoutes()})}
+  pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=e=>{e.stopPropagation();FAV.routes=FAV.routes.filter(x=>x!==b.dataset.unfav);saveFav();showFavRoutes()});applyFavStatus()}
 // ---------- route timetable page (all stops, Earlier / Later, day picker, live, updates)
 const RTC={};const COLS=5;
 const fmtDayOpt=new Intl.DateTimeFormat("en-AU",{timeZone:"UTC",weekday:"long",day:"numeric",month:"short"});
@@ -489,6 +490,52 @@ async function renderRTLive(){if(view!=="rt"||!rtState)return;const {key,st,cols
 document.getElementById("favStopsBtn").onclick=()=>{webCam=null;showFavStops()};
 document.getElementById("favRoutesBtn").onclick=()=>{webCam=null;showFavRoutes()};
 updateFavBtns();
+
+// ---------- school routes (list only)
+let SCHOOL=null;
+async function showSchool(q){focusRoutes=null;rtFocus=false;syncVehVis();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+  if(!SCHOOL){try{SCHOOL=await (await fetch(BASE+"data/school.json")).json()}catch(e){openPanel("School routes","",`<div class="sub">School route list unavailable.</div>`);return}}
+  q=(q||"").trim().toLowerCase();
+  const list=SCHOOL.routes.filter(([n,l])=>!q||n.toLowerCase().startsWith(q)||l.toLowerCase().includes(q));
+  const grp={};list.forEach(r=>{const m=r[0].match(/^([A-Za-z]*)(\d)/);const g=m?(m[1]+m[2]+(r[0].replace(/^[A-Za-z]*/,"").length>=4?"xxx":"xx")):"Other";(grp[g]=grp[g]||[]).push(r)});
+  const note=`<div class="schnote"><b>About school services</b><p>These buses run on <b>school days only</b> and are designed mainly for students travelling to and from school. They have their own route numbers, which can look like everyday routes: for example, school route <b>S700</b> is not the same as everyday Gold Coast route <b>700</b>, and the first digit of a school route does not follow the area rule used for everyday routes. They may not stop at every stop along the way, and some only run on certain school days. School services are not shown on the map, in search or in timetables.</p><p>Check times and who can travel on a service with the school or at <a href="https://translink.com.au" target="_blank" rel="noopener">translink.com.au</a>.</p></div>`;
+  const body=Object.keys(grp).map(g=>`<div class="grp">${esc(g)} · ${grp[g].length}</div>`+grp[g].map(([n,l])=>`<div class="schr"><span class="rb sch">${esc(n)}</span><span>${esc(l)}</span></div>`).join("")).join("")||`<div class="sub">No school routes match.</div>`;
+  if(!pB.querySelector("#schQ")||view!=="school"){
+    openPanel("School routes",`${SCHOOL.routes.length} school-only routes · Translink school services (pilot data), ${esc(SCHOOL.updated)}`,note+`<input id="schQ" class="ttf schq" placeholder="Search school routes or schools" autocomplete="off"><div id="schList"></div>`,{view:"school"});
+    document.getElementById("schQ").oninput=e=>showSchool(e.target.value)}
+  document.getElementById("schList").innerHTML=body}
+document.getElementById("schoolBtn").onclick=()=>{webCam=null;showSchool("")};
+
+// ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
+const CX={routes:{},stops:{}};
+function startMin(tu){const t=tu.trip.start;if(!t)return null;const [h,m]=t.split(":").map(Number);return h*60+m}
+async function pollCancellations(){if(!FAV.stops.length&&!FAV.routes.length){applyFavStatus();return}let d;try{d=await getTrips()}catch(e){return}
+  const now=bneNow();const nowMin=now.min;const today=now.ymd;const rset={},sset={};
+  const favStops=new Set(FAV.stops);const kidToStop={};FAV.stops.forEach(id=>{kidToStop[id]=id;(KIDS[id]||[]).forEach(k=>kidToStop[k]=id)});
+  for(const e of d.entity){const tu=e.tu;if(!tu||!tu.trip)continue;const ri=riOfRoute(tu.trip.route);if(ri<0)continue;
+    const tripCx=tu.trip.sr===3;const sm=startMin(tu);if(tu.trip.date&&tu.trip.date!==today&&!(sm!==null&&sm>=1440))continue;
+    if(tripCx&&(sm===null||sm>nowMin)){const key=R[ri].t==="train"?(lineOf[ri]||[])[0]:R[ri].n;(rset[key]=rset[key]||[]).push(sm)}
+    for(const u of tu.stu||[]){if(!(tripCx||u.sr===1))continue;const sid=kidToStop[u.stop];if(!sid)continue;const ev=u.dep||u.arr;const when=ev&&ev.time?bneMin(ev.time):sm;if(when===null||when>nowMin)(sset[sid]=sset[sid]||[]).push(when)}}
+  CX.routes=rset;CX.stops=sset;applyFavStatus()}
+function favAlertState(){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
+  const live=LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<eod&&(!p.end||p.end>=nowS)));
+  const st={stops:{},routes:{}};
+  for(const id of FAV.stops){const ids=new Set([id,...(KIDS[id]||[])]);if(live.some(a=>(a.sel||[]).some(x=>x.stop&&ids.has(x.stop))))st.stops[id]=true}
+  for(const k of FAV.routes){const ids=new Set(keyIds(k));if(live.some(a=>(a.sel||[]).some(x=>x.route&&ids.has(riOfRoute(x.route)))))st.routes[k]=true}
+  return st}
+function statusClass(alert,cx){return alert&&cx?"st-both":cx?"st-cx":alert?"st-al":""}
+function applyFavStatus(){const al=favAlertState();
+  const sCls=FAV.stops.map(id=>statusClass(al.stops[id],CX.stops[id]&&CX.stops[id].length));const rCls=FAV.routes.map(k=>statusClass(al.routes[k],CX.routes[k]&&CX.routes[k].length));
+  const agg=a=>a.includes("st-both")||(a.includes("st-cx")&&a.includes("st-al"))?"st-both":a.includes("st-cx")?"st-cx":a.includes("st-al")?"st-al":"";
+  const sb=document.getElementById("favStopsBtn"),rb=document.getElementById("favRoutesBtn");
+  sb.classList.remove("st-al","st-cx","st-both");rb.classList.remove("st-al","st-cx","st-both");const a1=agg(sCls),a2=agg(rCls);if(a1)sb.classList.add(a1);if(a2)rb.classList.add(a2);
+  sb.title=a1==="st-cx"||a1==="st-both"?"A saved stop has a cancelled service still to come":a1?"A saved stop has a service alert":"Your saved stops and stations";
+  rb.title=a2==="st-cx"||a2==="st-both"?"A saved route has a cancelled trip still to come":a2?"A saved route has a service alert":"Your saved routes and train lines";
+  if(view==="favs")FAV.stops.forEach((id,k)=>{const el=pB.querySelector(`.fav[data-fav="${id}"]`);if(!el)return;el.classList.remove("st-al","st-cx","st-both");if(sCls[k])el.classList.add(sCls[k]);
+    const n=el.querySelector(".favst");const c=CX.stops[id]||[];const txt=(c.length?`<span class="cx">✕ ${c.length} cancelled service${c.length>1?"s":""} still to come</span>`:"")+(al.stops[id]?`<span class="al">⚠ alert today</span>`:"");if(n)n.innerHTML=txt});
+  if(view==="favr")FAV.routes.forEach((k,j)=>{const el=pB.querySelector(`.favr[data-rt="${CSS.escape(k)}"]`);if(!el)return;el.classList.remove("st-al","st-cx","st-both");if(rCls[j])el.classList.add(rCls[j]);
+    const n=el.querySelector(".favst");const c=(CX.routes[k]||[]).filter(x=>x!==null).sort((a,b)=>a-b);const txt=(CX.routes[k]&&CX.routes[k].length?`<span class="cx">✕ ${CX.routes[k].length} cancelled${c.length?" · next "+clock(c[0]):""}</span>`:"")+(al.routes[k]?`<span class="al">⚠ alert</span>`:"");if(n)n.innerHTML=txt})}
+setInterval(pollCancellations,60000);setTimeout(pollCancellations,3000);
 
 // ---------- map clicks
 const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line"];

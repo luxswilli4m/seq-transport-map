@@ -1,0 +1,72 @@
+{
+  "_help": "Busway station lists used to draw the busways. Edit this file to add, remove or reorder busway stations. See README.md, section 'Adding a busway station'. Station names must match Translink's stop names exactly (search the map to check spelling).",
+  "busways": {
+    "N": {
+      "name": "Northern Busway",
+      "colour": "#A46BD6",
+      "stations": [
+        "Kedron Brook station",
+        "Lutwyche station",
+        "Truro Street station",
+        "Federation Street station",
+        "RBWH station",
+        "Herston station",
+        "QUT Kelvin Grove station",
+        "Normanby station",
+        "Roma Street busway station",
+        "King George Square bus station"
+      ]
+    },
+    "SE": {
+      "name": "South East Busway",
+      "colour": "#1FAE98",
+      "stations": [
+        "King George Square bus station",
+        "Queen Street bus station",
+        "Cultural Centre station",
+        "South Bank busway station",
+        "Mater Hill station",
+        "Buranda busway station",
+        "Greenslopes station",
+        "Holland Park West station",
+        "Griffith University station",
+        "Upper Mt Gravatt station",
+        "Eight Mile Plains station",
+        "Rochedale station",
+        "Springwood station"
+      ]
+    },
+    "SP": {
+      "name": "South East Busway",
+      "colour": "#1FAE98",
+      "part_of": "SE",
+      "stations": [
+        "Mater Hill station",
+        "Woolloongabba station"
+      ]
+    },
+    "E": {
+      "name": "Eastern Busway",
+      "colour": "#D98A45",
+      "stations": [
+        "UQ Lakes station",
+        "Dutton Park Place",
+        "Boggo Road busway station",
+        "PA Hospital station",
+        "Buranda busway station",
+        "Stones Corner station",
+        "Langlands Park station"
+      ]
+    }
+  },
+  "on_road_sections": [
+    [
+      "Truro Street station",
+      "Federation Street station"
+    ],
+    [
+      "Federation Street station",
+      "RBWH station"
+    ]
+  ]
+}
