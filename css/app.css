@@ -27,6 +27,9 @@ body:not(.light) .badge-unoff{color:#fbbf24;background:transparent}
 .chip .dot{width:10px;height:10px;border-radius:50%;opacity:.3}
 .chip.on{color:var(--ink);border-color:var(--accent)}
 .chip.on .dot{opacity:1}
+.chip .onlytag{display:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:#ffffff;color:var(--accent);border-radius:4px;padding:1px 4px}
+.chip.only{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.only .onlytag{display:inline}
 .rb{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:22px;padding:0 6px;border-radius:5px;font-size:12px;font-weight:700;white-space:nowrap}
 #panel{position:absolute;z-index:11;left:12px;bottom:12px;width:370px;max-height:60vh;display:none;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px #0006}
 #panel .ph{display:flex;align-items:flex-start;gap:8px;padding:14px 12px 10px 14px;border-bottom:1px solid var(--hover)}

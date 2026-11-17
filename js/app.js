@@ -81,7 +81,7 @@ function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
 src("bwlines",FC(bwLineF));src("trainl",FC(net2.train));src("ferryl",FC(net2.ferry));src("traml",FC(net2.tram));
 ["busway","busstn","train","ferry","tram","bus"].forEach(k=>src("pt_"+k,FC(ptF(k))));
-src("hl",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
+src("hl",FC([]));src("arrows",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
 
 // ---------- overlay layers
 const L = [];
@@ -106,6 +106,7 @@ add({id:"zlabels",type:"symbol",source:"zlabels",maxzoom:12.5,layout:{"text-fiel
 // highlight (route / all routes)
 add({id:"hl-case",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":["case",["==",["get","mode"],"web"],6,10],"line-opacity":.95}});
 add({id:"hl-line",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["case",["==",["get","mode"],"web"],3.4,6]}});
+add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"symbol-placement":"line","symbol-spacing":["interpolate",["linear"],["zoom"],9,55,15,90],"icon-image":"loopArrow","icon-size":["interpolate",["linear"],["zoom"],9,.9,15,1.25],"icon-rotation-alignment":"map","icon-allow-overlap":false,"icon-padding":1}});
 // stops & stations
 add({id:"stops",type:"circle",source:"pt_bus",minzoom:13.5,paint:{"circle-color":"#E463A4","circle-radius":["interpolate",["linear"],["zoom"],14,3.6,17,6.5],"circle-stroke-color":THEME[theme].stopStroke,"circle-stroke-width":1.4}});
 add({id:"hlstops",type:"circle",source:"hlstops",paint:{"circle-color":"#ffffff","circle-radius":4.5,"circle-stroke-color":["get","c"],"circle-stroke-width":2.5}});
@@ -142,9 +143,18 @@ const GROUPS=[
  ["train","Trains","#4778B2",["train-case","train-line","train-pt"]],
  ["ferry","Ferries","#36A9B4",["ferry-line","ferry-pt"]],
  ["tram","Tram","#FFD400",["tram-case","tram-line","tram-pt"]]];
-const chipBox=document.getElementById("chips");
-GROUPS.forEach(([k,label,col,ids])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}`;
-  el.onclick=()=>{const on=!el.classList.contains("on");el.classList.toggle("on",on);ids.forEach(id=>map.setLayoutProperty(id,"visibility",on?"visible":"none"));if(k==="stops")hint()};chipBox.appendChild(el)});
+const chipBox=document.getElementById("chips");const chipState={};const chipEl={};let soloSnap=null,soloKey=null;
+function setGroup(k,vis){GROUPS.find(g=>g[0]===k)[3].forEach(id=>map.setLayoutProperty(id,"visibility",vis?"visible":"none"))}
+function renderChip(k){const el=chipEl[k],st=chipState[k];el.classList.toggle("on",st!=="off");el.classList.toggle("only",st==="only");el.title=st==="on"?"Click to hide":st==="off"?"Click to show only this layer":"Click to show all layers again"}
+function clickChip(k){
+  if(soloKey&&soloKey!==k){chipState[soloKey]="on";renderChip(soloKey);soloKey=null;soloSnap=null}
+  const st=chipState[k];
+  if(st==="on"){chipState[k]="off";setGroup(k,false)}
+  else if(st==="off"){soloSnap={};GROUPS.forEach(([g])=>{if(g!==k){soloSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)}});chipState[k]="only";soloKey=k;setGroup(k,true)}
+  else{chipState[k]="on";setGroup(k,true);if(soloSnap)Object.entries(soloSnap).forEach(([g,v])=>{chipState[g]=v;setGroup(g,v!=="off");renderChip(g)});soloSnap=null;soloKey=null}
+  renderChip(k);hint()}
+GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
+  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
 function hint(){const z=map.getZoom();document.getElementById("hint").style.display=(stopsOn()&&z>=12&&z<13.5)?"block":"none"}
 map.on("zoomend",hint);hint();
@@ -159,7 +169,7 @@ function openPanel(t,s,html){pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;p
 function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,true));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,true));
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
-function clearHL(){map.getSource("hl").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
+function clearHL(){map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
 document.getElementById("pClose").onclick=()=>{panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none"};
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";map.jumpTo(b.cam);openStop(b.id,false,b.web)};
 function sortRoutes(ids){return ids.slice().sort((a,b)=>{const A=R[a].n,B=R[b].n,na=parseInt(A.replace(/\D/g,"")),nb=parseInt(B.replace(/\D/g,""));return (isNaN(na)?1e9:na)-(isNaN(nb)?1e9:nb)||A.localeCompare(B)})}
@@ -183,13 +193,21 @@ function openStop(id,fly,web){const s=ST[id];if(!s)return;ctx={id,web:!!web};bac
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>openStop(id,false,!ctx.web);
   if(web)drawWeb(id)}
 
-// all routes from a stop ("spider web") with end labels
-function drawWeb(id){const s=ST[id];const lines=[],ends=[];const seenEnd=new Set();let bb=null;
-  s[5].forEach(i=>{const r=R[i];r.d.forEach((d,di)=>{const p=path(i,di);lines.push({type:"Feature",properties:{c:r.c,ri:i,mode:"web"},geometry:{type:"LineString",coordinates:p}});
-    p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]});
-    const last=d.s[d.s.length-1];const ls=ST[last];if(!ls||last===id)return;const dest=(d.h&&d.h.length<34?d.h:ls[0]).replace(/\s*,\s*stop\s+\w+$/i,"").replace(/\s+(near|at|opp)\s+.*$/i,"");const lab=(r.t==="train"?(lineOf[i]||[r.n]).join("/"):r.t==="tram"?"G:link":r.n)+" → "+shortName(dest);const key=lab;if(seenEnd.has(key))return;seenEnd.add(key);
+// all routes from a stop ("spider web"): full bus paths, onward legs for rail/ferry/tram, white arrows on onward parts, end labels
+function nearestIdx(p,x,y){let bi=0,bd=1e9;for(let k=0;k<p.length;k++){const dx=(p[k][0]-x)*0.886,dy=p[k][1]-y,d=dx*dx+dy*dy;if(d<bd){bd=d;bi=k}}return bi}
+function drawWeb(id){const s=ST[id];const lines=[],arrows=[],ends=[];const seenEnd=new Set();let bb=null;
+  const grow=p=>p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]});
+  s[5].forEach(i=>{const r=R[i];const fixed=r.t!=="bus";r.d.forEach((d,di)=>{const p=path(i,di);const k=d.s.indexOf(id);
+    if(k<0){if(!fixed){lines.push({type:"Feature",properties:{c:r.c,ri:i,mode:"web"},geometry:{type:"LineString",coordinates:p}});grow(p)}return}
+    if(k>=d.s.length-1){if(!fixed){lines.push({type:"Feature",properties:{c:r.c,ri:i,mode:"web"},geometry:{type:"LineString",coordinates:p}});grow(p)}return}
+    const j=nearestIdx(p,s[2],s[1]);const onward=[[s[2],s[1]],...p.slice(j+1)];if(onward.length<2)return;
+    lines.push({type:"Feature",properties:{c:r.c,ri:i,mode:"web"},geometry:{type:"LineString",coordinates:fixed?onward:p}});grow(fixed?onward:p);
+    arrows.push({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:onward}});
+    const last=d.s[d.s.length-1];const ls=ST[last];if(!ls)return;
+    const dest=(d.h&&d.h.length<34?d.h:ls[0]).replace(/\s*,\s*stop\s+\w+$/i,"").replace(/\s+(near|at|opp)\s+.*$/i,"");
+    const lab=(r.t==="train"?(((lineOf[i]||[]).find(l=>new RegExp(LINES.find(x=>x[0]===l)[1]).test(dest))||(lineOf[i]||[r.n])[0])+" line"):r.t==="tram"?"G:link":r.n)+" → "+shortName(dest);if(seenEnd.has(lab))return;seenEnd.add(lab);
     ends.push({type:"Feature",properties:{t:lab,c:r.c,ri:i},geometry:{type:"Point",coordinates:[ls[2],ls[1]]}})})});
-  map.getSource("hl").setData(FC(lines));map.getSource("ends").setData(FC(ends));
+  map.getSource("hl").setData(FC(lines));map.getSource("arrows").setData(FC(arrows));map.getSource("ends").setData(FC(ends));
   if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?400:30,right:40},duration:700,maxZoom:15})}
 
 // single route view
@@ -200,7 +218,7 @@ function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs"
 function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{pB.innerHTML=routeBody(i,+b.dataset.d);wire();wireDirs(i)})}
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
-  map.getSource("hl").setData(FC(f));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?400:30,right:40},duration:700,maxZoom:15})}
+  map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?400:30,right:40},duration:700,maxZoom:15})}
 function showRoute(i,fromStop){const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,routeBody(i,0));wireDirs(i);if(backState)pBack.style.display="block"}
