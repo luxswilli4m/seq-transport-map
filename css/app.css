@@ -83,3 +83,20 @@ ol.stops li .s2{display:block;font-size:12px;color:var(--muted)}
 .sbox .clr{top:10px}
 .results{top:48px}
 .results div.r{padding:12px}
+
+.webrow{display:flex;gap:10px;align-items:center;margin:2px 0 10px}
+.webrow .btn{margin-top:0}
+.ttf{flex:1;min-width:0;height:40px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 10px;font-size:14px;outline:none}
+.tt .th,.tt .tr{display:grid;grid-template-columns:205px 64px 1fr;gap:8px;align-items:center}
+.tt .th{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);padding:2px 0 6px;border-bottom:1px solid var(--hover)}
+.tt .tr{padding:7px 0;border-bottom:1px solid var(--hover);min-height:46px}
+.tt .tc1{display:flex;align-items:center;gap:8px;min-width:0}
+.tt .tc1 .rb{flex:none}
+.tt .hd{font-size:13px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tt .nx{font-size:14px;font-weight:700;text-align:center;border-left:1px solid var(--hover);border-right:1px solid var(--hover);padding:4px 2px;white-space:nowrap}
+.tt .nx.sched{color:var(--muted)}
+.tt .nx.live{color:#16a34a}
+.tt .nx.late{color:#d97706}
+.tt .tc3{display:flex;gap:10px;overflow-x:auto;white-space:nowrap;font-size:13px;color:var(--ink);scrollbar-width:thin;padding:4px 0}
+.tt .tc3 span{flex:none}
+.tt .tc3 em{color:var(--muted);font-style:normal;font-size:12.5px}
