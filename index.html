@@ -11,7 +11,7 @@
 <body class="light">
 <div id="map"></div>
 <div id="top">
-  <div id="titlebar"><h1>QLD SEQ Public Transport Interactive Map</h1><span class="badge-unoff">Unofficial</span><button id="alertBtn" class="alertbtn" title="Service alerts posted for today">⚠ Alerts</button>
+  <div id="titlebar"><h1>QLD SEQ Public Transport Interactive Map</h1><span class="badge-unoff">Unofficial</span><button id="alertBtn" class="alertbtn" title="Service alerts posted for today">⚠ Alerts</button><button id="favStopsBtn" class="alertbtn fav" title="Your saved stops and stations">★ Stops</button><button id="favRoutesBtn" class="alertbtn fav" title="Your saved routes and train lines">★ Routes</button>
     <button id="themeBtn" class="roundbtn" aria-label="Switch light or dark map" title="Light / dark map"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
     <button id="infoBtn" class="roundbtn" aria-label="About this map" title="About">i</button></div>
   <div id="searches">
@@ -21,7 +21,7 @@
   <div id="chips"></div>
 </div>
 <div id="panel">
-  <div class="ph"><button class="x" id="pBack" aria-label="Back to stop" title="Back">‹</button><div class="pht"><h2 id="pTitle"></h2><div class="sub" id="pSub"></div></div><button class="x" id="pClose" aria-label="Close" title="Close">×</button></div>
+  <div class="ph"><button class="x" id="pBack" aria-label="Back to stop" title="Back">‹</button><div class="pht"><h2 id="pTitle"></h2><div class="sub" id="pSub"></div></div><button class="x star" id="pStar" aria-label="Save">☆</button><button class="x" id="pClose" aria-label="Close" title="Close">×</button></div>
   <div class="pb" id="pBody"></div>
 </div>
 <div id="hint">Zoom in to see bus stops</div>
@@ -31,7 +31,7 @@
   <div class="warn"><b>Unofficial product.</b> This map is not produced, endorsed or maintained by Translink or the Queensland Government. It is an independent visualisation of Translink open data, provided for information and consultation only. Routes, stops and services change — always check <b>translink.com.au</b> or the MyTranslink app before travelling. No warranty is given as to accuracy or completeness.</div>
   <p class="p1"><b>Bus route numbering zones</b> show where each three-digit route series predominantly stops (a rule of thumb, not exact boundaries).</p>
   <div class="lg" id="lgZones"></div>
-  <p class="p1"><b>How to use:</b> search a route to see its path and stops in order; search a station, stop, street or suburb to jump there. Tap any station or stop (bus stops appear when zoomed in) to see every route serving it with its next departure and the rest of today's scheduled times (scroll sideways); tap a route badge to open that route. <b>Show all routes</b> draws every route from that stop, with white arrows showing the direction of travel away from it; tap any line or route to open it, and use ‹ to return to the stop. Each button under the search bars cycles through on, off and <i>only this layer</i> (a third click brings the other layers back as they were); the half-circle button switches between light and dark maps. In the <b>Next</b> column, green times are live predictions, amber means running late, and grey is the scheduled time.</p>
+  <p class="p1"><b>How to use:</b> search a route to see its path and stops in order; search a station, stop, street or suburb to jump there. Tap any station or stop (bus stops appear when zoomed in) to see every route serving it with its next departure and the rest of today's scheduled times (scroll sideways); tap a route badge to open that route. <b>Show all routes</b> draws every route from that stop, with white arrows showing the direction of travel away from it; tap any line or route to open it, and use ‹ to return to the stop. Each button under the search bars cycles through on, off and <i>only this layer</i> (a third click brings the other layers back as they were); the half-circle button switches between light and dark maps. Tap ☆ on a stop or route to save it; <b>★ Stops</b> and <b>★ Routes</b> show your saved ones (saved on this device only). Saved routes open a full timetable with every stop, Earlier/Later and a day picker, plus live vehicles and updates. In the <b>Next</b> column, green times are live predictions, amber means running late, and grey is the scheduled time.</p>
   <p class="cred">Timetable data (scheduled times, Brisbane time): Translink GTFS feed of <span id="feedDate"></span> (route paths simplified). Live vehicle positions, arrival predictions and service alerts: Translink GTFS-Realtime, refreshed every 15–30 seconds. Contains Translink / Queensland Government open data, licensed under Creative Commons Attribution 4.0. Base map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (Open Database Licence), rendered with <a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a> and <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a>.</p>
   <button id="infoClose">Close</button>
 </div></div>

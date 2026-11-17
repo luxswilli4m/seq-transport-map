@@ -3,7 +3,7 @@
 Usage: python3 tools/build_timetables.py <gtfs_dir> <repo_dir>
 Writes data/tt/calendar.json and data/tt/<tile>.json (stops grouped into ~5 km tiles).
 """
-import sys, os, json, math
+import sys, os, json, math, re
 import pandas as pd
 from collections import defaultdict
 
@@ -82,3 +82,83 @@ for t, d in tiles.items():
     open(os.path.join(odir, t + ".json"), "w").write(s)
 json.dump({"svc": svc, "hs": headsigns}, open(os.path.join(odir, "calendar.json"), "w"), separators=(",", ":"))
 print("tiles", len(tiles), "MB", round(total / 1e6, 1), "services", len(svc), "headsigns", len(headsigns))
+
+# ---------------------------------------------------------------------------
+# Per-route timetables (like Translink's route pages): every stop, every trip,
+# by direction. Bus/ferry/tram keyed by route name; trains keyed by line T1–T6.
+TLINE_BY_COLOUR = {"27855A": "T1", "6CC6E9": "T2", "9B60A6": "T3", "4778B2": "T4", "FFC425": "T5", "D53E45": "T6"}
+rinfo = routes.set_index("route_short_name")
+def route_key(name):
+    r = R[ridx[name]]
+    if r["t"] == "train":
+        return TLINE_BY_COLOUR.get(r["c"].lstrip("#").upper(), "T1")
+    return name
+trips["key"] = trips.route_short_name.map(route_key)
+trips["dir"] = pd.read_csv(os.path.join(G, "trips.txt"), dtype=str, usecols=["trip_id", "direction_id"]).set_index("trip_id").direction_id.reindex(trips.trip_id).fillna("0").values
+st_all = pd.read_csv(os.path.join(G, "stop_times.txt"), dtype=str, usecols=["trip_id", "departure_time", "stop_id", "stop_sequence"])
+st_all = st_all[st_all.trip_id.isin(set(trips.trip_id))]
+st_all["seq"] = st_all.stop_sequence.astype(int)
+st_all["m"] = st_all.departure_time.map(mins)
+st_all["sid"] = st_all.stop_id.map(parent)
+st_all = st_all.sort_values(["trip_id", "seq"])
+tmeta = trips.set_index("trip_id")[["key", "dir", "hi", "si"]]
+by_trip = {tid: (g.sid.tolist(), g.m.tolist()) for tid, g in st_all.groupby("trip_id", sort=False)}
+del st_all
+
+def order_stops(patterns):
+    """patterns: list of (keys, weight). Returns a merged order (topological, ties by mean position)."""
+    from collections import defaultdict
+    succ = defaultdict(set); indeg = defaultdict(int); pos = defaultdict(list); nodes = set()
+    for keys, w in patterns:
+        n = len(keys)
+        for i, k in enumerate(keys):
+            nodes.add(k); pos[k].append((i / max(n - 1, 1), w))
+        for a, b in zip(keys, keys[1:]):
+            if b not in succ[a]: succ[a].add(b); indeg[b] += 1
+    avg = {k: sum(p * w for p, w in v) / sum(w for _, w in v) for k, v in pos.items()}
+    out = []; ready = [k for k in nodes if indeg[k] == 0]; left = set(nodes)
+    while left:
+        if not ready:
+            k = min(left, key=lambda x: avg[x]); ready = [k]
+        nxt = [x for x in ready if out and x in succ[out[-1]]]  # keep a branch together
+        pick = min(nxt, key=lambda x: avg[x]) if nxt else min(ready, key=lambda x: avg[x])
+        ready.remove(pick); k = pick
+        if k not in left: continue
+        out.append(k); left.discard(k)
+        for nb in succ[k]:
+            indeg[nb] -= 1
+            if indeg[nb] <= 0 and nb in left and nb not in ready: ready.append(nb)
+    return out
+
+rdir = os.path.join(OUT, "data/rt"); os.makedirs(rdir, exist_ok=True)
+for f in os.listdir(rdir): os.remove(os.path.join(rdir, f))
+groups = defaultdict(list)
+for tid, (key, d, hi, si) in tmeta.iterrows():
+    if tid in by_trip: groups[(key, d)].append((tid, int(hi), int(si)))
+files = defaultdict(dict); rt_total = 0
+for (key, d), tl in groups.items():
+    pat = defaultdict(int); tkeys = {}
+    for tid, hi, si in tl:
+        sids, _ = by_trip[tid]; seen = defaultdict(int); ks = []
+        for x in sids:
+            seen[x] += 1; ks.append(x + ("#%d" % seen[x] if seen[x] > 1 else ""))
+        tkeys[tid] = ks; pat[tuple(ks)] += 1
+    order = order_stops(list(pat.items()))
+    col = {k: i for i, k in enumerate(order)}
+    uniq = {}
+    for tid, hi, si in tl:
+        ks = tkeys[tid]; _, ms = by_trip[tid]
+        row = [-1] * len(order)
+        for k, m in zip(ks, ms): row[col[k]] = m
+        first = min(m for m in row if m >= 0)
+        rel = tuple(m - first if m >= 0 else -1 for m in row)
+        u = uniq.setdefault((hi, first, rel), [])
+        u.append(si)
+    tripsout = sorted(([hi, sorted(set(sv)), first] + list(rel) for (hi, first, rel), sv in uniq.items()), key=lambda x: x[2])
+    hcount = defaultdict(int)
+    for tid, hi, si in tl: hcount[hi] += 1
+    files[key][d] = {"o": [k.split("#")[0] for k in order], "top": [h for h, _ in sorted(hcount.items(), key=lambda x: -x[1])[:3]], "t": tripsout}
+for key, dd in files.items():
+    s = json.dumps(dd, separators=(",", ":")); rt_total += len(s)
+    open(os.path.join(rdir, re.sub(r"[^A-Za-z0-9_-]", "_", key) + ".json"), "w").write(s)
+print("route tables", len(files), "MB", round(rt_total / 1e6, 1))

@@ -185,21 +185,32 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-function openPanel(t,s,html){pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";wire()}
+function openPanel(t,s,html,opt){opt=opt||{};view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+  if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
+// ---------- favourites (saved on this device only)
+const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
+function saveFav(){try{localStorage.setItem("seqmap_favs",JSON.stringify(FAV))}catch(e){}updateFavBtns()}
+const pStar=document.getElementById("pStar");let starTarget=null;
+function setStar(t){starTarget=t;if(!t){pStar.style.display="none";return}pStar.style.display="block";const on=FAV[t.list].includes(t.key);pStar.textContent=on?"★":"☆";pStar.classList.toggle("on",on);pStar.title=on?"Remove from saved":"Save to favourites"}
+pStar.onclick=()=>{if(!starTarget)return;const L=FAV[starTarget.list];const k=L.indexOf(starTarget.key);if(k>=0)L.splice(k,1);else L.push(starTarget.key);saveFav();setStar(starTarget)};
+function updateFavBtns(){document.getElementById("favStopsBtn").textContent="★ Stops"+(FAV.stops.length?" ("+FAV.stops.length+")":"");document.getElementById("favRoutesBtn").textContent="★ Routes"+(FAV.routes.length?" ("+FAV.routes.length+")":"")}
 function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,true));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,true));
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
-function closePanel(){focusRoutes=null;drawVehicles();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
+function closePanel(){focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 document.getElementById("pClose").onclick=closePanel;
-pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";map.jumpTo(b.cam);openStop(b.id,false,b.web,true,true)};
+pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
+  if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
+function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
 function dist(a,b){const k=Math.PI/180,x=(b[2]-a[2])*Math.cos((a[1]+b[1])/2*k),y=b[1]-a[1];return Math.sqrt(x*x+y*y)*111320}
 
 // ---------- timetables
 const TT={cal:null,tiles:{}};
 const tileOf=s=>Math.floor(s[1]*20)+"_"+Math.floor(s[2]*20);
-async function loadTT(s){if(!TT.cal)TT.cal=await (await fetch(BASE+"data/tt/calendar.json")).json();const t=tileOf(s);
+async function ensureCal(){if(!TT.cal)TT.cal=await (await fetch(BASE+"data/tt/calendar.json")).json();return TT.cal}
+async function loadTT(s){await ensureCal();const t=tileOf(s);
   if(!(t in TT.tiles)){try{TT.tiles[t]=await (await fetch(BASE+"data/tt/"+t+".json")).json()}catch(e){TT.tiles[t]={}}}return TT.tiles[t]}
 const fmtParts=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23",weekday:"short"});
 function bneNow(){const p=Object.fromEntries(fmtParts.formatToParts(new Date()).map(x=>[x.type,x.value]));return {ymd:p.year+p.month+p.day,dow:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].indexOf(p.weekday),min:(+p.hour)*60+(+p.minute)}}
@@ -235,7 +246,7 @@ async function renderTT(id){const box=document.getElementById("ttBox");if(!box)r
   box.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,true));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,true));
   if(typeof applyLive==="function")applyLive(id)}
 
-function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;focusRoutes=null;drawVehicles();if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
+function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;focusRoutes=null;rtFocus=false;syncVehVis();if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
   if(fly)map.flyTo({center:[s[2],s[1]],zoom:Math.max(map.getZoom(),s[3]==="bus"?16:15),duration:600});
   const near=[];for(const [oid,o] of Object.entries(ST)){if(oid===id||o[3]==="bus")continue;const d=dist(s,o);if(d<1000)near.push([d,oid,o])}near.sort((a,b)=>a[0]-b[0]);
   let h="";
@@ -244,7 +255,7 @@ function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;focusRou
     h+=`<div id="ttBox" class="tt"><div class="sub">Loading timetable…</div></div>`}
   else h+=`<div class="sub">No scheduled services in this timetable.</div>`;
   let sub=KIND[s[3]];if(s[3]==="busway"&&BWS[id])sub+=" · "+BWS[id].b.map(k=>BWNAME[k]).join(" / ")+(BWS[id].road?" (on-road section)":"");if(s[4])sub+=" · "+esc(s[4]);
-  openPanel(s[0],sub,h);
+  openPanel(s[0],sub,h,{star:{list:"stops",key:id}});
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
   const tf=document.getElementById("ttFilter");if(tf)tf.oninput=()=>renderTT(id);
   if(s[5].length)renderTT(id);
@@ -297,39 +308,43 @@ function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach
 function showRoute(i,fromStop){focusRoutes=new Set([i]);drawVehicles();const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   let di0=0;if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
-  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,routeBody(i,di0));insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
+  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n}});
+  document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
 function showLine(nm,fromStop){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);let h=routeBody(main,0);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
-  openPanel(`${nm} ${TNAME[nm]}`,`Train line`,h);insertAlerts([],ids);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
+  openPanel(`${nm} ${TNAME[nm]}`,`Train line`,`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+h,{star:{list:"routes",key:nm}});
+  document.getElementById("fullTT").onclick=()=>openRouteTable(nm);insertAlerts([],ids);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
 
 // ---------- live data (via relay)
+let rtFocus=false,view="",rtState=null;
+function syncVehVis(){setGroup("live",chipState.live==="on"||rtFocus);drawVehicles()}
 const nameIdx={};R.forEach((r,i)=>{nameIdx[r.n]=i});
 const riOfRoute=id=>{if(!id)return -1;const n=id.replace(/-\d+$/,"");return n in nameIdx?nameIdx[n]:-1};
 const LIVE={veh:[],vehAt:0,trips:null,tripsAt:0,alerts:[],alertsAt:0};
 async function getFeed(name){const r=await fetch(RELAY+"/"+name,{cache:"no-store"});if(!r.ok)throw new Error(name+" "+r.status);return decodeGTFSRT(await r.arrayBuffer())}
 function drawVehicles(){if(!map.getSource("veh"))return;const f=[];const now=Date.now()/1000;
-  for(const v of LIVE.veh){const r=R[v.ri];const dim=!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
+  const liveOn=chipState.live==="on";
+  for(const v of LIVE.veh){if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
     f.push({type:"Feature",properties:{c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
   if(focusRoutes)f.sort((a,b)=>a.properties.dim-b.properties.dim).reverse();
   map.getSource("veh").setData(FC(f))}
 async function pollVehicles(){if(document.hidden||map.getLayoutProperty("veh-dot","visibility")==="none")return;
-  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();drawVehicles()}catch(e){console.warn(e)}}
+  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),trip:e.vp.trip.trip,dir:e.vp.trip.dir,stop:e.vp.stop,lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();drawVehicles();if(view==="rt"&&rtState)renderRTLive()}catch(e){console.warn(e)}}
 async function getTrips(){if(LIVE.trips&&Date.now()-LIVE.tripsAt<25000)return LIVE.trips;const d=await getFeed("trips");LIVE.trips=d;LIVE.tripsAt=Date.now();return d}
 const bneMin=sec=>Math.floor(((sec+36000)%86400)/60);
+function computeLive(id,rows,d){const ids=new Set([id,...(KIDS[id]||[])]);const preds=[];const nowS=Date.now()/1000;
+  for(const e of d.entity){const tu=e.tu;if(!tu||!tu.stu)continue;const ri=riOfRoute(tu.trip&&tu.trip.route);if(ri<0)continue;const tripCx=tu.trip.sr===3;
+    for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;const delay=ev.delay||0;preds.push({ri,pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
+  return rows.map(row=>{if(!row.up.length)return null;const same=p=>row.kind==="train"?(lineOf[p.ri]||[])[0]===row.line:p.ri===row.ri;
+    const t0=row.up[0]%1440;const p=preds.find(x=>same(x)&&x.sched===t0);if(!p)return null;
+    if(p.cx)return {cls:"nx cx",html:"Cancelled",title:"Cancelled"};
+    const mins=Math.round((p.pred-nowS)/60);const late=p.delay>=120,early=p.delay<=-60;
+    return {cls:"nx "+(late?"late":"live"),title:late?`${Math.round(p.delay/60)} min late (scheduled ${clock(row.up[0])})`:early?`${Math.round(-p.delay/60)} min early`:"On time (live)",
+      html:`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")}})}
 async function applyLive(id){const box=document.getElementById("ttBox");if(!box||!ctx||ctx.id!==id||!ctx.rows)return;let d;
   try{d=await getTrips()}catch(e){return}
-  if(!ctx||ctx.id!==id)return;const ids=new Set([id,...(KIDS[id]||[])]);const preds=[];const nowS=Date.now()/1000;
-  for(const e of d.entity){const tu=e.tu;if(!tu||!tu.stu)continue;const ri=riOfRoute(tu.trip&&tu.trip.route);if(ri<0)continue;const tripCx=tu.trip.sr===3;
-    for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time){if(tripCx||u.sr===1)preds.push({ri,cx:true,seq:u.seq});continue}
-      const delay=ev.delay||0;preds.push({ri,pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
-  ctx.rows.forEach((row,k)=>{const cell=box.querySelector(`[data-live="${k}"]`);if(!cell||!row.up.length)return;
-    const same=p=>row.kind==="train"?(lineOf[p.ri]||[])[0]===row.line&&R[p.ri]:p.ri===row.ri;
-    const t0=row.up[0]%1440;const p=preds.find(x=>same(x)&&x.sched!==undefined&&x.sched===t0);if(!p)return;
-    if(p.cx){cell.className="nx cx";cell.innerHTML="Cancelled";return}
-    const mins=Math.round((p.pred-nowS)/60);const late=p.delay>=120,early=p.delay<=-60;
-    cell.className="nx "+(late?"late":"live");cell.title=late?`${Math.round(p.delay/60)} min late (scheduled ${clock(row.up[0])})`:early?`${Math.round(-p.delay/60)} min early`:"On time (live)";
-    cell.innerHTML=`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")})}
+  if(!ctx||ctx.id!==id)return;computeLive(id,ctx.rows,d).forEach((v,k)=>{const cell=box.querySelector(`[data-live="${k}"]`);if(!cell||!v)return;cell.className=v.cls;cell.innerHTML=v.html;cell.title=v.title})}
 // alerts
 async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
   LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn()}catch(e){console.warn(e)}}
@@ -354,7 +369,7 @@ function alertTags(a){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/864
   const M={train:"Train",bus:"Bus",ferry:"Ferry",tram:"Tram"};
   return {timing,type:EFFECT[a.effect]||"Other",modes:["train","bus","ferry","tram"].filter(m=>modes.has(m)).map(m=>M[m]),where:["Station","Train line","Bus route","Ferry route","Tram line","Bus stop","Tram stop"].filter(w=>where.has(w)),kind}}
 let alertFilter="All";
-function showAllAlerts(){backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+function showAllAlerts(){focusRoutes=null;drawVehicles();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
   const all=todaysAlerts().map(a=>({a,t:alertTags(a)}));const tord={"Now":0,"Later today":1,"Ongoing":2};
   all.sort((x,y)=>tord[x.t.timing]-tord[y.t.timing]||((x.a.periods||[{}])[0].start||0)-((y.a.periods||[{}])[0].start||0));
   const LR=new Set(["Train line","Bus route","Ferry route","Tram line"]),SS=new Set(["Station","Bus stop","Tram stop"]);
@@ -377,7 +392,7 @@ function showAllAlerts(){backState=null;pBack.style.display="none";ctx=null;clea
       (ss.length?`<div class="alstops">${ss.slice(0,12).map(x=>`<span class="near" data-near="${x}">${esc(ST[x][0])}</span>`).join(" · ")}</div>`:"")+
       (a.desc?`<p>${esc(a.desc).slice(0,1500)}</p>`:"")+(a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:"")+`</details>`}).join("");
   const chips=`<div class="acats">`+cats.map(c=>`<button class="acat${c===alertFilter?" on":""}" data-cat="${esc(c)}">${esc(c)} <span>${count(c)}</span></button>`).join("")+`</div>`;
-  openPanel("Service alerts",`${all.length} posted for today · Translink`,chips+`<div class="alist">${body}</div>`);
+  openPanel("Service alerts",`${all.length} posted for today · Translink`,chips+`<div class="alist">${body}</div>`,{view:"alerts"});
   pB.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{alertFilter=(alertFilter===b.dataset.cat&&b.dataset.cat!=="All")?"All":b.dataset.cat;const sc=pB.querySelector(".acats").scrollLeft;showAllAlerts();const n=pB.querySelector(".acats");if(n)n.scrollLeft=sc})}
 function activeNow(a){const now=Date.now()/1000;return !a.periods||!a.periods.length||a.periods.some(p=>(!p.start||p.start<=now)&&(!p.end||now<=p.end))}
 function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(activeNow).filter(a=>(a.sel||[]).some(x=>(x.stop&&sset.has(x.stop))||(x.route&&rset.has(riOfRoute(x.route)))))}
@@ -386,6 +401,93 @@ function insertAlerts(stopIds,routeIdxs){const html=alertHTML(alertsFor(stopIds,
 document.getElementById("alertBtn").onclick=()=>{webCam=null;showAllAlerts()};
 setInterval(pollVehicles,20000);setInterval(pollAlerts,120000);pollVehicles();pollAlerts();
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){pollVehicles();if(ctx&&ctx.id)renderTT(ctx.id)}});
+
+// ---------- saved stops
+let favTimer=null;
+async function showFavStops(){focusRoutes=null;rtFocus=false;syncVehVis();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+  if(!FAV.stops.length){openPanel("Saved stops","Saved on this device",`<div class="sub">No saved stops yet. Open any stop or station and tap ☆ next to its name to save it here.</div>`,{view:"favs"});return}
+  openPanel("Saved stops",`${FAV.stops.length} saved on this device`,FAV.stops.map(id=>ST[id]?`<div class="fav" data-fav="${id}"><div class="favh"><a data-open="${id}">${esc(ST[id][0])}</a><span>${KIND[ST[id][3]]}${ST[id][4]?" · "+esc(ST[id][4]):""}</span><button class="favx" data-unfav="${id}" title="Remove">✕</button></div><div class="tt favtt" id="fv_${id}"><div class="sub">Loading…</div></div></div>`:"").join(""),{view:"favs"});
+  pB.querySelectorAll("[data-open]").forEach(a=>a.onclick=()=>{const cam={center:map.getCenter(),zoom:map.getZoom()};openStop(a.dataset.open,true);setBack({kind:"favs",cam})});
+  pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=()=>{FAV.stops=FAV.stops.filter(x=>x!==b.dataset.unfav);saveFav();showFavStops()});
+  await refreshFavStops();clearInterval(favTimer);favTimer=setInterval(()=>{if(view==="favs"&&panel.style.display!=="none")refreshFavStops();else clearInterval(favTimer)},30000)}
+async function refreshFavStops(){let d=null;try{d=await getTrips()}catch(e){}
+  for(const id of FAV.stops){const box=document.getElementById("fv_"+id);if(!box||!ST[id])continue;let tile;try{tile=await loadTT(ST[id])}catch(e){continue}
+    const {rows,nowMin}=buildRows(id,tile[id]||[]);const soon=rows.filter(r=>r.up.length).sort((a,b)=>a.up[0]-b.up[0]).slice(0,5);
+    if(!soon.length){box.innerHTML=`<div class="sub">No more departures today.</div>`;continue}
+    box.innerHTML=soon.map((r,k)=>rowHTML(r,nowMin,k)).join("");
+    box.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,false));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,false));
+    if(d)computeLive(id,soon,d).forEach((v,k)=>{const c=box.querySelector(`[data-live="${k}"]`);if(c&&v){c.className=v.cls;c.innerHTML=v.html;c.title=v.title}})}}
+// ---------- saved routes
+const keyIds=key=>TNAME[key]?(lineRoutes[key]||[]):(key in nameIdx?[nameIdx[key]]:[]);
+function keyBadge(key){if(TNAME[key])return lineBadge(key);const i=nameIdx[key];return i===undefined?esc(key):badge(i,R[i].t==="tram"?"G:link":R[i].n)}
+const keyName=key=>TNAME[key]?TNAME[key]:(key in nameIdx?R[nameIdx[key]].l:key);
+function showFavRoutes(){focusRoutes=null;rtFocus=false;syncVehVis();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+  if(!FAV.routes.length){openPanel("Saved routes","Saved on this device",`<div class="sub">No saved routes yet. Open any route or train line and tap ☆ next to its name to save it here.</div>`,{view:"favr"});return}
+  const now=Date.now()/1000;
+  openPanel("Saved routes",`${FAV.routes.length} saved on this device`,FAV.routes.map(k=>{const ids=new Set(keyIds(k));const nv=LIVE.veh.filter(v=>ids.has(v.ri)).length;
+    const na=LIVE.alerts.filter(a=>(a.sel||[]).some(x=>x.route&&ids.has(riOfRoute(x.route)))&&(!a.periods||!a.periods.length||a.periods.some(p=>!p.end||p.end>=now))).length;
+    return `<div class="favr" data-rt="${esc(k)}">${keyBadge(k)}<div class="favrn"><b>${esc(keyName(k))}</b><span>${LIVE.vehAt?nv+" running now":""}${na?` · <em>⚠ ${na} alert${na>1?"s":""}</em>`:""}</span></div><button class="favx" data-unfav="${esc(k)}" title="Remove">✕</button></div>`}).join(""),{view:"favr"});
+  pB.querySelectorAll("[data-rt]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-unfav]"))return;e.stopPropagation();openRouteTable(el.dataset.rt,null,{kind:"favr",cam:{center:map.getCenter(),zoom:map.getZoom()}})});
+  pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=e=>{e.stopPropagation();FAV.routes=FAV.routes.filter(x=>x!==b.dataset.unfav);saveFav();showFavRoutes()})}
+// ---------- route timetable page (all stops, Earlier / Later, day picker, live, updates)
+const RTC={};const COLS=5;
+const fmtDayOpt=new Intl.DateTimeFormat("en-AU",{timeZone:"UTC",weekday:"long",day:"numeric",month:"short"});
+async function openRouteTable(key,st,back){const file=key.replace(/[^A-Za-z0-9_-]/g,"_");
+  try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+file+".json")).json()}catch(e){openPanel(keyName(key),"Timetable",`<div class="sub">Timetable unavailable.</div>`);return}
+  const data=RTC[key];const dirs=Object.keys(data).sort();const now=bneNow();
+  st=Object.assign({dir:dirs[0],day:0,start:null},st||{});if(!data[st.dir])st.dir=dirs[0];
+  const day=shiftDay(now.ymd,now.dow,st.day);const D=data[st.dir];
+  const trips=D.t.filter(t=>t[1].some(si=>svcOn(si,day)));
+  if(st.start===null){st.start=0;if(st.day===0){const k=trips.findIndex(t=>{let mx=0;for(let j=3;j<t.length;j++)if(t[j]>mx)mx=t[j];return t[2]+mx>=now.min});st.start=k<0?Math.max(0,trips.length-COLS):k}}
+  st.start=Math.max(0,Math.min(st.start,Math.max(0,trips.length-COLS)));
+  const cols=trips.slice(st.start,st.start+COLS);
+  const ids=keyIds(key);focusRoutes=new Set(ids);rtFocus=true;syncVehVis();drawPaths(ids,TNAME[key]?TCOL[key]:undefined);ctx=null;setSel(null);
+  rtState={key,st,cols,dir:st.dir,order:D.o};
+  const dayOpts=Array.from({length:14},(_,k)=>{const dd=shiftDay(now.ymd,now.dow,k);const lab=k===0?"Today":k===1?"Tomorrow":fmtDayOpt.format(new Date(Date.UTC(+dd.ymd.slice(0,4),+dd.ymd.slice(4,6)-1,+dd.ymd.slice(6,8))));return `<option value="${k}"${k===st.day?" selected":""}>${lab}</option>`}).join("");
+  const dirLab=dk=>"Towards "+data[dk].top.map(h=>cleanHead(TT.cal.hs[h])).filter((x,i,a)=>a.indexOf(x)===i).join(", ");
+  let h=`<div class="rtc"><select id="rtDay">${dayOpts}</select><button class="btn" id="rtNow">Now</button></div>`+
+    `<div class="rtdirs">${dirs.map(dk=>`<button data-dir="${dk}" class="${dk===st.dir?"on":""}">${esc(dirLab(dk))}</button>`).join("")}</div>`+
+    `<div class="rtnav"><button id="rtEarlier"${st.start<=0?" disabled":""}>← Earlier</button><span>${trips.length?`Trips ${st.start+1}–${st.start+cols.length} of ${trips.length}`:""}</span><button id="rtLater"${st.start+COLS>=trips.length?" disabled":""}>Later →</button></div>`;
+  if(!cols.length)h+=`<div class="sub">No services this day in this direction.</div>`;
+  else{const rowsUsed=D.o.map((sid,j)=>cols.some(t=>t[3+j]>=0)?j:-1).filter(j=>j>=0);
+    h+=`<div class="rtgrid"><table><thead><tr><th class="sn">Stop</th>${cols.map(t=>`<th>${esc(cleanHead(TT.cal.hs[t[0]]))}</th>`).join("")}</tr><tr class="lv"><th class="sn"></th>${cols.map((t,c)=>`<th id="rtlv${c}"></th>`).join("")}</tr></thead><tbody>`+
+      rowsUsed.map(j=>{const sid=D.o[j];const s=ST[sid];return `<tr><td class="sn"><a data-s2="${sid}">${esc(s?s[0]:sid)}</a></td>${cols.map(t=>{const v=t[3+j];return `<td>${v>=0?clock(t[2]+v):"—"}</td>`}).join("")}</tr>`}).join("")+`</tbody></table></div>`}
+  h+=`<div class="grp">Live now</div><div id="rtLive" class="rtlive"><div class="sub">Loading live data…</div></div><div class="grp">Updates</div><div id="rtUpd"></div>`;
+  openPanel(TNAME[key]?`${key} ${TNAME[key]}`:`${R[nameIdx[key]].t==="tram"?"G:link":key} — ${keyName(key)}`,"Timetable · all stops",h,{view:"rt",wide:true,star:{list:"routes",key}});
+  if(back)setBack(back);
+  const go=o=>openRouteTable(key,Object.assign({},st,o),backState);
+  document.getElementById("rtDay").onchange=e=>go({day:+e.target.value,start:null});
+  document.getElementById("rtNow").onclick=()=>go({day:0,start:null});
+  pB.querySelectorAll("[data-dir]").forEach(b=>b.onclick=()=>go({dir:b.dataset.dir,start:null}));
+  const E=document.getElementById("rtEarlier"),Lt=document.getElementById("rtLater");if(E)E.onclick=()=>go({start:st.start-COLS});if(Lt)Lt.onclick=()=>go({start:st.start+COLS});
+  pB.querySelectorAll("[data-s2]").forEach(a=>a.onclick=()=>{const b={kind:"rt",key,st:Object.assign({},st),cam:{center:map.getCenter(),zoom:map.getZoom()}};openStop(a.dataset.s2,true);setBack(b)});
+  // updates (current and upcoming alerts for this route)
+  const nowS=Date.now()/1000;const iset=new Set(ids);
+  const al=LIVE.alerts.filter(a=>(a.sel||[]).some(x=>x.route&&iset.has(riOfRoute(x.route)))&&(!a.periods||!a.periods.length||a.periods.some(p=>!p.end||p.end>=nowS)));
+  document.getElementById("rtUpd").innerHTML=!al.length?`<div class="sub">No current or upcoming alerts for this ${TNAME[key]?"line":"route"}.</div>`:al.map(a=>{const t=alertTags(a);const p=(a.periods||[]).find(p=>!p.end||p.end>=nowS);
+    return `<details class="alcard"><summary><b>${esc(a.header)}</b><div class="atags"><span class="atag t-${t.timing.replace(/\s/g,"").toLowerCase()}">${t.timing}</span>${t.kind?`<span class="atag ${t.kind==="Disruption"?"dis":"pl"}">${t.kind}</span>`:""}<span class="atype">${esc(t.type)}</span></div>${p&&(p.start||p.end)?`<span class="when">${p.start?fmtDay.format(p.start*1000):""}${p.end?" – "+fmtDay.format(p.end*1000):""}</span>`:""}</summary>${a.desc?`<p>${esc(a.desc).slice(0,1500)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</details>`}).join("");
+  renderRTLive()}
+async function renderRTLive(){if(view!=="rt"||!rtState)return;const {key,st,cols,dir,order}=rtState;const ids=new Set(keyIds(key));let d=null;try{d=await getTrips()}catch(e){}
+  if(view!=="rt"||!rtState||rtState.key!==key)return;
+  const delays={},stopSched={};
+  if(d)for(const e of d.entity){const tu=e.tu;if(!tu||!tu.trip)continue;const ri=riOfRoute(tu.trip.route);if(!ids.has(ri))continue;const stu=tu.stu||[];
+    const dl=(stu.find(u=>(u.dep||u.arr)&&(u.dep||u.arr).delay!==undefined)||{});const ev=dl.dep||dl.arr;delays[tu.trip.trip]={delay:ev?ev.delay||0:(tu.delay||0),cx:tu.trip.sr===3};
+    if(st.day===0)for(const u of stu){const ev2=u.dep||u.arr;if(!ev2||!ev2.time)continue;const sid=ST[u.stop]?u.stop:parentOf[u.stop];if(sid)stopSched[sid+"|"+bneMin(ev2.time-(ev2.delay||0))]={delay:ev2.delay||0,cx:tu.trip.sr===3||u.sr===1}}}
+  if(st.day===0)cols.forEach((t,c)=>{const cell=document.getElementById("rtlv"+c);if(!cell)return;let hit=null;
+    for(let j=0;j<order.length&&!hit;j++){const v=t[3+j];if(v<0)continue;hit=stopSched[order[j]+"|"+((t[2]+v)%1440)]||null}
+    if(!hit){cell.textContent="";return}
+    cell.innerHTML=hit.cx?`<span class="lvx">Cancelled</span>`:hit.delay>=120?`<span class="lvl">● ${Math.round(hit.delay/60)} min late</span>`:`<span class="lvo">● On time</span>`});
+  const vs=LIVE.veh.filter(v=>ids.has(v.ri)&&String(v.dir)===String(dir));const box=document.getElementById("rtLive");if(!box)return;
+  if(!LIVE.vehAt){box.innerHTML=`<div class="sub">Loading live vehicles…</div>`;pollVehicles();return}
+  if(!vs.length){box.innerHTML=`<div class="sub">No vehicles running in this direction right now.</div>`;return}
+  box.innerHTML=vs.map((v,k)=>{const s=v.stop&&(ST[v.stop]?ST[v.stop]:ST[parentOf[v.stop]]);const dl=delays[v.trip];const r=R[v.ri];
+    const lab=r.t==="train"?(lineOf[v.ri]||[""])[0]:r.t==="tram"?"G:link":r.n;
+    const stat=dl?(dl.cx?`<span class="lvx">Cancelled</span>`:dl.delay>=120?`<span class="lvl">${Math.round(dl.delay/60)} min late</span>`:`<span class="lvo">On time</span>`):"";
+    return `<div class="lvrow" data-v="${k}">${r.t==="train"?lineBadge(lab):badge(v.ri,lab)}<span>${s?"Next: "+esc(s[0]):"Running"}</span>${stat}</div>`}).join("");
+  box.querySelectorAll("[data-v]").forEach(el=>el.onclick=()=>{const v=vs[+el.dataset.v];map.flyTo({center:[v.lon,v.lat],zoom:15,duration:700})})}
+document.getElementById("favStopsBtn").onclick=()=>{webCam=null;showFavStops()};
+document.getElementById("favRoutesBtn").onclick=()=>{webCam=null;showFavRoutes()};
+updateFavBtns();
 
 // ---------- map clicks
 const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line"];
