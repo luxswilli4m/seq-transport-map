@@ -1,0 +1,24 @@
+{
+  "_help": "On-demand areas shown by the 'On demand' button. Each area points at Translink's page that links to its map files (KML). The weekly refresh re-reads these pages. 'how' is the short explanation shown on the card. See README.md, section 'On-demand areas'.",
+  "areas": [
+    {
+      "id": "gc",
+      "name": "Gold Coast on demand",
+      "page": "https://translink.com.au/travel-with-us/on-demand/ondemandgoldcoast",
+      "map_page": "/travel-with-us/on-demand/gold-coast/maps",
+      "zone_names": {
+        "SmallPacificPinesZone_AH": "Roam zone A: Pacific Pines and parts of Oxenford, Maudsland and Gaven",
+        "NerangZone_AH": "Roam zone B: Nerang, Highland Park and parts of Worongary"
+      },
+      "how": "Pre-booked shared service. It picks you up close to home inside the roam zone and takes you to a key location, and back again."
+    },
+    {
+      "id": "logan",
+      "name": "Logan on demand (DRT)",
+      "page": "https://translink.com.au/travel-with-us/on-demand/logan",
+      "map_page": "/travel-with-us/on-demand/logan/trial-sites",
+      "destinations_page": "/travel-with-us/on-demand/logan/trial-sites/destinations",
+      "how": "Pre-booked shared service. It picks you up near home in these suburbs and drops you at one of the destinations below. For the trip home, you're picked up at the destination. Book at least two hours ahead."
+    }
+  ]
+}

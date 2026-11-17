@@ -27,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install tools
-        run: pip install pandas shapely scipy pillow contourpy
+        run: pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile
 
       - name: Download Translink SEQ GTFS
         run: |
@@ -49,6 +49,10 @@ jobs:
           curl -fsSL --retry 3 -o school.zip https://gtfsrt.api.translink.com.au/GTFS/SEQ_SCH_GTFS.zip
           unzip -q school.zip -d school
           python tools/build_school.py school gtfs .
+
+      - name: Rebuild on-demand service areas
+        continue-on-error: true
+        run: python tools/build_ondemand.py gtfs .
 
       - name: Notify if parts of the map were held back
         if: hashFiles('zone_check.txt') != ''

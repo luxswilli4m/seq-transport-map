@@ -15,6 +15,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 - **Live data** — vehicle positions, arrival predictions, cancellations and service alerts.
 - **Saved stops and routes** — with full route timetables and alert colours.
 - **School routes list** — every school-only bus by number and name.
+- **On demand** — Translink on-demand service areas and their destinations (Gold Coast and Logan).
+- **Journey planner** — a link to Translink's official journey planner.
 - **Light and dark maps** — light by default.
 
 ## Data and credits
@@ -43,6 +45,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **School routes.** The School routes button lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
 
+**On demand.** The On demand button shades Translink's on-demand (pre-booked, flexible bus) service areas in navy and marks their destinations and key locations with yellow dots. Tap an area for how it works and where it goes. Destinations that couldn't be placed automatically are still listed, marked "(not marked on map)". Gold Coast and Logan are drawn so far. Ipswich, Tamborine Mountain, Yarrabilba and Bribie Island also have on-demand services, which aren't drawn yet.
+
 ## How it works behind the scenes
 
 Everything is static files served by GitHub Pages. There is no server or database. `data/network.json` holds the routes, stops, zones and busways; `tiles/seq.pmtiles` holds the base map, which the browser reads in small pieces as you move around. Timetables are split into small area files in `data/tt/` (one per stop area) and `data/rt/` (one per route), loaded only when needed. `data/school.json` holds the school route list.
@@ -55,7 +59,7 @@ Everything is static files served by GitHub Pages. There is no server or databas
 
 ### The weekly refresh (automatic)
 
-Every Monday at about 3:17 am Brisbane time a GitHub Action (`.github/workflows/refresh-data.yml`) downloads Translink's latest data and rebuilds everything: routes, stops, timetables, school routes, bus zones and busways. It commits the result if anything changed. You can also run it any time from the **Actions** tab: **Refresh Translink data → Run workflow**.
+Every Monday at about 3:17 am Brisbane time a GitHub Action (`.github/workflows/refresh-data.yml`) downloads Translink's latest data and rebuilds everything: routes, stops, timetables, school routes, bus zones, busways and on-demand areas. It commits the result if anything changed. You can also run it any time from the **Actions** tab: **Refresh Translink data → Run workflow**.
 
 Bus zones and busways only change once the change is live, meaning buses are actually running the new routes or stopping at the new station within the next 7 days. Announced but not-yet-running changes are ignored until then.
 
@@ -101,6 +105,14 @@ You'd add one line so it reads:
 That's it. The build finds "Example Road station" in Translink's stop list, takes its position, and traces the busway from Greenslopes to Example Road and on to Holland Park West along the paths buses actually drive.
 
 **Extending a busway at the end** works the same way: add the new station as the last item (and add a comma to the line above it). **Removing a station:** delete its line, taking care with commas. **Sections on ordinary roads** (drawn thinner) are listed under `"on_road_sections"` at the bottom of the file as pairs of neighbouring stations.
+
+### On-demand areas
+
+The shapes come from map files (KML) that Translink links on its own on-demand pages: the Gold Coast maps page and the Logan "sites" page. Logan's destinations come from the table on Translink's Logan destinations page. The weekly refresh re-reads these pages, so new or changed areas on those pages appear automatically.
+
+Destinations are pinned automatically when their name confidently matches a Translink stop or a named place in the base map. Otherwise they're listed in the card as "(not marked on map)" rather than guessed.
+
+The list of areas, the links to Translink's pages, and the short "how it works" text on each card live in **`tools/ondemand.json`**. If Translink moves a page, the refresh keeps the previous areas on the map and opens a GitHub issue. Fix the page address in that file, then run the workflow.
 
 ### Other things you can change by hand
 
