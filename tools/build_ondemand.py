@@ -167,7 +167,27 @@ def match(dest, stops, pois, near):
 try:
     stops = load_stops()
     areas = []
+    TRACED = json.load(open(os.path.join(REPO, "tools", "ondemand_traced.json")))
     for a in CFG["areas"]:
+        if a.get("traced"):
+            # shapes traced from Translink's map pictures (tools/ondemand_traced.json); pins matched by name
+            groups = []
+            for g in a["groups"]:
+                z = TRACED[g["zone"]]
+                b = [min(p[0] for p in z) - 0.08, min(p[1] for p in z) - 0.08, max(p[0] for p in z) + 0.08, max(p[1] for p in z) + 0.08]
+                pois = load_pois(b)
+                groups.append({"name": g["name"], "zones": [z], "hours": g.get("hours"),
+                               "dests": [{"n": d, "ll": match(d, stops, pois, centroid(z))} for d in g["dests"]]})
+            out = {k: a[k] for k in ("id", "name", "page", "how")}
+            out.update({"groups": groups, "traced": True, "dlabel": "Key locations"})
+            if a.get("starts"):
+                out["starts"] = a["starts"]
+            areas.append(out)
+            print(f"{a['name']}: traced, {len(groups)} groups")
+            for g in groups:
+                for d in g["dests"]:
+                    print(f"   {'pin ' if d['ll'] else '----'} {d['n']}")
+            continue
         page = fetch(BASE + a["map_page"]).decode("utf-8", "replace")
         feats = []
         for u in kml_links(page):
@@ -192,7 +212,7 @@ try:
                 if missing:
                     problems.append(f"{a['name']}: no map file found for {', '.join(missing)}.")
                 near = centroid([p for z in zs for p in z]) if zs else centroid(allpts)
-                groups.append({"name": ", ".join(subs), "zones": zs,
+                groups.append({"name": ", ".join(subs), "zones": zs, "pickup": ", ".join(subs),
                                "dests": [{"n": d, "ll": match(d, stops, pois, near)} for d in dests]})
         else:
             for n, c in sorted(polys, key=lambda x: a.get("zone_names", {}).get(x[0], x[0])):

@@ -19,6 +19,63 @@
       "map_page": "/travel-with-us/on-demand/logan/trial-sites",
       "destinations_page": "/travel-with-us/on-demand/logan/trial-sites/destinations",
       "how": "Pre-booked shared service. It picks you up near home in these suburbs and drops you at one of the destinations below. For the trip home, you're picked up at the destination. Book at least two hours ahead."
+    },
+    {
+      "id": "ipswich",
+      "name": "Ipswich Flexilink",
+      "page": "https://translink.com.au/travel-with-us/on-demand/ipswich",
+      "traced": true,
+      "how": "Shared service that runs hourly. It picks you up from home and drops you anywhere in the roam zone or at a key location. Book at least two hours ahead with Logan Coaches on 1800 228 287; the trip back is a separate booking.",
+      "groups": [
+        {
+          "name": "Roam zone C: parts of Goodna and Bellbird Park",
+          "zone": "ipswich_c",
+          "hours": "Monday to Friday 6am to 7pm; Saturday 7am to 5:30pm",
+          "dests": [
+            "Goodna station",
+            "Redbank Plains Shopping Centre",
+            "Redbank Plaza",
+            "Goodna Marketplace",
+            "Club Parkview"
+          ]
+        },
+        {
+          "name": "Roam zone D: parts of Barellan Point, Karalee and Chuwar",
+          "zone": "ipswich_d",
+          "hours": "Weekday peaks only: 6am to 9am and 4pm to 6:30pm",
+          "dests": [
+            "Ipswich station",
+            "Riverlink Shopping Centre"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bribie",
+      "name": "Bribie Island on demand",
+      "page": "https://translink.com.au/bribie-on-demand",
+      "traced": true,
+      "starts": "2026-11-30",
+      "how": "Pre-booked shared service. It takes you from anywhere in the roam zone to a key location, from a key location back to anywhere in the zone, or between two key locations. Book ahead, including your trip back.",
+      "groups": [
+        {
+          "name": "Bribie Island roam zone",
+          "zone": "bribie",
+          "hours": "Monday to Friday 4:30am to 10pm; Saturday 7am to 10pm; Sunday and public holidays 7am to 7pm",
+          "dests": [
+            "Bribie Island Central",
+            "Bribie Island Community Arts Centre",
+            "Bongaree Jetty",
+            "Bongaree Plaza",
+            "Bellara shops",
+            "Banksia Beach shops",
+            "Bribie Island RSL Club",
+            "Bribie Island Satellite Health Centre",
+            "Bribie Island Sports Complex",
+            "Woorim Beach"
+          ]
+        }
+      ]
     }
   ]
 }

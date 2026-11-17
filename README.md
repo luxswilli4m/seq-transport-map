@@ -15,7 +15,7 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 - **Live data** — vehicle positions, arrival predictions, cancellations and service alerts.
 - **Saved stops and routes** — with full route timetables and alert colours.
 - **School routes list** — every school-only bus by number and name.
-- **On demand** — Translink on-demand service areas and their destinations (Gold Coast and Logan).
+- **On demand** — Translink on-demand service areas and their destinations (Gold Coast, Logan, Ipswich Flexilink and Bribie Island).
 - **Journey planner** — a link to Translink's official journey planner.
 - **Light and dark maps** — light by default.
 
@@ -45,7 +45,7 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **School routes.** The School routes button lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
 
-**On demand.** The On demand button shades Translink's on-demand (pre-booked, flexible bus) service areas in navy and marks their destinations and key locations with yellow dots. Tap an area for how it works and where it goes. Destinations that couldn't be placed automatically are still listed, marked "(not marked on map)". Gold Coast and Logan are drawn so far. Ipswich, Tamborine Mountain, Yarrabilba and Bribie Island also have on-demand services, which aren't drawn yet.
+**On demand.** The On demand button shades Translink's on-demand (pre-booked, flexible bus) service areas in navy and marks their destinations and key locations with yellow dots. Tap an area for how it works and where it goes. Destinations that couldn't be placed automatically are still listed, marked "(not marked on map)". Turning On demand on hides the other map layers; turning it off brings them back as they were. Gold Coast and Logan come from Translink's own map files and are exact. Ipswich Flexilink (zones C and D) and Bribie Island are traced from Translink's map pictures, so their edges are approximate; Bribie shows its start date until the service begins. Tamborine Mountain and Yarrabilba aren't drawn yet.
 
 ## How it works behind the scenes
 
@@ -112,7 +112,9 @@ The shapes come from map files (KML) that Translink links on its own on-demand p
 
 Destinations are pinned automatically when their name confidently matches a Translink stop or a named place in the base map. Otherwise they're listed in the card as "(not marked on map)" rather than guessed.
 
-The list of areas, the links to Translink's pages, and the short "how it works" text on each card live in **`tools/ondemand.json`**. If Translink moves a page, the refresh keeps the previous areas on the map and opens a GitHub issue. Fix the page address in that file, then run the workflow.
+The list of areas, the links to Translink's pages, and the short "how it works" text on each card live in **`tools/ondemand.json`**.
+
+**Traced areas (Ipswich, Bribie Island).** Translink only publishes these as pictures, so their outlines were traced once, by lining each picture up with the real road network and picking out the boundary line, and are stored in **`tools/ondemand_traced.json`**. They don't update themselves. If Translink changes one of these areas, it needs re-tracing (ask for it to be redone). Their key locations, hours and start date are in `tools/ondemand.json`; edit those by hand if Translink's page changes. If Translink moves a page, the refresh keeps the previous areas on the map and opens a GitHub issue. Fix the page address in that file, then run the workflow.
 
 ### Other things you can change by hand
 

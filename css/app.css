@@ -228,3 +228,5 @@ ul.odd{margin:2px 0 10px;padding-left:20px;font-size:14px;line-height:1.6}
 .odlink{margin:6px 0 10px;font-size:13.5px}
 .odnote{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:8px}
 #panel a{color:var(--accent)}
+.odstart{display:inline-block;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-size:12.5px;font-weight:600;margin:2px 0 6px}
+body:not(.light) .odstart{background:#f59e0b22;color:#fbbf24}

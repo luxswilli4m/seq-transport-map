@@ -521,7 +521,7 @@ async function showSchool(q){focusRoutes=null;rtFocus=false;syncVehVis();backSta
 document.getElementById("schoolBtn").onclick=()=>{webCam=null;showSchool("")};
 
 // ---------- on-demand service areas (navy zones + key destination pins)
-let OD=null,odOn=false;const selPt=c=>map.getSource("sel").setData(FC([{type:"Feature",properties:{},geometry:{type:"Point",coordinates:c}}]));const OD_FILL="#1e3a8a";
+let OD=null,odOn=false,odSnap=null;const selPt=c=>map.getSource("sel").setData(FC([{type:"Feature",properties:{},geometry:{type:"Point",coordinates:c}}]));const OD_FILL="#1e3a8a";
 function odGroups(){const out=[];OD.areas.forEach((a,ai)=>a.groups.forEach((g,gi)=>out.push({a,ai,g,gi})));return out}
 function odPins(){const m=new Map();OD.areas.forEach((a,ai)=>{(a.dests||[]).forEach(d=>{if(d.ll&&!m.has(d.n))m.set(d.n,{n:d.n,ll:d.ll,ai,gi:-1})});a.groups.forEach((g,gi)=>(g.dests||[]).forEach(d=>{if(d.ll&&!m.has(d.n))m.set(d.n,{n:d.n,ll:d.ll,ai,gi})}))});return [...m.values()]}
 function odSetup(){if(map.getSource("odz"))return;
@@ -535,6 +535,9 @@ function odSetup(){if(map.getSource("odz"))return;
   L.push("od-fill","od-line","od-pin","od-lbl");odPaint();
   ["od-pin","od-fill"].forEach(id=>{map.on("mouseenter",id,e=>{map.getCanvas().style.cursor="pointer";if(id==="od-pin")pop.setLngLat(e.lngLat).setText(e.features[0].properties.n).addTo(map)});map.on("mouseleave",id,()=>{map.getCanvas().style.cursor="";pop.remove()})})}
 function odPaint(){if(!map.getLayer("od-fill"))return;const d=theme!=="light";map.setPaintProperty("od-fill","fill-color",d?"#3b6fd8":OD_FILL);map.setPaintProperty("od-line","line-color",d?"#93b4ff":OD_FILL);map.setPaintProperty("od-lbl","text-color",d?"#dbe6ff":OD_FILL);map.setPaintProperty("od-lbl","text-halo-color",d?"#0b1220":"#ffffff")}
+function odLayers(on){if(on){odSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{odSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
+  else if(odSnap){Object.entries(odSnap).forEach(([g,v])=>{const st=v==="only"?"on":v;chipState[g]=st;if(g==="live")syncVehVis();else setGroup(g,st!=="off");renderChip(g)});odSnap=null}
+  renderAll();hint()}
 function odVis(v){["od-fill","od-line","od-pin","od-lbl"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",v?"visible":"none"))}
 function odBounds(zs){let b=null;zs.forEach(z=>z.forEach(([x,y])=>{b=b?[Math.min(b[0],x),Math.min(b[1],y),Math.max(b[2],x),Math.max(b[3],y)]:[x,y,x,y]}));return b}
 function odFit(zs){const b=odBounds(zs);if(b)map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:14})}
@@ -542,19 +545,23 @@ function odDestHTML(list,ai){return `<ul class="odd">`+list.map(d=>d.ll?`<li><a 
 function odWire(){pB.querySelectorAll("[data-odll]").forEach(a=>a.onclick=e=>{e.preventDefault();const [x,y]=a.dataset.odll.split(",").map(Number);map.flyTo({center:[x,y],zoom:15,duration:700});selPt([x,y])});
   pB.querySelectorAll("[data-odg]").forEach(a=>a.onclick=e=>{e.preventDefault();const [ai,gi]=a.dataset.odg.split(",").map(Number);odCard(ai,gi,true)})}
 const odLink=a=>`<p class="odlink"><a href="${esc(a.page)}" target="_blank" rel="noopener">Hours, booking and details at Translink ↗</a></p>`;
-function odOverview(){const others="Ipswich, Tamborine Mountain, Yarrabilba and Bribie Island";
-  const h=OD.areas.map((a,ai)=>`<div class="grp">${esc(a.name)}</div><div class="odhow">${esc(a.how)}</div>`+a.groups.map((g,gi)=>`<div class="odg"><a href="#" data-odg="${ai},${gi}">${esc(g.name)}</a></div>`).join("")+odLink(a)).join("")
-   +`<div class="odnote">Shaded navy areas are where on-demand buses pick up. Yellow dots are destinations and key locations; tap an area for its list. ${others} also have on-demand services that aren't drawn yet; see <a href="https://translink.com.au/ondemand" target="_blank" rel="noopener">translink.com.au/ondemand</a>.</div>`;
+function odStarts(a){if(!a.starts)return "";const t=bneNow().ymd,d=a.starts.replace(/-/g,"");if(t>=d)return "";const dt=new Date(a.starts+"T00:00:00+10:00");return "Starts "+dt.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",timeZone:"Australia/Brisbane"})}
+function odOverview(){const others="Tamborine Mountain and Yarrabilba";
+  const h=OD.areas.map((a,ai)=>`<div class="grp">${esc(a.name)}</div>${odStarts(a)?`<div class="odstart">${odStarts(a)}</div>`:""}<div class="odhow">${esc(a.how)}</div>`+a.groups.map((g,gi)=>`<div class="odg"><a href="#" data-odg="${ai},${gi}">${esc(g.name)}</a></div>`).join("")+odLink(a)).join("")
+   +`<div class="odnote">Shaded navy areas are where on-demand buses pick up. Yellow dots are destinations and key locations; tap an area for its list. ${others} also have on-demand services that aren't drawn yet. Ipswich and Bribie Island areas are traced from Translink's map pictures, so their edges are approximate; see <a href="https://translink.com.au/ondemand" target="_blank" rel="noopener">translink.com.au/ondemand</a>.</div>`;
   openPanel("On-demand services",`Flexible, pre-booked buses · Translink map files, ${esc(OD.updated)}`,h,{view:"od"});odWire()}
 function odCard(ai,gi,fit){const a=OD.areas[ai];let h=`<div class="odhow">${esc(a.how)}</div>`,sub="On-demand service area";
-  if(gi>=0){const g=a.groups[gi];sub=esc(g.name);if(g.dests){h+=`<div class="grp">Picks up in</div><div class="odhow">${esc(g.name)}</div><div class="grp">Destinations</div>`+odDestHTML(g.dests,ai)}
+  if(odStarts(a))h=`<div class="odstart">${odStarts(a)}</div>`+h;
+  if(gi>=0){const g=a.groups[gi];sub=esc(g.name);if(g.hours)h+=`<div class="grp">Hours</div><div class="odhow">${esc(g.hours)}</div>`;
+    if(g.dests){h+=(g.pickup?`<div class="grp">Picks up in</div><div class="odhow">${esc(g.pickup)}</div>`:"")+`<div class="grp">${esc(a.dlabel||"Destinations")}</div>`+odDestHTML(g.dests,ai)}
     else h+=`<div class="grp">Key locations (both roam zones)</div>`+odDestHTML(a.dests||[],ai);if(fit)odFit(g.zones)}
   else h+=`<div class="grp">Key locations</div>`+odDestHTML(a.dests||[],ai);
+  if(a.traced)h+=`<div class="odnote">Area traced from Translink's map picture, so the edges are approximate.</div>`;
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
-  if(odOn){odOn=false;odVis(false);btn.classList.remove("odon");if(view==="od")closePanel();return}
+  if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od")closePanel();return}
   if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json")).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
-  odSetup();odOn=true;odVis(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   odOverview();odFit(odGroups().flatMap(x=>x.g.zones))}
 document.getElementById("odBtn").onclick=toggleOD;
 map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point.x+6,e.point.y+6]];
