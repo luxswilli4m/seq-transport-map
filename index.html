@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>QLD SEQ Public Transport Interactive Map — Unofficial</title>
+<meta name="description" content="Unofficial interactive map of South East Queensland public transport: busways, bus route zones, trains, ferries and tram, built from Translink open data.">
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body class="light">
+<div id="map"></div>
+<div id="top">
+  <div id="titlebar"><h1>QLD SEQ Public Transport Interactive Map</h1><span class="badge-unoff">Unofficial</span>
+    <button id="themeBtn" class="roundbtn" aria-label="Switch light or dark map" title="Light / dark map"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
+    <button id="infoBtn" class="roundbtn" aria-label="About this map" title="About">i</button></div>
+  <div id="searches">
+    <div class="sbox"><input id="qRoute" placeholder="Search a route — e.g. 397, M1, Cleveland, F1" autocomplete="off"><button class="clr" data-for="qRoute" aria-label="Clear">×</button><div class="results" id="rRoute"></div></div>
+    <div class="sbox"><input id="qPlace" placeholder="Search a station, stop, street or suburb" autocomplete="off"><button class="clr" data-for="qPlace" aria-label="Clear">×</button><div class="results" id="rPlace"></div></div>
+  </div>
+  <div id="chips"></div>
+</div>
+<div id="panel">
+  <div class="ph"><button class="x" id="pBack" aria-label="Back to stop" title="Back">‹</button><div class="pht"><h2 id="pTitle"></h2><div class="sub" id="pSub"></div></div><button class="x" id="pClose" aria-label="Close" title="Close">×</button></div>
+  <div class="pb" id="pBody"></div>
+</div>
+<div id="hint">Zoom in to see bus stops</div>
+<div id="loading">Loading map…</div>
+<div id="info"><div class="box">
+  <h3>QLD SEQ Public Transport Interactive Map</h3>
+  <div class="warn"><b>Unofficial product.</b> This map is not produced, endorsed or maintained by Translink or the Queensland Government. It is an independent visualisation of Translink open data, provided for information and consultation only. Routes, stops and services change — always check <b>translink.com.au</b> or the MyTranslink app before travelling. No warranty is given as to accuracy or completeness.</div>
+  <p class="p1"><b>Bus route numbering zones</b> show where each three-digit route series predominantly stops (a rule of thumb, not exact boundaries).</p>
+  <div class="lg" id="lgZones"></div>
+  <p class="p1"><b>How to use:</b> search a route to see its path and stops in order; search a station, stop, street or suburb to jump there. Tap any station or stop (bus stops appear when zoomed in) to see the routes serving it. <b>Show all routes</b> draws every route from that stop; tap any line or route to open it, and use ‹ to return to the stop. The buttons under the search bars turn layers on and off and the half-circle button switches between light and dark maps.</p>
+  <p class="cred">Timetable data: Translink GTFS feed of <span id="feedDate"></span> (route paths simplified). Contains Translink / Queensland Government open data. Base map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (Open Database Licence), rendered with <a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a> and <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a>.</p>
+  <button id="infoClose">Close</button>
+</div></div>
+<script src="lib/maplibre-gl.js"></script>
+<script src="lib/pmtiles.js"></script>
+<script src="lib/basemaps.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
