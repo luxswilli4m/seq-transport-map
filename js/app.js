@@ -159,19 +159,21 @@ const GROUPS=[
  ["live","Live vehicles","#16a34a",["veh-dot","veh-lbl"]]];
 const chipBox=document.getElementById("chips");const chipState={};const chipEl={};let soloSnap=null,soloKey=null;
 function setGroup(k,vis){GROUPS.find(g=>g[0]===k)[3].forEach(id=>map.setLayoutProperty(id,"visibility",vis?"visible":"none"))}
-function renderChip(k){const el=chipEl[k],st=chipState[k];el.classList.toggle("on",st!=="off");el.classList.toggle("only",st==="only");el.title=st==="on"?"Click to hide":st==="off"?"Click to show only this layer":"Click to show all layers again"}
+function renderChip(k){const el=chipEl[k],st=chipState[k];el.classList.toggle("on",st!=="off");el.classList.toggle("only",st==="only");el.title=k==="live"?(st==="on"?"Click to hide live vehicles":"Click to show live vehicles"):st==="on"?"Click to hide":st==="off"?"Click to show only this layer":"Click to show all layers again"}
+const MASS=g=>g!=="live";
 function clickChip(k){
+  if(k==="live"){chipState.live=chipState.live==="off"?"on":"off";setGroup("live",chipState.live==="on");renderChip("live");if(chipState.live==="on")pollVehicles();return}
   if(soloKey&&soloKey!==k){chipState[soloKey]="on";renderChip(soloKey);soloKey=null;soloSnap=null}
   const st=chipState[k];
   if(st==="on"){chipState[k]="off";setGroup(k,false)}
-  else if(st==="off"){soloSnap={};GROUPS.forEach(([g])=>{if(g!==k){soloSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)}});chipState[k]="only";soloKey=k;setGroup(k,true)}
+  else if(st==="off"){soloSnap={};GROUPS.forEach(([g])=>{if(g!==k&&MASS(g)){soloSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)}});chipState[k]="only";soloKey=k;setGroup(k,true)}
   else{chipState[k]="on";setGroup(k,true);if(soloSnap)Object.entries(soloSnap).forEach(([g,v])=>{chipState[g]=v;setGroup(g,v!=="off");renderChip(g)});soloSnap=null;soloKey=null}
   renderChip(k);renderAll();hint()}
 const allEl=document.createElement("div");allEl.className="chip allchip";allEl.innerHTML="All";chipBox.appendChild(allEl);
-function renderAll(){const anyOff=GROUPS.some(([g])=>chipState[g]==="off");allEl.textContent=anyOff?"Show all":"Hide all";allEl.title=anyOff?"Turn every layer on":"Turn every layer off"}
-allEl.onclick=()=>{const anyOff=GROUPS.some(([g])=>chipState[g]==="off");soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{chipState[g]=anyOff?"on":"off";setGroup(g,anyOff);renderChip(g)});renderAll();hint()};
+function renderAll(){const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");allEl.textContent=anyOff?"Show all":"Hide all";allEl.title=anyOff?"Turn every layer on":"Turn every layer off"}
+allEl.onclick=()=>{const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{if(!MASS(g))return;chipState[g]=anyOff?"on":"off";setGroup(g,anyOff);renderChip(g)});renderAll();hint()};
 GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
-  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});renderAll();
+  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});chipState.live="off";setGroup("live",false);renderChip("live");renderAll();
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
 function hint(){const z=map.getZoom();document.getElementById("hint").style.display=(stopsOn()&&z>=12&&z<13.5)?"block":"none"}
 map.on("zoomend",hint);hint();
@@ -329,10 +331,27 @@ async function applyLive(id){const box=document.getElementById("ttBox");if(!box|
     cell.innerHTML=`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")})}
 // alerts
 async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
-  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al).filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(!p.start||p.start<=now)&&(!p.end||now<=p.end)));LIVE.alertsAt=Date.now()}catch(e){console.warn(e)}}
-function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(a=>(a.sel||[]).some(x=>(x.stop&&sset.has(x.stop))||(x.route&&rset.has(riOfRoute(x.route)))))}
+  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn()}catch(e){console.warn(e)}}
+const fmtDay=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});
+function todaysAlerts(){const now=Date.now()/1000;const bneMid=Math.floor((now+36000)/86400)*86400-36000,end=bneMid+86400;
+  return LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<end&&(!p.end||p.end>bneMid)))}
+function updateAlertBtn(){const b=document.getElementById("alertBtn");if(!b)return;const n=todaysAlerts().length;b.textContent="⚠ Alerts"+(n?" ("+n+")":"");b.classList.toggle("has",n>0)}
+function showAllAlerts(){const list=todaysAlerts();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+  const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
+  const per=a=>{const ps=a.periods||[];return ps.find(p=>(p.start||0)<=nowS&&(!p.end||p.end>=nowS))||ps.find(p=>(p.start||0)<eod&&(!p.end||p.end>mid))||ps[0]};
+  const h=!list.length?`<div class="sub">No service alerts posted for today.</div>`:list.map(a=>{const rs=[...new Set((a.sel||[]).map(x=>riOfRoute(x.route)).filter(i=>i>=0))].sort((x,y)=>cmpRoute(R[x].n,R[y].n));
+    const ss=[...new Set((a.sel||[]).map(x=>x.stop).filter(Boolean).map(x=>ST[x]?x:Object.keys(KIDS).find(k=>KIDS[k].includes(x))).filter(Boolean))];const p=per(a);
+    const lines=[...new Set(rs.filter(i=>R[i].t==="train").map(i=>(lineOf[i]||[])[0]).filter(Boolean))];
+    return `<details class="alcard"><summary><b>${esc(a.header)}</b>${p&&(p.start||p.end)?`<span class="when">${p.start?fmtDay.format(p.start*1000):""}${p.end?" – "+fmtDay.format(p.end*1000):""}</span>`:""}</summary>`+
+      (lines.length||rs.length?`<div class="badges" style="margin:6px 0">${lines.map(lineBadge).join("")}${rs.filter(i=>R[i].t!=="train").slice(0,30).map(i=>badge(i,R[i].t==="tram"?"G:link":R[i].n)).join("")}</div>`:"")+
+      (ss.length?`<div class="alstops">${ss.slice(0,12).map(x=>`<span class="near" data-near="${x}">${esc(ST[x][0])}</span>`).join(" · ")}</div>`:"")+
+      (a.desc?`<p>${esc(a.desc).slice(0,1500)}</p>`:"")+(a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:"")+`</details>`}).join("");
+  openPanel("Service alerts",`${list.length} posted for today · Translink`,h)}
+function activeNow(a){const now=Date.now()/1000;return !a.periods||!a.periods.length||a.periods.some(p=>(!p.start||p.start<=now)&&(!p.end||now<=p.end))}
+function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(activeNow).filter(a=>(a.sel||[]).some(x=>(x.stop&&sset.has(x.stop))||(x.route&&rset.has(riOfRoute(x.route)))))}
 function alertHTML(list){if(!list.length)return"";return `<details class="alerts"><summary>⚠ ${list.length} service alert${list.length>1?"s":""}</summary>`+list.slice(0,20).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</div>`).join("")+`</details>`}
 function insertAlerts(stopIds,routeIdxs){const html=alertHTML(alertsFor(stopIds,routeIdxs));if(!html)return;const old=pB.querySelector(".alerts");if(old)old.remove();pB.insertAdjacentHTML("afterbegin",html)}
+document.getElementById("alertBtn").onclick=()=>{webCam=null;showAllAlerts()};
 setInterval(pollVehicles,20000);setInterval(pollAlerts,120000);pollVehicles();pollAlerts();
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){pollVehicles();if(ctx&&ctx.id)renderTT(ctx.id)}});
 
@@ -341,7 +360,7 @@ const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","
 map.on("click",e=>{const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];
   const f=map.queryRenderedFeatures(box,{layers:CLICK.filter(id=>map.getLayer(id)&&map.getLayoutProperty(id,"visibility")!=="none")});if(!f.length)return;
   f.sort((a,b)=>CLICK.indexOf(a.layer.id)-CLICK.indexOf(b.layer.id));const top=f[0];
-  if(top.layer.id==="veh-dot"){const ri=+top.properties.ri;if(R[ri]){webCam=null;if(R[ri].t==="train")showLine((lineOf[ri]||["T1"])[0],false);else showRoute(ri,false)}return}
+  if(top.layer.id==="veh-dot"){const ri=+top.properties.ri;if(R[ri]){webCam={center:map.getCenter(),zoom:map.getZoom()};const keep=webCam;if(R[ri].t==="train")showLine((lineOf[ri]||["T1"])[0],false);else showRoute(ri,false);webCam=keep}return}
   if(["hl-line","ends","ends-dot"].includes(top.layer.id)){const ri=+top.properties.ri;if(ctx&&ctx.web)showRoute(ri,true);return}
   openStop(top.properties.id,false)});
 const pop=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:10});

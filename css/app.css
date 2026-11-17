@@ -118,3 +118,14 @@ body:not(.light) details.alerts summary{color:#fbbf24}
 details.alerts .al{padding:8px 0;border-top:1px solid #f59e0b33;font-size:13px}
 details.alerts .al p{margin:4px 0;color:var(--muted);white-space:pre-line}
 details.alerts .al a{color:var(--accent);font-size:12.5px}
+
+.alertbtn{flex:none;height:30px;padding:0 12px;border-radius:15px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer}
+.alertbtn.has{border-color:#f59e0b;color:#b45309;background:#fef3c7}
+body:not(.light) .alertbtn.has{background:#f59e0b22;color:#fbbf24}
+details.alcard{border-bottom:1px solid var(--hover);padding:10px 0}
+details.alcard summary{cursor:pointer;font-size:14px;line-height:1.35;min-height:32px}
+details.alcard summary .when{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:2px}
+details.alcard p{white-space:pre-line;font-size:13px;color:var(--muted);margin:6px 0}
+details.alcard a{color:var(--accent);font-size:13px}
+.alstops{font-size:13px;margin:4px 0}
+.alstops .near{display:inline;padding:0}
