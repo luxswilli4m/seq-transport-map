@@ -248,7 +248,8 @@ async function renderTT(id){const box=document.getElementById("ttBox");if(!box)r
 
 function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;focusRoutes=null;rtFocus=false;syncVehVis();if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
   if(fly)map.flyTo({center:[s[2],s[1]],zoom:Math.max(map.getZoom(),s[3]==="bus"?16:15),duration:600});
-  const near=[];for(const [oid,o] of Object.entries(ST)){if(oid===id||o[3]==="bus")continue;const d=dist(s,o);if(d<1000)near.push([d,oid,o])}near.sort((a,b)=>a[0]-b[0]);
+  const DET=window.__det||(window.__det=new Set(net.detached||[]));
+  const near=[];for(const [oid,o] of Object.entries(ST)){if(oid===id||(o[3]==="bus"&&!(DET.has(oid)&&s[3]==="train")))continue;const d=dist(s,o);if(d<1000)near.push([d,oid,o])}near.sort((a,b)=>a[0]-b[0]);
   let h="";
   if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,25).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
   if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;

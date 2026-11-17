@@ -33,6 +33,13 @@ def simplify(pts, tol=0.00006):
     return list(LineString(pts).simplify(tol).coords) if len(pts) > 2 else pts
 
 par = s.set_index("stop_id").parent_station.to_dict()
+# Translink groups some kerbside bus stops under train stations. Detach any child of a train
+# station that has no train service, so it appears as its own bus stop.
+_tt = t.merge(r[["route_id", "route_type"]], on="route_id")[["trip_id", "route_type"]]
+_types = st[["trip_id", "stop_id"]].drop_duplicates().merge(_tt, on="trip_id").groupby("stop_id").route_type.agg(set).to_dict()
+train_parents = {p for c, p in par.items() if isinstance(p, str) and "2" in _types.get(c, set())}
+detached = sorted(c for c, p in par.items() if isinstance(p, str) and p in train_parents and "2" not in _types.get(c, set()) and c in _types)
+for c in detached: par[c] = None
 def top(x): p = par.get(x); return p if isinstance(p, str) and p != "nan" else x
 st["sid"] = st.stop_id.map(top)
 
@@ -94,14 +101,15 @@ except Exception: pass
 if not feed:
     import datetime; feed = datetime.date.today().strftime("%-d %b %Y")
 
-kids = {}
+kids = {}; dset = set(detached)
 for a, b in zip(s.stop_id, s.parent_station):
-    if isinstance(b, str) and b in stops: kids.setdefault(b, []).append(a)
+    if isinstance(b, str) and b in stops and a not in dset: kids.setdefault(b, []).append(a)
 
 old["data"] = {"routes": routes, "stops": stops,
                "suburbs": [[a, round(b, 5), round(c, 5)] for a, b, c in zip(sub.suburb, sub.lat, sub.lon)],
                "streets": [[a, b, round(c, 5), round(d, 5)] for a, b, c, d in zip(stg.street, stg.suburb, stg.lat, stg.lon)],
                "feed": feed}
 old["kids"] = kids
+old["detached"] = detached
 json.dump(old, open(NET, "w"), separators=(",", ":"))
-print("routes", len(routes), dict(Counter(x["t"] for x in routes)), "stops", len(stops), dict(Counter(v[3] for v in stops.values())), "feed", feed)
+print("detached kerbside stops", len(detached)); print("routes", len(routes), dict(Counter(x["t"] for x in routes)), "stops", len(stops), dict(Counter(v[3] for v in stops.values())), "feed", feed)

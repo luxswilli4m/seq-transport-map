@@ -18,6 +18,7 @@ trips = trips.merge(routes[["route_id", "route_short_name"]], on="route_id")
 trips = trips[trips.route_short_name.isin(ridx)]
 stops = pd.read_csv(os.path.join(G, "stops.txt"), dtype=str, usecols=["stop_id", "parent_station"])
 parent = {a: (b if isinstance(b, str) and b and b != "nan" else a) for a, b in zip(stops.stop_id, stops.parent_station)}
+for c in net.get("detached", []): parent[c] = c
 
 # calendar
 cal = pd.read_csv(os.path.join(G, "calendar.txt"), dtype=str)
