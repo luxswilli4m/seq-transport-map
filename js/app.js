@@ -359,7 +359,7 @@ function showAllAlerts(){backState=null;pBack.style.display="none";ctx=null;clea
   const tagsOf=o=>[o.t.timing,o.t.type,...o.t.modes,...o.t.where,o.t.kind].filter(Boolean);
   const count=c=>c==="All"?all.length:all.filter(o=>tagsOf(o).includes(c)).length;
   const types=[...new Set(all.map(o=>o.t.type))].sort((x,y)=>count(y)-count(x));
-  const cats=["All","Now","Later today","Ongoing",...types,"Train","Bus","Ferry","Tram","Station","Train line","Bus route","Ferry route","Tram line","Bus stop","Tram stop","Disruption","Planned works"].filter((c,i,arr)=>arr.indexOf(c)===i&&count(c)>0);
+  const cats=["All",...types,"Station","Train line","Bus route","Ferry route","Tram line","Bus stop","Tram stop","Disruption","Planned works"].filter((c,i,arr)=>arr.indexOf(c)===i&&count(c)>0);
   if(!cats.includes(alertFilter))alertFilter="All";
   const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
   const per=a=>{const ps=a.periods||[];return ps.find(p=>(p.start||0)<=nowS&&(!p.end||p.end>=nowS))||ps.find(p=>(p.start||0)<eod&&(!p.end||p.end>mid))||ps[0]};
