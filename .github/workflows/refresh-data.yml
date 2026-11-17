@@ -1,0 +1,47 @@
+name: Refresh Translink data
+
+# Every Monday at 3:17 am Brisbane time (Sunday 17:17 UTC), and on demand from the Actions tab.
+on:
+  schedule:
+    - cron: "17 17 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install pandas shapely
+
+      - name: Download Translink SEQ GTFS
+        run: |
+          curl -fsSL --retry 3 -o gtfs.zip https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip
+          unzip -q gtfs.zip -d gtfs
+
+      - name: Rebuild routes, stops and timetables
+        run: |
+          python tools/build_network.py gtfs .
+          python tools/build_timetables.py gtfs .
+
+      - name: Commit if anything changed
+        run: |
+          rm -rf gtfs gtfs.zip
+          if git diff --quiet -- data; then
+            echo "No changes in Translink data."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data
+            git commit -m "Weekly Translink data refresh"
+            git push
+          fi

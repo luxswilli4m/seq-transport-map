@@ -20,8 +20,14 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 - Base map: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the Open Database Licence; tiles from [Protomaps](https://protomaps.com) (`tiles/seq.pmtiles`, South East Queensland extract).
 - Map rendering: [MapLibre GL JS](https://maplibre.org) (BSD-3-Clause), [PMTiles](https://github.com/protomaps/PMTiles) and [@protomaps/basemaps](https://github.com/protomaps/basemaps) (BSD-3-Clause). Fonts: Noto Sans (SIL Open Font Licence).
 
+## Live data
+
+Live vehicle positions, arrival predictions and service alerts come from Translink's GTFS-Realtime feeds (CC BY 4.0) through a small Cloudflare Worker relay (`worker/worker.js`), which adds browser access and caches each feed for 15 seconds.
+
 ## How it works
 
 Everything is static files served by GitHub Pages — there is no server or database. `data/network.json` holds the routes, stops, zones and busways; `tiles/seq.pmtiles` holds the base map, which the browser reads in small pieces as you move around.
 
-To refresh the timetable data, the network file is rebuilt from a new Translink GTFS download and committed in place of the old one.
+Timetables are split into small area files in `data/tt/`, loaded only for the stop you open.
+
+**Automatic refresh:** every Monday a GitHub Action (`.github/workflows/refresh-data.yml`) downloads the latest Translink GTFS, rebuilds `data/network.json` and `data/tt/` with the scripts in `tools/`, and commits the result if anything changed. It can also be run by hand from the Actions tab (**Refresh Translink data → Run workflow**). Bus zones and busway geometry are kept as they are.
