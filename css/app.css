@@ -129,3 +129,18 @@ details.alcard p{white-space:pre-line;font-size:13px;color:var(--muted);margin:6
 details.alcard a{color:var(--accent);font-size:13px}
 .alstops{font-size:13px;margin:4px 0}
 .alstops .near{display:inline;padding:0}
+
+.acats{display:flex;gap:6px;overflow-x:auto;padding:0 0 10px;margin-bottom:4px;border-bottom:1px solid var(--hover);scrollbar-width:thin}
+.acat{flex:none;height:36px;padding:0 12px;border-radius:18px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:13px;cursor:pointer}
+.acat span{color:var(--muted);font-size:12px;margin-left:2px}
+.acat.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.acat.on span{color:#ffffffcc}
+.atags{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 2px;align-items:center}
+.atag{font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--hover);color:var(--ink)}
+.atag.t-now{background:#16a34a;color:#fff}
+.atag.t-latertoday{background:#2563eb;color:#fff}
+.atag.t-ongoing{background:#64748b;color:#fff}
+.atag.dis{background:#dc2626;color:#fff}
+.atag.pl{background:#f59e0b33;color:#92400e}
+body:not(.light) .atag.pl{color:#fbbf24}
+.atype{font-size:11.5px;color:var(--muted);margin-left:4px}

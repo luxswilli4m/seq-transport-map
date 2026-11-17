@@ -336,17 +336,46 @@ const fmtDay=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",week
 function todaysAlerts(){const now=Date.now()/1000;const bneMid=Math.floor((now+36000)/86400)*86400-36000,end=bneMid+86400;
   return LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<end&&(!p.end||p.end>bneMid)))}
 function updateAlertBtn(){const b=document.getElementById("alertBtn");if(!b)return;const n=todaysAlerts().length;b.textContent="⚠ Alerts"+(n?" ("+n+")":"");b.classList.toggle("has",n>0)}
-function showAllAlerts(){const list=todaysAlerts();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+const EFFECT={1:"No service",2:"Reduced service",3:"Significant delays",4:"Detour",5:"Additional service",6:"Modified service",7:"Other",8:"Other",9:"Stop moved",10:"Information",11:"Accessibility"};
+const DISRUPT=new Set([3,4,5,6,8,11,12]),PLANNED=new Set([9,10]);
+const parentOf={};for(const [p,ks] of Object.entries(KIDS))ks.forEach(k=>parentOf[k]=p);
+function alertTags(a){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;const ps=a.periods||[];
+  const cur=ps.find(p=>(p.start||0)<=nowS&&(!p.end||p.end>=nowS));const span=p=>p?((p.end||nowS+1e8)-(p.start||0)):0;
+  let timing;if(cur)timing=(span(cur)>7*86400||(cur.start&&nowS-cur.start>7*86400))?"Ongoing":"Now";else timing=ps.some(p=>(p.start||0)>nowS&&(p.start||0)<eod)?"Later today":"Ongoing";
+  const modes=new Set(),where=new Set();const sel=a.sel||[];
+  for(const x of sel){if(x.route){const ri=riOfRoute(x.route);if(ri>=0){const t=R[ri].t;modes.add(t);where.add(t==="train"?"Train line":t==="bus"?"Bus route":t==="ferry"?"Ferry route":"Tram line")}}
+    if(x.stop){const id=ST[x.stop]?x.stop:parentOf[x.stop];const k=id&&ST[id]?ST[id][3]:null;
+      if(k==="train"){modes.add("train");where.add("Station")}else if(k==="busway"||k==="busstn"){modes.add("bus");where.add("Station")}
+      else if(k==="ferry"){modes.add("ferry");where.add("Station")}else if(k==="tram"){modes.add("tram");where.add("Tram stop")}else if(k==="bus"){modes.add("bus");where.add("Bus stop")}}}
+  const h=a.header||"";if(/\bstation\b|lift|escalator|platform/i.test(h)&&where.has("Bus stop")&&!/bus stop/i.test(h)){where.delete("Bus stop");where.add("Station")}
+  if(/\bline\b|track/i.test(h))modes.add("train");if(/\btram\b|g:link/i.test(h))modes.add("tram");if(/ferry/i.test(h))modes.add("ferry");
+  const kind=DISRUPT.has(a.cause)||a.effect===3?"Disruption":PLANNED.has(a.cause)?"Planned works":null;
+  const M={train:"Train",bus:"Bus",ferry:"Ferry",tram:"Tram"};
+  return {timing,type:EFFECT[a.effect]||"Other",modes:["train","bus","ferry","tram"].filter(m=>modes.has(m)).map(m=>M[m]),where:["Station","Train line","Bus route","Ferry route","Tram line","Bus stop","Tram stop"].filter(w=>where.has(w)),kind}}
+let alertFilter="All";
+function showAllAlerts(){backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
+  const all=todaysAlerts().map(a=>({a,t:alertTags(a)}));const tord={"Now":0,"Later today":1,"Ongoing":2};
+  all.sort((x,y)=>tord[x.t.timing]-tord[y.t.timing]||((x.a.periods||[{}])[0].start||0)-((y.a.periods||[{}])[0].start||0));
+  const tagsOf=o=>[o.t.timing,o.t.type,...o.t.modes,...o.t.where,o.t.kind].filter(Boolean);
+  const count=c=>c==="All"?all.length:all.filter(o=>tagsOf(o).includes(c)).length;
+  const types=[...new Set(all.map(o=>o.t.type))].sort((x,y)=>count(y)-count(x));
+  const cats=["All","Now","Later today","Ongoing",...types,"Train","Bus","Ferry","Tram","Station","Train line","Bus route","Ferry route","Tram line","Bus stop","Tram stop","Disruption","Planned works"].filter((c,i,arr)=>arr.indexOf(c)===i&&count(c)>0);
+  if(!cats.includes(alertFilter))alertFilter="All";
   const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
   const per=a=>{const ps=a.periods||[];return ps.find(p=>(p.start||0)<=nowS&&(!p.end||p.end>=nowS))||ps.find(p=>(p.start||0)<eod&&(!p.end||p.end>mid))||ps[0]};
-  const h=!list.length?`<div class="sub">No service alerts posted for today.</div>`:list.map(a=>{const rs=[...new Set((a.sel||[]).map(x=>riOfRoute(x.route)).filter(i=>i>=0))].sort((x,y)=>cmpRoute(R[x].n,R[y].n));
-    const ss=[...new Set((a.sel||[]).map(x=>x.stop).filter(Boolean).map(x=>ST[x]?x:Object.keys(KIDS).find(k=>KIDS[k].includes(x))).filter(Boolean))];const p=per(a);
-    const lines=[...new Set(rs.filter(i=>R[i].t==="train").map(i=>(lineOf[i]||[])[0]).filter(Boolean))];
-    return `<details class="alcard"><summary><b>${esc(a.header)}</b>${p&&(p.start||p.end)?`<span class="when">${p.start?fmtDay.format(p.start*1000):""}${p.end?" – "+fmtDay.format(p.end*1000):""}</span>`:""}</summary>`+
+  const pill=(t,cls)=>`<span class="atag ${cls}">${esc(t)}</span>`;
+  const list=all.filter(o=>alertFilter==="All"||tagsOf(o).includes(alertFilter));
+  const body=!list.length?`<div class="sub">No service alerts in this category today.</div>`:list.map(({a,t})=>{const rs=[...new Set((a.sel||[]).map(x=>riOfRoute(x.route)).filter(i=>i>=0))].sort((x,y)=>cmpRoute(R[x].n,R[y].n));
+    const ss=[...new Set((a.sel||[]).map(x=>x.stop).filter(Boolean).map(x=>ST[x]?x:parentOf[x]).filter(Boolean))];const p=per(a);
+    const lines=[...new Set(rs.filter(i=>R[i].t==="train").map(i=>(lineOf[i]||[])[0]).filter(Boolean))].sort((x,y)=>LINE_ORDER.indexOf(x)-LINE_ORDER.indexOf(y));
+    const tags=pill(t.timing,"t-"+t.timing.replace(/\s/g,"").toLowerCase())+t.modes.map(m=>pill(m,"m")).join("")+t.where.map(w=>pill(w,"w")).join("")+(t.kind?pill(t.kind,t.kind==="Disruption"?"dis":"pl"):"");
+    return `<details class="alcard"><summary><b>${esc(a.header)}</b><div class="atags">${tags}<span class="atype">${esc(t.type)}</span></div>${p&&(p.start||p.end)?`<span class="when">${p.start?fmtDay.format(p.start*1000):""}${p.end?" – "+fmtDay.format(p.end*1000):""}</span>`:""}</summary>`+
       (lines.length||rs.length?`<div class="badges" style="margin:6px 0">${lines.map(lineBadge).join("")}${rs.filter(i=>R[i].t!=="train").slice(0,30).map(i=>badge(i,R[i].t==="tram"?"G:link":R[i].n)).join("")}</div>`:"")+
       (ss.length?`<div class="alstops">${ss.slice(0,12).map(x=>`<span class="near" data-near="${x}">${esc(ST[x][0])}</span>`).join(" · ")}</div>`:"")+
       (a.desc?`<p>${esc(a.desc).slice(0,1500)}</p>`:"")+(a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:"")+`</details>`}).join("");
-  openPanel("Service alerts",`${list.length} posted for today · Translink`,h)}
+  const chips=`<div class="acats">`+cats.map(c=>`<button class="acat${c===alertFilter?" on":""}" data-cat="${esc(c)}">${esc(c)} <span>${count(c)}</span></button>`).join("")+`</div>`;
+  openPanel("Service alerts",`${all.length} posted for today · Translink`,chips+`<div class="alist">${body}</div>`);
+  pB.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{alertFilter=(alertFilter===b.dataset.cat&&b.dataset.cat!=="All")?"All":b.dataset.cat;const sc=pB.querySelector(".acats").scrollLeft;showAllAlerts();const n=pB.querySelector(".acats");if(n)n.scrollLeft=sc})}
 function activeNow(a){const now=Date.now()/1000;return !a.periods||!a.periods.length||a.periods.some(p=>(!p.start||p.start<=now)&&(!p.end||now<=p.end))}
 function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(activeNow).filter(a=>(a.sel||[]).some(x=>(x.stop&&sset.has(x.stop))||(x.route&&rset.has(riOfRoute(x.route)))))}
 function alertHTML(list){if(!list.length)return"";return `<details class="alerts"><summary>⚠ ${list.length} service alert${list.length>1?"s":""}</summary>`+list.slice(0,20).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</div>`).join("")+`</details>`}
