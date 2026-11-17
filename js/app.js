@@ -300,10 +300,24 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
-  return `<ol class="stops" style="--rc:${r.c}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}">${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+// travel time from the first stop, from the next full-length trip in the route timetable
+let tvKey=null;
+async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol||!tvKey)return;const key=tvKey;const r=R[+ol.dataset.ri],d=r.d[+ol.dataset.di];if(!d)return;
+  try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json")).json()}catch(e){return}
+  if(tvKey!==key||!ol.isConnected)return;const data=RTC[key],now=bneNow(),s0=d.s[0];let best=null;
+  for(const k of Object.keys(data)){const o=data[k].o,ix=new Map(o.map((x,j)=>[x,j]));if(!ix.has(s0))continue;
+    const idx=d.s.map(x=>ix.has(x)?ix.get(x):-1);if(idx[idx.length-1]>=0&&idx[idx.length-1]<idx[0])continue;
+    const tr=data[k].t.map(t=>{const a=t[3+idx[0]];if(a==null||a<0)return null;const cov=idx.filter(j=>j>=0&&t[3+j]>=0).length;return {t,dep:t[2]+a,cov,today:t[1].some(si=>svcOn(si,now))}}).filter(Boolean);
+    if(!tr.length)continue;const mx=Math.max(...tr.map(x=>x.cov));const full=tr.filter(x=>x.cov>=mx*0.9);
+    const pick=full.filter(x=>x.today&&x.dep>=now.min).sort((a,b)=>a.dep-b.dep)[0]||full.filter(x=>x.today).sort((a,b)=>a.dep-b.dep)[0]||full.sort((a,b)=>a.dep-b.dep)[0];
+    if(!best||pick.cov>best.cov)best={...pick,idx}}
+  if(!best)return;const a0=best.t[3+best.idx[0]];const lis=ol.querySelectorAll("li");
+  lis.forEach((li,n)=>{const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;li.querySelector(".tv").textContent=n===0?"Start":v>=0?(v-a0)+" min":""});
+  const note=document.getElementById("tvNote");if(note)note.textContent=`Minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`}
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
   return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)}
-function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepTop=pB.querySelector(".badges.svc");pB.innerHTML=(keepTop?keepTop.outerHTML:"")+routeBody(i,di);wire();wireDirs(i);routeArrows(i,di)})}
+function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepTop=pB.querySelector(".badges.svc");pB.innerHTML=(keepTop?keepTop.outerHTML:"")+routeBody(i,di);wire();wireDirs(i);routeArrows(i,di);applyTravel()})}
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
   webLegs=[];map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
@@ -311,12 +325,12 @@ function showRoute(i,fromStop){focusRoutes=new Set([i]);drawVehicles();const kee
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   let di0=0;if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n}});
-  document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
+  document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};tvKey=r.n;applyTravel();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
 function showLine(nm,fromStop){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);let h=routeBody(main,0);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
   openPanel(`${nm} ${TNAME[nm]}`,`Train line`,`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+h,{star:{list:"routes",key:nm}});
-  document.getElementById("fullTT").onclick=()=>openRouteTable(nm);insertAlerts([],ids);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
+  document.getElementById("fullTT").onclick=()=>openRouteTable(nm);tvKey=nm;applyTravel();insertAlerts([],ids);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
 
 // ---------- live data (via relay)
 let rtFocus=false,view="",rtState=null;

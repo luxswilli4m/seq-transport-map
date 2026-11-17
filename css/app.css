@@ -212,3 +212,10 @@ body:not(.light) .favst .al{color:#fbbf24}
 .schq{width:100%;margin-bottom:6px}
 .schr{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--hover);font-size:13.5px;min-height:40px}
 .rb.sch{background:#475569;color:#fff;min-width:52px}
+ol.stops li .tv{float:right;margin-left:10px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600}
+ol.stops li:first-child .tv{color:var(--ink)}
+.tvnote{font-size:12px;color:var(--muted);margin:-2px 0 8px}
+.tvnote:empty{display:none}
+/* keep scrolling inside cards on touch screens (stops Safari scrolling the whole page) */
+html,body{overflow:hidden;overscroll-behavior:none;position:fixed;inset:0;width:100%}
+#panel .pb,.results,#info .box{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
