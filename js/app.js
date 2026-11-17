@@ -25,11 +25,19 @@ const pathCache = new Map();
 function path(ri, di){const k=ri+"_"+di;if(!pathCache.has(k))pathCache.set(k,dec(R[ri].d[di].p));return pathCache.get(k)}
 const FC = f => ({type:"FeatureCollection",features:f});
 
-// ---------- train lines
-const LINES=[["Airport","Airport"],["Gold Coast","Varsity Lakes"],["Beenleigh","Beenleigh"],["Cleveland","Cleveland"],["Shorncliffe","Shorncliffe"],["Doomben","Doomben"],["Ferny Grove","Ferny Grove"],["Caboolture","Caboolture"],["Sunshine Coast","Nambour|Gympie"],["Ipswich","Ipswich"],["Rosewood","Rosewood"],["Redcliffe Peninsula","Redcliffe"],["Springfield","Springfield"]];
+// ---------- train lines (Translink T1–T6, assigned by route colour)
+const TLINES=[["T1","Ipswich / Rosewood – Caboolture / Nambour","27855A"],["T2","Springfield Central – Kippa-Ring","6CC6E9"],["T3","Doomben – Roma Street","9B60A6"],["T4","Cleveland – Shorncliffe","4778B2"],["T5","Varsity Lakes – Brisbane Airport","FFC425"],["T6","Beenleigh – Ferny Grove","D53E45"]];
+const TNAME=Object.fromEntries(TLINES.map(([t,n])=>[t,n])), TCOL=Object.fromEntries(TLINES.map(([t,,c])=>[t,"#"+c]));
 const lineOf={}, lineRoutes={};
-R.forEach((r,i)=>{if(r.t!=="train")return;const ls=[];for(const [nm,kw] of LINES){if(new RegExp(kw).test(r.l)){ls.push(nm);(lineRoutes[nm]=lineRoutes[nm]||[]).push(i)}}lineOf[i]=ls});
-function lineMain(nm){const kw=new RegExp(LINES.find(x=>x[0]===nm)[1]);let best=null,bl=-1;for(const i of lineRoutes[nm]||[]){const r=R[i];const sc=(/Brisbane City/.test(r.l)?1000:0)+Math.max(...r.d.map(d=>d.s.length));if(sc>bl&&kw.test(r.l)){bl=sc;best=i}}return best}
+R.forEach((r,i)=>{if(r.t!=="train")return;const hit=TLINES.find(x=>("#"+x[2]).toLowerCase()===r.c.toLowerCase());const t=hit?hit[0]:"T1";lineOf[i]=[t];(lineRoutes[t]=lineRoutes[t]||[]).push(i)});
+const TKW={T1:/Ipswich|Rosewood|Caboolture|Nambour|Gympie|Brisbane City|Roma Street/,T2:/Springfield|Redcliffe|Kippa|Brisbane City|Roma Street/,T3:/Doomben|Brisbane City|Roma Street/,T4:/Cleveland|Shorncliffe|Brisbane City|Roma Street/,T5:/Varsity|Airport|Gold Coast|Brisbane City|Roma Street/,T6:/Beenleigh|Ferny Grove|Brisbane City|Roma Street/};
+function ownLine(nm,i){const parts=R[i].l.split(/\s+-\s+/);return parts.length===2&&parts.every(x=>TKW[nm].test(x))&&!(parts[0]===parts[1]&&/Brisbane City/.test(parts[0]))}
+function lineMain(nm){let best=null,bl=-1;const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));for(const i of (own.length?own:all)){const sc=Math.max(...R[i].d.map(d=>d.s.length));if(sc>bl){bl=sc;best=i}}return best}
+const LINE_ORDER=TLINES.map(x=>x[0]);
+// ---------- route ordering: Metro first, then by number (NightLink beside its number), rail-replacement R last
+function routeKey(n){n=String(n);const m=n.match(/\d+/);const num=m?+m[0]:1e6;const pre=n.replace(/\d.*$/,"").toUpperCase();
+  const grp=pre==="M"?0:pre==="R"?2:1;return [grp,num,pre===""?0:pre==="N"?1:2,n]}
+function cmpRoute(a,b){const A=routeKey(a),B=routeKey(b);for(let k=0;k<3;k++)if(A[k]!==B[k])return A[k]-B[k];return A[3].localeCompare(B[3])}
 
 // ---------- map
 const protocol = new pmtiles.Protocol();
@@ -116,6 +124,8 @@ add({id:"train-pt",type:"circle",source:"pt_train",paint:{"circle-color":"#fffff
 add({id:"busstn-pt",type:"circle",source:"pt_busstn",paint:{"circle-color":"#ffffff","circle-radius":["interpolate",["linear"],["zoom"],9,3.4,14,6.5],"circle-stroke-color":"#0b0f17","circle-stroke-width":2}});
 add({id:"busway-pt",type:"symbol",source:"pt_busway",layout:{"icon-image":["get","icon"],"icon-size":["interpolate",["linear"],["zoom"],9,.62,12,.85,15,1.1],"icon-allow-overlap":true,"icon-ignore-placement":true}});
 add({id:"busway-lbl",type:"symbol",source:"pt_busway",minzoom:11.3,layout:{"text-field":["get","sn"],"text-font":FONT,"text-size":12.5,"text-offset":[0,1.25],"text-anchor":"top","text-optional":true,"text-padding":2},paint:{"text-color":THEME[theme].lblText,"text-halo-color":THEME[theme].lblHalo,"text-halo-width":1.8}});
+add({id:"train-lbl",type:"symbol",source:"pt_train",minzoom:12.3,layout:{"text-field":["get","sn"],"text-font":FONT,"text-size":12,"text-offset":[0,1.1],"text-anchor":"top","text-optional":true,"text-padding":3},paint:{"text-color":THEME[theme].lblText,"text-halo-color":THEME[theme].lblHalo,"text-halo-width":1.8}});
+add({id:"busstn-lbl",type:"symbol",source:"pt_busstn",minzoom:12.3,layout:{"text-field":["get","sn"],"text-font":FONT,"text-size":12,"text-offset":[0,1.1],"text-anchor":"top","text-optional":true,"text-padding":3},paint:{"text-color":THEME[theme].lblText,"text-halo-color":THEME[theme].lblHalo,"text-halo-width":1.8}});
 add({id:"ends",type:"symbol",source:"ends",layout:{"text-field":["get","t"],"text-font":FONT,"text-size":12,"text-anchor":"left","text-offset":[.7,0],"text-allow-overlap":false,"text-padding":1},paint:{"text-color":["get","c"],"text-halo-color":"#ffffff","text-halo-width":2.2}});
 add({id:"ends-dot",type:"circle",source:"ends",paint:{"circle-color":["get","c"],"circle-radius":4,"circle-stroke-color":"#fff","circle-stroke-width":1.5}});
 add({id:"sel",type:"circle",source:"sel",paint:{"circle-color":"rgba(0,0,0,0)","circle-radius":12,"circle-stroke-color":"#ff2d55","circle-stroke-width":3}});
@@ -125,7 +135,7 @@ const FIRST_OVERLAY = L[0];
 function applyThemePaint(){const T=THEME[theme];
   map.setPaintProperty("zones-fill","fill-opacity",["interpolate",["linear"],["zoom"],12,T.zoneFill,13,.16,15,.07]);
   [["dots","line-color",T.dots],["loop","line-color",T.dots],["chev-line","line-color",T.chevLine],["tram-case","line-color",T.casing],["train-case","line-color",T.casing],["bw-case","line-color",T.casing],
-   ["zlabels","text-color",T.zoneText],["zlabels","text-halo-color",T.zoneHalo],["stops","circle-stroke-color",T.stopStroke],["ferry-pt","circle-stroke-color",T.stopStroke],["busway-lbl","text-color",T.lblText],["busway-lbl","text-halo-color",T.lblHalo]].forEach(([l,p,v])=>map.setPaintProperty(l,p,v))}
+   ["zlabels","text-color",T.zoneText],["zlabels","text-halo-color",T.zoneHalo],["stops","circle-stroke-color",T.stopStroke],["ferry-pt","circle-stroke-color",T.stopStroke],["busway-lbl","text-color",T.lblText],["busway-lbl","text-halo-color",T.lblHalo],["train-lbl","text-color",T.lblText],["train-lbl","text-halo-color",T.lblHalo],["busstn-lbl","text-color",T.lblText],["busstn-lbl","text-halo-color",T.lblHalo]].forEach(([l,p,v])=>map.setPaintProperty(l,p,v))}
 document.getElementById("themeBtn").onclick=()=>{
   theme = theme==="light"?"dark":"light"; document.body.classList.toggle("light",theme==="light");
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
@@ -138,9 +148,9 @@ document.getElementById("themeBtn").onclick=()=>{
 const GROUPS=[
  ["zones","Bus zones","#9B5DE5",["zones-fill","chev-fill","chev-line","zones-line","dots","loop","loop-arrows","zlabels"]],
  ["busway","Busways","#1FAE98",["bw-case","bw-line","bw-road","busway-pt","busway-lbl"]],
- ["busstn","Bus stations","#ffffff",["busstn-pt"]],
+ ["busstn","Bus stations","#ffffff",["busstn-pt","busstn-lbl"]],
  ["stops","Bus stops","#E463A4",["stops"]],
- ["train","Trains","#4778B2",["train-case","train-line","train-pt"]],
+ ["train","Trains","#4778B2",["train-case","train-line","train-pt","train-lbl"]],
  ["ferry","Ferries","#36A9B4",["ferry-line","ferry-pt"]],
  ["tram","Tram","#FFD400",["tram-case","tram-line","tram-pt"]]];
 const chipBox=document.getElementById("chips");const chipState={};const chipEl={};let soloSnap=null,soloKey=null;
@@ -152,16 +162,19 @@ function clickChip(k){
   if(st==="on"){chipState[k]="off";setGroup(k,false)}
   else if(st==="off"){soloSnap={};GROUPS.forEach(([g])=>{if(g!==k){soloSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)}});chipState[k]="only";soloKey=k;setGroup(k,true)}
   else{chipState[k]="on";setGroup(k,true);if(soloSnap)Object.entries(soloSnap).forEach(([g,v])=>{chipState[g]=v;setGroup(g,v!=="off");renderChip(g)});soloSnap=null;soloKey=null}
-  renderChip(k);hint()}
+  renderChip(k);renderAll();hint()}
+const allEl=document.createElement("div");allEl.className="chip allchip";allEl.innerHTML="All";chipBox.appendChild(allEl);
+function renderAll(){const anyOff=GROUPS.some(([g])=>chipState[g]==="off");allEl.textContent=anyOff?"Show all":"Hide all";allEl.title=anyOff?"Turn every layer on":"Turn every layer off"}
+allEl.onclick=()=>{const anyOff=GROUPS.some(([g])=>chipState[g]==="off");soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{chipState[g]=anyOff?"on":"off";setGroup(g,anyOff);renderChip(g)});renderAll();hint()};
 GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
-  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});
+  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});renderAll();
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
 function hint(){const z=map.getZoom();document.getElementById("hint").style.display=(stopsOn()&&z>=12&&z<13.5)?"block":"none"}
 map.on("zoomend",hint);hint();
 
 // ---------- badges & panel
 function badge(i,label){const r=R[i];return `<span class="rb" data-r="${i}" style="background:${r.c};color:${r.tc}">${esc(label||r.n)}</span>`}
-function lineBadge(nm){const i=lineMain(nm);return `<span class="rb" data-line="${esc(nm)}" style="background:${R[i].c};color:#fff">${esc(nm)}</span>`}
+function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="background:${TCOL[nm]};color:${nm==="T5"||nm==="T2"?"#111":"#fff"}" title="${esc(TNAME[nm])}">${esc(nm)}</span>`}
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
@@ -170,32 +183,33 @@ function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRou
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
-document.getElementById("pClose").onclick=()=>{panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none"};
-pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";map.jumpTo(b.cam);openStop(b.id,false,b.web)};
-function sortRoutes(ids){return ids.slice().sort((a,b)=>{const A=R[a].n,B=R[b].n,na=parseInt(A.replace(/\D/g,"")),nb=parseInt(B.replace(/\D/g,""));return (isNaN(na)?1e9:na)-(isNaN(nb)?1e9:nb)||A.localeCompare(B)})}
+function closePanel(){const c=webCam;webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
+document.getElementById("pClose").onclick=closePanel;
+pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";map.jumpTo(b.cam);openStop(b.id,false,b.web,true,true)};
+function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
 function dist(a,b){const k=Math.PI/180,x=(b[2]-a[2])*Math.cos((a[1]+b[1])/2*k),y=b[1]-a[1];return Math.sqrt(x*x+y*y)*111320}
 
-function openStop(id,fly,web){const s=ST[id];if(!s)return;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
+function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
   if(fly)map.flyTo({center:[s[2],s[1]],zoom:Math.max(map.getZoom(),s[3]==="bus"?16:15),duration:600});
   const groups={bus:[],train:new Set(),ferry:[],tram:[]};
   s[5].forEach(i=>{const t=R[i].t;if(t==="train")(lineOf[i]||[]).forEach(l=>groups.train.add(l));else groups[t].push(i)});
   const near=[];for(const [oid,o] of Object.entries(ST)){if(oid===id||o[3]==="bus")continue;const d=dist(s,o);if(d<250)near.push([d,oid,o])}near.sort((a,b)=>a[0]-b[0]);
   let h="";
-  if(groups.train.size)h+=`<div class="grp">Train lines</div><div class="badges">${[...groups.train].sort().map(lineBadge).join("")}</div>`;
+  if(groups.train.size)h+=`<div class="grp">Train lines</div><div class="badges">${[...groups.train].sort((a,b)=>LINE_ORDER.indexOf(a)-LINE_ORDER.indexOf(b)).map(lineBadge).join("")}</div>`;
   if(groups.bus.length)h+=`<div class="grp">Bus routes (${groups.bus.length})</div><div class="badges">${sortRoutes(groups.bus).map(i=>badge(i)).join("")}</div>`;
-  if(groups.ferry.length)h+=`<div class="grp">Ferry</div><div class="badges">${groups.ferry.map(i=>badge(i)).join("")}</div>`;
+  if(groups.ferry.length)h+=`<div class="grp">Ferry</div><div class="badges">${sortRoutes(groups.ferry).map(i=>badge(i)).join("")}</div>`;
   if(groups.tram.length)h+=`<div class="grp">Tram</div><div class="badges">${groups.tram.map(i=>badge(i,"G:link")).join("")}</div>`;
   if(s[5].length)h+=`<div style="margin-top:10px"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button></div>`;
   else h+=`<div class="sub">No scheduled services in this timetable.</div>`;
   if(near.length)h+=`<div class="grp">Also here</div>`+near.slice(0,4).map(([d,oid,o])=>`<div class="near" data-near="${oid}">${esc(o[0])} <span>· ${KIND[o[3]]} · ${Math.round(d)} m</span></div>`).join("");
   let sub=KIND[s[3]];if(s[3]==="busway"&&BWS[id])sub+=" · "+BWS[id].b.map(k=>BWNAME[k]).join(" / ")+(BWS[id].road?" (on-road section)":"");if(s[4])sub+=" · "+esc(s[4]);
   openPanel(s[0],sub,h);
-  const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>openStop(id,false,!ctx.web);
-  if(web)drawWeb(id)}
+  const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
+  if(web)drawWeb(id,noFit)}
 
 // all routes from a stop ("spider web"): full bus paths, onward legs for rail/ferry/tram, white arrows on onward parts, end labels
 function nearestIdx(p,x,y){let bi=0,bd=1e9;for(let k=0;k<p.length;k++){const dx=(p[k][0]-x)*0.886,dy=p[k][1]-y,d=dx*dx+dy*dy;if(d<bd){bd=d;bi=k}}return bi}
-let webLegs=[];
+let webLegs=[];let webCam=null;
 function placeArrows(){if(!webLegs.length){map.getSource("arrows").setData(FC([]));return}
   const SP=innerWidth<=640?42:48,CELL=20,taken=new Set(),pts=[];
   for(const leg of webLegs){let prev=map.project(leg[0]),acc=SP*0.6;
@@ -207,7 +221,7 @@ function placeArrows(){if(!webLegs.length){map.getSource("arrows").setData(FC([]
       acc-=seg;prev=cur}}
   map.getSource("arrows").setData(FC(pts))}
 map.on("moveend",()=>{if(webLegs.length)placeArrows()});
-function drawWeb(id){const s=ST[id];const lines=[],arrows=[],ends=[];const seenEnd=new Set();let bb=null;
+function drawWeb(id,noFit){const s=ST[id];const lines=[],arrows=[],ends=[];const seenEnd=new Set();let bb=null;
   const grow=p=>p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]});
   s[5].forEach(i=>{const r=R[i];const fixed=r.t!=="bus";r.d.forEach((d,di)=>{const p=path(i,di);const k=d.s.indexOf(id);
     if(k<0){if(!fixed){lines.push({type:"Feature",properties:{c:r.c,ri:i,mode:"web"},geometry:{type:"LineString",coordinates:p}});grow(p)}return}
@@ -217,27 +231,32 @@ function drawWeb(id){const s=ST[id];const lines=[],arrows=[],ends=[];const seenE
     arrows.push(onward);
     const last=d.s[d.s.length-1];const ls=ST[last];if(!ls)return;
     const dest=(d.h&&d.h.length<34?d.h:ls[0]).replace(/\s*,\s*stop\s+\w+$/i,"").replace(/\s+(near|at|opp)\s+.*$/i,"");
-    const lab=(r.t==="train"?(((lineOf[i]||[]).find(l=>new RegExp(LINES.find(x=>x[0]===l)[1]).test(dest))||(lineOf[i]||[r.n])[0])+" line"):r.t==="tram"?"G:link":r.n)+" → "+shortName(dest);if(seenEnd.has(lab))return;seenEnd.add(lab);
+    const lab=(r.t==="train"?(lineOf[i]||["Train"])[0]:r.t==="tram"?"G:link":r.n)+" → "+shortName(dest);if(seenEnd.has(lab))return;seenEnd.add(lab);
     ends.push({type:"Feature",properties:{t:lab,c:r.c,ri:i},geometry:{type:"Point",coordinates:[ls[2],ls[1]]}})})});
   map.getSource("hl").setData(FC(lines));webLegs=arrows;placeArrows();map.getSource("ends").setData(FC(ends));
-  if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?400:30,right:40},duration:700,maxZoom:15})}
+  if(bb&&!noFit)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
 
 // single route view
+let curRoute=null;
+function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows();return}const p=path(i,di);let leg=p;
+  if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
+  webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
   return `<ol class="stops" style="--rc:${r.c}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}">${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
   return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)}
-function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{pB.innerHTML=routeBody(i,+b.dataset.d);wire();wireDirs(i)})}
+function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepTop=pB.querySelector(".badges.svc");pB.innerHTML=(keepTop?keepTop.outerHTML:"")+routeBody(i,di);wire();wireDirs(i);routeArrows(i,di)})}
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
-  webLegs=[];map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?400:30,right:40},duration:700,maxZoom:15})}
+  webLegs=[];map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
 function showRoute(i,fromStop){const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
-  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,routeBody(i,0));wireDirs(i);if(backState)pBack.style.display="block"}
-function showLine(nm,fromStop){rememberStop(fromStop);ctx=null;setSel(null);const ids=lineRoutes[nm]||[];const main=lineMain(nm);drawPaths(ids,R[main].c);
+  let di0=0;if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
+  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`,routeBody(i,di0));wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
+function showLine(nm,fromStop){rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);let h=routeBody(main,0);
-  if(other.length)h=`<div class="grp">Services on this line</div><div class="badges" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
-  openPanel(`${nm} line`,`Train · main service ${esc(R[main].l)}`,h);wireDirs(main);if(backState)pBack.style.display="block"}
+  if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
+  openPanel(`${nm} ${TNAME[nm]}`,`Train line`,h);wireDirs(main);routeArrows(main,0);if(backState)pBack.style.display="block"}
 
 // ---------- map clicks
 const CLICK=["busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line"];
@@ -253,13 +272,13 @@ CLICK.forEach(id=>{map.on("mouseenter",id,e=>{map.getCanvas().style.cursor="poin
 function norm(s){return String(s).toLowerCase().replace(/\bstation\b/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim()}
 const routeIndex=[];
 R.forEach((r,i)=>{if(r.t==="train")return;const lab=r.t==="tram"?"G:link":r.n;routeIndex.push({k:"r",i,key:norm(lab+" "+r.l),n:lab.toLowerCase(),html:`${badge(i,lab)}<span>${esc(r.l)}</span>`,ty:r.t})});
-Object.keys(lineRoutes).forEach(nm=>routeIndex.push({k:"l",nm,key:norm(nm+" line train"),n:nm.toLowerCase(),html:`${lineBadge(nm)}<span>${esc(nm)} line</span>`,ty:"train"}));
+LINE_ORDER.filter(nm=>lineRoutes[nm]).forEach(nm=>{const dests=[...new Set(lineRoutes[nm].map(i=>R[i].l))].join(" ");routeIndex.push({k:"l",nm,key:norm(nm+" "+TNAME[nm]+" line train "+dests),n:nm.toLowerCase(),html:`${lineBadge(nm)}<span>${esc(TNAME[nm])}</span>`,ty:"train"})});
 const placeIndex=[];
 for(const [id,s] of Object.entries(ST))placeIndex.push({k:"s",id,key:norm(s[0]),rank:{train:0,busway:0,busstn:1,ferry:2,tram:2,bus:5}[s[3]],html:`<span>${esc(s[0])}</span>`,ty:KIND[s[3]]+(s[4]?" · "+s[4]:"")});
 DATA.suburbs.forEach(([n,la,lo])=>placeIndex.push({k:"sub",c:[lo,la],key:norm(n),rank:-1,html:`<span><b>${esc(n)}</b></span>`,ty:"Suburb"}));
 DATA.streets.forEach(([n,sub,la,lo])=>placeIndex.push({k:"st",c:[lo,la],key:norm(n+" "+sub),rank:3,html:`<span>${esc(n)}</span>`,ty:"Street · "+sub}));
 function searchRoutes(q){q=norm(q);if(!q)return[];const out=[];for(const e of routeIndex){let sc=-1;if(e.n===q)sc=0;else if(e.n.startsWith(q))sc=1;else if(e.key.split(" ").some(w=>w.startsWith(q)))sc=2;else if(e.key.includes(q))sc=3;if(sc>=0)out.push([sc+(sc>0&&e.ty!=="bus"?-.5:0),e])}
-  return out.sort((a,b)=>a[0]-b[0]||a[1].n.localeCompare(b[1].n,undefined,{numeric:true})).slice(0,40).map(x=>x[1])}
+  return out.sort((a,b)=>a[0]-b[0]||(a[1].ty==="train")-(b[1].ty==="train")||cmpRoute(a[1].n.toUpperCase(),b[1].n.toUpperCase())).slice(0,40).map(x=>x[1])}
 function searchPlaces(q){q=norm(q);if(q.length<2)return[];const out=[];const w=q.split(" ");for(const e of placeIndex){if(!w.every(x=>e.key.includes(x)))continue;let sc=e.rank;if(e.key.startsWith(q))sc-=3;out.push([sc,e]);if(out.length>4000)break}
   const seenK=new Set();return out.sort((a,b)=>a[0]-b[0]).map(x=>x[1]).filter(e=>{const k=e.key+e.ty;if(seenK.has(k))return false;seenK.add(k);return true}).slice(0,40)}
 function setupSearch(inpId,resId,fn,pick){const inp=document.getElementById(inpId),res=document.getElementById(resId),clr=document.querySelector(`.clr[data-for="${inpId}"]`);let items=[],act=-1;
@@ -271,7 +290,7 @@ function setupSearch(inpId,resId,fn,pick){const inp=document.getElementById(inpI
   inp.addEventListener("keydown",ev=>{const rows=res.querySelectorAll(".r");if(ev.key==="ArrowDown"||ev.key==="ArrowUp"){ev.preventDefault();act=Math.max(0,Math.min(rows.length-1,act+(ev.key==="ArrowDown"?1:-1)));rows.forEach((r,k)=>r.classList.toggle("act",k===act));rows[act]&&rows[act].scrollIntoView({block:"nearest"})}else if(ev.key==="Enter")choose(items[act>=0?act:0]);else if(ev.key==="Escape")res.style.display="none"});
   clr.onclick=()=>{inp.value="";render();inp.focus()};
   document.addEventListener("click",ev=>{if(!res.contains(ev.target)&&ev.target!==inp)res.style.display="none"})}
-setupSearch("qRoute","rRoute",searchRoutes,e=>{if(e.k==="l")showLine(e.nm,false);else showRoute(e.i,false)});
+setupSearch("qRoute","rRoute",searchRoutes,e=>{webCam=null;if(e.k==="l")showLine(e.nm,false);else showRoute(e.i,false)});
 setupSearch("qPlace","rPlace",searchPlaces,e=>{if(e.k==="s")openStop(e.id,true);else{panel.style.display="none";setSel(null);clearHL();map.flyTo({center:e.c,zoom:e.k==="sub"?14.5:16.2,duration:700})}});
 
 // ---------- info dialog
