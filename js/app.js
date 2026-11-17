@@ -357,9 +357,10 @@ function showAllAlerts(){backState=null;pBack.style.display="none";ctx=null;clea
   const all=todaysAlerts().map(a=>({a,t:alertTags(a)}));const tord={"Now":0,"Later today":1,"Ongoing":2};
   all.sort((x,y)=>tord[x.t.timing]-tord[y.t.timing]||((x.a.periods||[{}])[0].start||0)-((y.a.periods||[{}])[0].start||0));
   const LR=new Set(["Train line","Bus route","Ferry route","Tram line"]),SS=new Set(["Station","Bus stop","Tram stop"]);
-  const tagsOf=o=>[o.t.timing,o.t.type,...o.t.modes,...o.t.where,o.t.kind,o.t.where.some(w=>LR.has(w))?"Lines/Routes":null,o.t.where.some(w=>SS.has(w))?"Stops/Stations":null].filter(Boolean);
+  const SC=new Set(["Modified service","Information","Additional service","Detour"]);
+  const tagsOf=o=>[o.t.timing,SC.has(o.t.type)?"Service changes/information":o.t.type,...o.t.modes,...o.t.where,o.t.kind,o.t.where.some(w=>LR.has(w))?"Lines/Routes":null,o.t.where.some(w=>SS.has(w))?"Stops/Stations":null].filter(Boolean);
   const count=c=>c==="All"?all.length:all.filter(o=>tagsOf(o).includes(c)).length;
-  const types=[...new Set(all.map(o=>o.t.type))].sort((x,y)=>count(y)-count(x));
+  const types=[...new Set(all.map(o=>SC.has(o.t.type)?"Service changes/information":o.t.type))].sort((x,y)=>count(y)-count(x));
   const cats=["All",...types,"Lines/Routes","Stops/Stations","Disruption","Planned works"].filter((c,i,arr)=>arr.indexOf(c)===i&&count(c)>0);
   if(!cats.includes(alertFilter))alertFilter="All";
   const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
