@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build data/plan/<YYYYMMDD>.json: one compact timetable per day for "Best connections".
 
-Usage: build_planner.py <gtfs_dir> <repo> [days]   (default 8 days from today, Brisbane time)
+Usage: build_planner.py <gtfs_dir> <repo> [days]   (default 14 days from today, Brisbane time)
 
 Each file lists stop keys (stations/stops as in data/network.json), and trip patterns:
   {"r": route index, "h": headsign index, "s": [stop indexes], "pl": [platform label index or -1],
@@ -12,7 +12,7 @@ import pandas as pd
 from collections import defaultdict
 
 G, REPO = sys.argv[1], sys.argv[2]
-DAYS = int(sys.argv[3]) if len(sys.argv) > 3 else 8
+DAYS = int(sys.argv[3]) if len(sys.argv) > 3 else 14   # always at least a week ahead, even late in the week
 net = json.load(open(os.path.join(REPO, "data/network.json")))
 R = net["data"]["routes"]; ST = net["data"]["stops"]
 ridx = {r["n"]: i for i, r in enumerate(R)}
