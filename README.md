@@ -53,7 +53,7 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 - **Red:** a trip on that route, or through that stop, has been cancelled and hasn't reached its start time yet. Red clears once the cancelled trip's start time has passed.
 - **Half red, half orange:** both of the above.
 
-**More ▾ menu.** Extras live under **More ▾** in the top bar: On demand, School routes and Lost property, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
+**More ▾ menu.** Extras live under **More ▾** in the top bar: On demand, School routes, Lost property and a link to Translink's feedback form, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
 
 **School routes.** School routes (under More ▾) lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
 
