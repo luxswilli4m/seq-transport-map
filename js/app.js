@@ -508,7 +508,16 @@ function showAllAlerts(){focusRoutes=null;drawVehicles();backState=null;pBack.st
   openPanel("Service alerts",`${all.length} posted for today · Translink`,chips+`<div class="alist">${body}</div>`,{view:"alerts"});
   pB.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{alertFilter=(alertFilter===b.dataset.cat&&b.dataset.cat!=="All")?"All":b.dataset.cat;const sc=pB.querySelector(".acats").scrollLeft;showAllAlerts();const n=pB.querySelector(".acats");if(n)n.scrollLeft=sc})}
 function activeNow(a){const now=Date.now()/1000;return !a.periods||!a.periods.length||a.periods.some(p=>(!p.start||p.start<=now)&&(!p.end||now<=p.end))}
-function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(activeNow).filter(a=>(a.sel||[]).some(x=>(x.stop&&sset.has(x.stop))||(x.route&&rset.has(riOfRoute(x.route)))))}
+// ---------- which stations/stops an alert touches (stop -> its station; park 'n' ride -> stations within 500 m)
+const PNR_ST=(()=>{const out={};const sts=Object.entries(ST).filter(([,s])=>["train","busway","busstn","ferry","tram"].includes(s[3]));
+  const km=(a,b)=>Math.hypot((a[2]-b[2])*98.7,(a[1]-b[1])*110.6);
+  for(const [id,s] of Object.entries(ST)){if(!/park\s*'?n'?\s*ride/i.test(s[0]))continue;const near=sts.filter(([,t])=>km(s,t)<0.5).map(([k])=>k);if(near.length)out[id]=near}return out})();
+const routeStopSet=i=>{const set=new Set();R[i].d.forEach(d=>{d.s.forEach(x=>set.add(x));(d.v||[]).forEach(v=>v.x.forEach(x=>set.add(x)))});return set};
+const RSTOPS=new Map();const rStops=i=>{if(!RSTOPS.has(i))RSTOPS.set(i,routeStopSet(i));return RSTOPS.get(i)};
+function alertStops(a){if(a._st)return a._st;const set=new Set();for(const x of a.sel||[]){if(!x.stop)continue;const t=ST[x.stop]?x.stop:(parentOf[x.stop]||x.stop);set.add(x.stop);set.add(t);(PNR_ST[t]||[]).forEach(k=>set.add(k))}return a._st=set}
+function alertHits(a,stopSet,routeSet){const as=alertStops(a);for(const x of a.sel||[])if(x.route&&routeSet.has(riOfRoute(x.route)))return true;
+  for(const s of as){if(stopSet.has(s))return true;for(const i of routeSet)if(rStops(i).has(s))return true}return false}
+function alertsFor(stopIds,routeIdxs){const sset=new Set(stopIds),rset=new Set(routeIdxs);return LIVE.alerts.filter(activeNow).filter(a=>alertHits(a,sset,rset))}
 function alertHTML(list){if(!list.length)return"";return `<details class="alerts"><summary>⚠ ${list.length} service alert${list.length>1?"s":""}</summary>`+list.slice(0,20).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</div>`).join("")+`</details>`}
 function insertAlerts(stopIds,routeIdxs){const html=alertHTML(alertsFor(stopIds,routeIdxs));if(!html)return;const old=pB.querySelector(".alerts");if(old)old.remove();pB.insertAdjacentHTML("afterbegin",html)}
 document.getElementById("alertBtn").onclick=()=>{webCam=null;showAllAlerts()};
@@ -576,7 +585,7 @@ async function openRouteTable(key,st,back){const file=key.replace(/[^A-Za-z0-9_-
   pB.querySelectorAll("[data-s2]").forEach(a=>a.onclick=()=>{const b={kind:"rt",key,st:Object.assign({},st),cam:{center:map.getCenter(),zoom:map.getZoom()}};openStop(a.dataset.s2,true);setBack(b)});
   // updates (current and upcoming alerts for this route)
   const nowS=Date.now()/1000;const iset=new Set(ids);
-  const al=LIVE.alerts.filter(a=>(a.sel||[]).some(x=>x.route&&iset.has(riOfRoute(x.route)))&&(!a.periods||!a.periods.length||a.periods.some(p=>!p.end||p.end>=nowS)));
+  const al=LIVE.alerts.filter(a=>alertHits(a,new Set(),iset)&&(!a.periods||!a.periods.length||a.periods.some(p=>!p.end||p.end>=nowS)));
   document.getElementById("rtUpd").innerHTML=!al.length?`<div class="sub">No current or upcoming alerts for this ${TNAME[key]?"line":"route"}.</div>`:al.map(a=>{const t=alertTags(a);const p=(a.periods||[]).find(p=>!p.end||p.end>=nowS);
     return `<details class="alcard"><summary><b>${esc(a.header)}</b><div class="atags"><span class="atag t-${t.timing.replace(/\s/g,"").toLowerCase()}">${t.timing}</span>${t.kind?`<span class="atag ${t.kind==="Disruption"?"dis":"pl"}">${t.kind}</span>`:""}<span class="atype">${esc(t.type)}</span></div>${p&&(p.start||p.end)?`<span class="when">${p.start?fmtDay.format(p.start*1000):""}${p.end?" – "+fmtDay.format(p.end*1000):""}</span>`:""}</summary>${a.desc?`<p>${esc(a.desc).slice(0,1500)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</details>`}).join("");
   renderRTLive()}
@@ -681,8 +690,8 @@ async function pollCancellations(){if(!FAV.stops.length&&!FAV.routes.length){app
 function favAlertState(){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
   const live=LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<eod&&(!p.end||p.end>=nowS)));
   const st={stops:{},routes:{}};
-  for(const id of FAV.stops){const ids=new Set([id,...(KIDS[id]||[])]);if(live.some(a=>(a.sel||[]).some(x=>x.stop&&ids.has(x.stop))))st.stops[id]=true}
-  for(const k of FAV.routes){const ids=new Set(keyIds(k));if(live.some(a=>(a.sel||[]).some(x=>x.route&&ids.has(riOfRoute(x.route)))))st.routes[k]=true}
+  for(const id of FAV.stops){const ids=new Set([id,...(KIDS[id]||[])]);if(live.some(a=>alertHits(a,ids,new Set())))st.stops[id]=true}
+  for(const k of FAV.routes){const ids=new Set(keyIds(k));if(live.some(a=>alertHits(a,new Set(),ids)))st.routes[k]=true}
   return st}
 function statusClass(alert,cx){return alert&&cx?"st-both":cx?"st-cx":alert?"st-al":""}
 function applyFavStatus(){const al=favAlertState();
