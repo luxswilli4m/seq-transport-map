@@ -3,7 +3,9 @@
 
 Usage: build_platforms.py <gtfs_dir> <repo>
 
-Platform areas are the platform shapes in the base map (OpenStreetMap, tiles/seq.pmtiles);
+Platform areas are the platform shapes in the base map (OpenStreetMap, tiles/seq.pmtiles), plus
+OpenStreetMap platform outlines from Overture Maps for platforms the base map leaves out (underground
+busway platforms); where neither has a shape, a small square marks the platform at Translink's position;
 platform numbers are the positions of each platform / bay in Translink's stop list.
 Stations are listed in BAU below (same as the BAU menu in index.html).
 """
@@ -39,6 +41,60 @@ def plabel(name, code):
     if m: return m.group(1)
     return None
 
+# ---------- platform outlines from Overture Maps (OpenStreetMap platforms the base map leaves out, such as
+# the underground Queen Street bus station and Cultural Centre busway platforms). Kept in
+# tools/platform_shapes.json and re-downloaded only when Overture publishes a new release.
+def overture_platforms():
+    cache_p = os.path.join(REPO, "tools", "platform_shapes.json")
+    cache = json.load(open(cache_p)) if os.path.exists(cache_p) else {}
+    ids = BAU + EXTRA
+    pts_ = [(float(stops[i]["stop_lon"]), float(stops[i]["stop_lat"])) for i in ids if i in stops]
+    bb = (min(p[0] for p in pts_) - 0.01, min(p[1] for p in pts_) - 0.01, max(p[0] for p in pts_) + 0.01, max(p[1] for p in pts_) + 0.01)
+    try:
+        import io, requests, pyarrow.parquet as pq, pyarrow.compute as pc
+        from shapely import wkb
+        sys.path.insert(0, os.path.join(REPO, "tools"))
+        from od_places import _HTTPRangeFile
+        stac = "https://stac.overturemaps.org"
+        rel = requests.get(f"{stac}/catalog.json", timeout=60).json()["latest"]
+        if cache.get("release") == rel and cache.get("bbox") == [round(v, 4) for v in bb]:
+            return cache["polys"]
+        n = int(requests.get(f"{stac}/{rel}/base/infrastructure/collection.json", timeout=60).json()["partition:file_count"])
+        polys = []
+        for i in range(n):
+            it = requests.get(f"{stac}/{rel}/base/infrastructure/{i:05d}/{i:05d}.json", timeout=60).json(); b = it["bbox"]
+            if not (b[0] <= bb[2] and b[2] >= bb[0] and b[1] <= bb[3] and b[3] >= bb[1]):
+                continue
+            url = [a["href"] for a in it["assets"].values() if "amazonaws.com" in a["href"]][0]
+            f = pq.ParquetFile(io.BufferedReader(_HTTPRangeFile(url), buffer_size=8 << 20)); md = f.metadata
+            cols = [md.schema.column(k).path for k in range(md.num_columns)]; ix = {c: k for k, c in enumerate(cols)}
+            keep = []
+            for r in range(md.num_row_groups):
+                stt = lambda c: md.row_group(r).column(ix[c]).statistics
+                if stt("bbox.xmin").max >= bb[0] and stt("bbox.xmax").min <= bb[2] and stt("bbox.ymin").max >= bb[1] and stt("bbox.ymax").min <= bb[3]:
+                    keep.append(r)
+            if not keep:
+                continue
+            tb = f.read_row_groups(keep, columns=["geometry", "bbox", "class", "names"])
+            bx = tb.column("bbox").combine_chunks(); x = pc.struct_field(bx, "xmin"); y = pc.struct_field(bx, "ymin")
+            tb = tb.filter(pc.and_(pc.and_(pc.greater_equal(x, bb[0]), pc.less_equal(x, bb[2])), pc.and_(pc.greater_equal(y, bb[1]), pc.less_equal(y, bb[3]))))
+            tb = tb.filter(pc.equal(tb.column("class"), "platform"))
+            for r in tb.to_pylist():
+                g = wkb.loads(r["geometry"])
+                for gg in getattr(g, "geoms", [g]):
+                    if gg.geom_type == "Polygon" and gg.area > 0:
+                        polys.append({"n": (r["names"] or {}).get("primary") or "", "c": [[round(a, 6), round(c, 6)] for a, c in gg.exterior.coords]})
+        if len(polys) < 5:
+            raise RuntimeError(f"only {len(polys)} platform outlines found")
+        json.dump({"release": rel, "bbox": [round(v, 4) for v in bb], "polys": polys}, open(cache_p, "w"), separators=(",", ":"))
+        print(f"Overture {rel}: {len(polys)} platform outlines")
+        return polys
+    except Exception as e:      # unreachable: use the last download (or the base map alone)
+        print("Overture platform outlines not updated:", e)
+        return cache.get("polys", [])
+
+OV_POLYS = [Polygon(p["c"]).buffer(0) for p in overture_platforms()]
+
 out = []
 for sid in BAU + EXTRA:
     st = stops.get(sid)
@@ -61,6 +117,8 @@ for sid in BAU + EXTRA:
                 g = shape(f["geometry"])
                 g = transform(lambda px, py, z=None, x=x, y=y: tuple(zip(*[lonlat(x, y, a, b, ext) for a, b in zip(px, py)])), g)
                 polys.append(g.buffer(0))
+    if sid not in EXTRA:
+        polys += [g for g in OV_POLYS if g.distance(Point(lo0, la0)) * 111000 < RADIUS * 1000]
     area = unary_union(polys) if polys else None
     pts = []
     for k, s in stops.items():
