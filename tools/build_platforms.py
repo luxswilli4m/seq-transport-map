@@ -121,6 +121,7 @@ OV_POLYS = [Polygon(p["c"]).buffer(0) for p in OV_RAW]
 OV_NAMED = [(re.sub(r"\s+", " ", p["n"].lower()).strip(), Polygon(p["c"]).buffer(0)) for p in OV_RAW if p.get("n")]
 
 out = []
+CLAIMED = []
 for sid in BAU + EXTRA:
     st = stops.get(sid)
     if not st: print("missing", sid); continue
@@ -142,44 +143,65 @@ for sid in BAU + EXTRA:
                 g = shape(f["geometry"])
                 g = transform(lambda px, py, z=None, x=x, y=y: tuple(zip(*[lonlat(x, y, a, b, ext) for a, b in zip(px, py)])), g)
                 polys.append(g.buffer(0))
-    if sid not in EXTRA:
-        polys += [g for g in OV_POLYS if g.distance(Point(lo0, la0)) * 111000 < RADIUS * 1000]
+    polys += [g for g in OV_POLYS if g.distance(Point(lo0, la0)) * 111000 < RADIUS * 1000]
     area = unary_union(polys) if polys else None
     pts = []
     for k, s in stops.items():
         if s.get("parent_station") != sid: continue
         lb = None if re.search(r"\bstop\s+\d{3}\b", s["stop_name"], re.I) else plabel(s["stop_name"], s.get("platform_code"))
         if lb and not any(p["n"] == lb for p in pts):   # one number per platform (a station entry can repeat platform 1)
-            pts.append({"n": lb, "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
+            pts.append({"n": lb, "sn": s["stop_name"], "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
     # Helensvale's platforms 1, 2, 4 and 5 are listed without a parent; add same-named platforms within 300 m
     base = st["stop_name"].lower().replace(" busway station", "").replace(" bus station", "").replace(" station", "")
     for k, s in stops.items():
         if s.get("parent_station") or k == sid or not s["stop_name"].lower().startswith(base): continue
         if math.hypot((float(s["stop_lon"]) - lo0) * kx, (float(s["stop_lat"]) - la0) * ky) > 0.3: continue
         lb = plabel(s["stop_name"], s.get("platform_code")) if re.search(r"platform", s["stop_name"], re.I) else None
-        if lb and not any(p["n"] == lb for p in pts): pts.append({"n": lb, "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
-    # keep only platform areas that actually hold one of this station's platforms (within 25 m)
-    keep = []
-    if area is not None and sid not in EXTRA:   # bus platforms get their own squares, never the rail platform shapes beside them
-        for g in getattr(area, "geoms", [area]):
-            if g.area <= 0: continue
+        if lb and not any(p["n"] == lb for p in pts): pts.append({"n": lb, "sn": s["stop_name"], "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
+    # Outlines, from the base map and Overture (OpenStreetMap). A square is only drawn when no outline qualifies,
+    # so a platform that gets mapped later switches over by itself.
+    #   1. every outline a BAU station's platform sits on (within 25 m), as before;
+    #   2. for a platform still without one: an outline named exactly like it ("Roma Street busway, platform 1",
+    #      up to 150 m away), or named for the station and its number ("Cultural Centre Platform 1", up to 60 m);
+    #   3. a station drawn beside a BAU station: an unnamed outline within 15 m that isn't one of the BAU station's.
+    norm = lambda t: re.sub(r"[^a-z0-9]+", " ", (t or "").lower()).strip()
+    stem = norm(base_name(st["stop_name"]))
+    cands = [(norm(n_), g) for n_, g in OV_NAMED if g.distance(Point(lo0, la0)) * 111000 < RADIUS * 1000]
+    unnamed = [g for g in getattr(area, "geoms", [area]) if g.area > 0] if area is not None else []
+    keep, used = [], []
+    def take(g):
+        if not any(g.equals(u) for u in used):
+            used.append(g); keep.append([[round(a, 6), round(b, 6)] for a, b in g.exterior.coords])
+    if sid not in EXTRA:
+        for g in unnamed:
             if any(g.distance(Point(p["ll"])) * 111000 < MATCH for p in pts):
-                keep.append([[round(a, 6), round(b, 6)] for a, b in g.exterior.coords])
-    # a station drawn beside a BAU station only takes outlines named exactly as its own platforms
-    # ("Roma Street busway, platform 1"), so it can't pick up the neighbouring station's platform shapes
-    if sid in EXTRA:
-        own = {re.sub(r"\s+", " ", s["stop_name"].lower()).strip() for s in stops.values() if s.get("parent_station") == sid}
-        for nm_, g in OV_NAMED:
-            if nm_ in own and g.distance(Point(lo0, la0)) * 111000 < RADIUS * 1000:
-                keep.append([[round(a, 6), round(b, 6)] for a, b in g.exterior.coords])
+                take(g)
+    base_set = list(used)
+    for p in pts:
+        P = Point(p["ll"])
+        if any(g.distance(P) * 111000 < MATCH for g in base_set):
+            p["got"] = 1; continue
+        sn = norm(p.get("sn"))
+        exact = [g for n_, g in cands if n_ == sn and g.distance(P) * 111000 < 150]
+        numbered = [g for n_, g in cands if stem and n_.startswith(stem) and re.search(r"\bplatform " + re.escape(p["n"].lower()) + r"\b", n_) and g.distance(P) * 111000 < 60]
+        if exact or numbered:
+            take(min(exact or numbered, key=lambda g: g.distance(P))); p["got"] = 1; continue
+        if sid in EXTRA:
+            near = [g for g in unnamed if g.distance(P) * 111000 < 15 and not any(g.intersects(c) for c in CLAIMED)]
+            if near:
+                take(min(near, key=lambda g: g.distance(P))); p["got"] = 1
+    if sid not in EXTRA:
+        CLAIMED.extend(used)
     # where the base map has no platform shape, mark the platform/bay with a small box (about 12 m square)
     from shapely.affinity import scale
     shapes_ = [Polygon(a) for a in keep]
     for p in pts:
         P = Point(p["ll"])
-        if any(g.distance(P) * 111000 < MATCH for g in shapes_): continue
+        if p.get("got") or any(g.distance(P) * 111000 < MATCH for g in shapes_): continue
         b = scale(P.buffer(6 / 111000, cap_style=3), xfact=111.32 / kx, yfact=1)
         keep.append([[round(a, 6), round(c, 6)] for a, c in b.exterior.coords]); p["box"] = 1
+    for p in pts:
+        p.pop("sn", None); p.pop("got", None)
     out.append({"id": sid, "name": st["stop_name"], "areas": keep, "pts": sorted(pts, key=lambda p: (int(re.match(r"\d*", p["n"]).group() or 999), p["n"]))})
     if area is not None: print("  nearest area to each number (m):", [round(min(g.distance(Point(p["ll"])) for g in getattr(area,"geoms",[area]))*111000) for p in pts])
     print(st["stop_name"], "areas", len(keep), "numbers", [p["n"] for p in pts])
