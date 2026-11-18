@@ -53,7 +53,9 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 - **Red:** a trip on that route, or through that stop, has been cancelled and hasn't reached its start time yet. Red clears once the cancelled trip's start time has passed.
 - **Half red, half orange:** both of the above.
 
-**School routes.** The School routes button lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
+**More ▾ menu.** Extras live under **More ▾** in the top bar: On demand and School routes, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
+
+**School routes.** School routes (under More ▾) lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
 
 **On demand.** The On demand button shades Translink's on-demand (pre-booked, flexible bus) service areas in navy and marks their destinations and key locations with yellow dots. Tap an area for how it works and where it goes. Destinations that couldn't be placed automatically are still listed, marked "(not marked on map)". Turning On demand on hides the other map layers; turning it off brings them back as they were. Gold Coast and Logan come from Translink's own map files and are exact. Ipswich Flexilink (zones C and D) and Bribie Island are traced from Translink's map pictures, so their edges are approximate; Bribie shows its start date until the service begins. Tamborine Mountain and Yarrabilba aren't drawn yet.
 

@@ -749,3 +749,13 @@ info.onclick=e=>{if(e.target===info)info.style.display="none"};
 try{if(!localStorage.getItem("seqmap_seen")){info.style.display="flex";localStorage.setItem("seqmap_seen","1")}}catch(e){info.style.display="flex"}
 window.__ready=true;window.__map=map;
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
+
+// ---------- "More" menu (School routes, On demand, future extras)
+(()=>{const w=document.getElementById("moreWrap"),b=document.getElementById("moreBtn");
+  const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
+  b.onclick=e=>{e.stopPropagation();set(!w.classList.contains("open"))};
+  document.getElementById("moreMenu").addEventListener("click",()=>set(false));
+  document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
+  const od=document.getElementById("odBtn");new MutationObserver(()=>b.classList.toggle("on",od.classList.contains("odon"))).observe(od,{attributes:true,attributeFilter:["class"]});
+  b.title="More: school routes, on-demand services"})();
