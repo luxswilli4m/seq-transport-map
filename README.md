@@ -140,7 +140,7 @@ That's it. The build finds "Example Road station" in Translink's stop list, take
 
 The shapes come from map files (KML) that Translink links on its own on-demand pages: the Gold Coast maps page and the Logan "sites" page. Logan's destinations come from the table on Translink's Logan destinations page. The weekly refresh re-reads these pages, so new or changed areas on those pages appear automatically.
 
-Destinations are pinned automatically when their name confidently matches a Translink stop or a named place in the base map. Otherwise they're listed in the card as "(not marked on map)" rather than guessed.
+Destinations are pinned automatically when their name confidently matches a Translink stop or a named place in the base map. If neither works, `tools/od_places.py` looks the name up with OpenStreetMap's place search (nominatim.openstreetmap.org, not map tiles). It only accepts a result whose own name has most of the destination's distinctive words, that sits in the suburb the destination names, and that is in or near the zone. If there are several such places far apart, it leaves the destination unmarked rather than guessing. These pins say "(approximate location)" on the card. Each name is searched once and the answer kept in **`tools/ondemand_places.json`**, so the weekly refresh only searches names it hasn't seen before. To fix or add a pin by hand, put `"Name": [longitude, latitude]` under `manual` in that file; hand pins always win. Anything still not found is listed in the card as "(not marked on map)".
 
 The list of areas, the links to Translink's pages, and the short "how it works" text on each card live in **`tools/ondemand.json`**.
 

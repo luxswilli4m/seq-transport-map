@@ -102,7 +102,34 @@ def load_stops():
     return out
 
 
-def dest_pin(d, stops, pois, near):
+PLACES = None
+SUBURBS = {}
+
+
+def suburb_centres():
+    """Suburb -> middle of its stops, from the ', Suburb' ending of Translink's stop descriptions."""
+    acc = {}
+    with open(os.path.join(GTFS, "stops.txt"), encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            m = re.search(r",\s*([A-Z][A-Za-z' -]+)$", r.get("stop_desc") or "")
+            if m:
+                acc.setdefault(m.group(1).strip(), []).append((float(r["stop_lon"]), float(r["stop_lat"])))
+    return {k: [sum(p[0] for p in v) / len(v), sum(p[1] for p in v) / len(v)] for k, v in acc.items()}
+
+
+def pin(name, stops, pois, near, zones, maxkm):
+    """Translink stop or base-map place first; then OpenStreetMap's place search (marked approximate)."""
+    ll = match(name, stops, pois, near)
+    if ll:
+        return {"n": name, "ll": ll}
+    if PLACES and zones:
+        ll, src = PLACES.find(name, zones, maxkm)
+        if ll:
+            return {"n": name, "ll": ll, "approx": src == "osm"}
+    return {"n": name, "ll": None}
+
+
+def dest_pin(d, stops, pois, near, zones=None, maxkm=2.0):
     """A destination is a name (matched automatically) or {"n": name, "stops": [stop ids Translink gives]}."""
     if isinstance(d, dict):
         lls = [STOP_LL[s] for s in d.get("stops", []) if s in STOP_LL]
@@ -110,8 +137,8 @@ def dest_pin(d, stops, pois, near):
             return {"n": d["n"], "ll": [round(sum(p[0] for p in lls) / len(lls), 6), round(sum(p[1] for p in lls) / len(lls), 6)]}
         if d.get("stops"):
             problems.append(f"{d['n']}: stop {', '.join(d['stops'])} isn't in Translink's stop list any more.")
-        return {"n": d["n"], "ll": match(d["n"], stops, pois, near)}
-    return {"n": d, "ll": match(d, stops, pois, near)}
+        return pin(d["n"], stops, pois, near, zones, maxkm)
+    return pin(d, stops, pois, near, zones, maxkm)
 
 
 def load_pois(bbox):
@@ -188,6 +215,13 @@ def match(dest, stops, pois, near):
 # ---------- build
 try:
     stops = load_stops()
+    try:
+        sys.path.insert(0, os.path.join(REPO, "tools"))
+        from od_places import Places
+        SUBURBS = suburb_centres()
+        PLACES = Places(REPO, SUBURBS)
+    except Exception as e:
+        print("OpenStreetMap place search not used:", e)
     areas = []
     TRACED = json.load(open(os.path.join(REPO, "tools", "ondemand_traced.json")))
     for a in CFG["areas"]:
@@ -199,7 +233,7 @@ try:
                 b = [min(p[0] for p in z) - 0.08, min(p[1] for p in z) - 0.08, max(p[0] for p in z) + 0.08, max(p[1] for p in z) + 0.08]
                 pois = load_pois(b)
                 groups.append({"name": g["name"], "zones": [z], "hours": g.get("hours"),
-                               "dests": [dest_pin(d, stops, pois, centroid(z)) for d in g["dests"]]})
+                               "dests": [dest_pin(d, stops, pois, centroid(z), [z], 2.0) for d in g["dests"]]})
             out = {k: a[k] for k in ("id", "name", "page", "how")}
             out.update({"groups": groups, "traced": True, "dlabel": "Key locations"})
             if a.get("auto"):
@@ -210,7 +244,7 @@ try:
             print(f"{a['name']}: traced, {len(groups)} groups")
             for g in groups:
                 for d in g["dests"]:
-                    print(f"   {'pin ' if d['ll'] else '----'} {d['n']}")
+                    print(f"   {('osm ' if d.get('approx') else 'pin ') if d['ll'] else '----'} {d['n']}")
             continue
         page = fetch(BASE + a["map_page"]).decode("utf-8", "replace")
         feats = []
@@ -237,7 +271,7 @@ try:
                     problems.append(f"{a['name']}: no map file found for {', '.join(missing)}.")
                 near = centroid([p for z in zs for p in z]) if zs else centroid(allpts)
                 groups.append({"name": ", ".join(subs), "zones": zs, "pickup": ", ".join(subs),
-                               "dests": [{"n": d, "ll": match(d, stops, pois, near)} for d in dests]})
+                               "dests": [pin(d, stops, pois, near, zs, 8.0) for d in dests]})
         else:
             for n, c in sorted(polys, key=lambda x: a.get("zone_names", {}).get(x[0], x[0])):
                 nice = a.get("zone_names", {}).get(n) or (re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"_[A-Z]{1,3}$", "", n)).replace("_", " ").strip() or n)
@@ -253,7 +287,7 @@ try:
         print(f"{a['name']}: {len(polys)} areas, {len(groups)} groups")
         for g in groups:
             for d in (g["dests"] or []):
-                print(f"   {'pin ' if d['ll'] else '----'} {d['n']}")
+                print(f"   {('osm ' if d.get('approx') else 'pin ') if d['ll'] else '----'} {d['n']}")
         for d in out.get("dests", []):
             print(f"   pin  {d['n']}")
 except Exception as e:
@@ -267,6 +301,11 @@ if problems:
         f.write("\n### On-demand service areas\n\n" + "\n".join("- " + p for p in problems) +
                 "\n\nCheck Translink's on-demand pages (translink.com.au/ondemand) and update tools/ondemand.json if a page has moved.\n")
     print("\n".join(problems))
+
+if PLACES:
+    PLACES.save()
+    for l in PLACES.log:
+        print("place search:", l)
 
 if areas is not None:
     json.dump({"updated": datetime.date.today().isoformat(), "areas": areas}, open(OUT, "w"), separators=(",", ":"))

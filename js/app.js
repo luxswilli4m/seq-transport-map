@@ -711,7 +711,7 @@ function odLayers(on){if(on){odSnap={};soloSnap=null;soloKey=null;GROUPS.forEach
 function odVis(v){["od-fill","od-line","od-pin","od-lbl"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",v?"visible":"none"))}
 function odBounds(zs){let b=null;zs.forEach(z=>z.forEach(([x,y])=>{b=b?[Math.min(b[0],x),Math.min(b[1],y),Math.max(b[2],x),Math.max(b[3],y)]:[x,y,x,y]}));return b}
 function odFit(zs){const b=odBounds(zs);if(b)map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:14})}
-function odDestHTML(list,ai){return `<ul class="odd">`+list.map(d=>d.ll?`<li><a href="#" data-odll="${d.ll.join(",")}">${esc(d.n)}</a></li>`:`<li>${esc(d.n)} <span class="odnm">(not marked on map)</span></li>`).join("")+`</ul>`}
+function odDestHTML(list,ai){return `<ul class="odd">`+list.map(d=>d.ll?`<li><a href="#" data-odll="${d.ll.join(",")}">${esc(d.n)}</a>${d.approx?` <span class="odnm">(approximate location)</span>`:""}</li>`:`<li>${esc(d.n)} <span class="odnm">(not marked on map)</span></li>`).join("")+`</ul>`}
 function odWire(){pB.querySelectorAll("[data-odll]").forEach(a=>a.onclick=e=>{e.preventDefault();const [x,y]=a.dataset.odll.split(",").map(Number);map.flyTo({center:[x,y],zoom:15,duration:700});selPt([x,y])});
   pB.querySelectorAll("[data-odg]").forEach(a=>a.onclick=e=>{e.preventDefault();const [ai,gi]=a.dataset.odg.split(",").map(Number);odCard(ai,gi,true)})}
 const odLink=a=>`<p class="odlink"><a href="${esc(a.page)}" target="_blank" rel="noopener">Hours, booking and details at Translink ↗</a></p>`;

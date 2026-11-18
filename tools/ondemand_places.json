@@ -1,0 +1,80 @@
+{
+ "_help": "On-demand key locations found with OpenStreetMap's place search (tools/od_places.py). 'found' is a cache (delete an entry to search again). Put hand fixes in 'manual' as \"Name\": [lon, lat]; they always win.",
+ "manual": {},
+ "found": {
+  "Logan North Library and Aquatic Centre": {
+   "ll": [
+    153.118912,
+    -27.610585
+   ],
+   "osm_name": "Logan North Library",
+   "osm_type": "library"
+  },
+  "Bribie Island Community Arts Centre": {
+   "ll": [
+    153.153373,
+    -27.048326
+   ],
+   "osm_name": "Bribie Island Community Arts Centre",
+   "osm_type": "community_centre"
+  },
+  "Bongaree Jetty": {
+   "ll": [
+    153.158634,
+    -27.084443
+   ],
+   "osm_name": "At The Jetty",
+   "osm_type": "restaurant"
+  },
+  "Bongaree Plaza": {
+   "ll": [
+    153.157168,
+    -27.075992
+   ],
+   "osm_name": "Bongaree Plaza",
+   "osm_type": "retail"
+  },
+  "Bribie Island RSL Club": {
+   "ll": [
+    153.164484,
+    -27.090001
+   ],
+   "osm_name": "Bribie Island RSL",
+   "osm_type": "yes"
+  },
+  "HomeCo. Marsden": {
+   "ll": null
+  },
+  "Browns Plains Community Health Centre": {
+   "ll": [
+    153.029444,
+    -27.67499
+   ],
+   "osm_name": "Browns Plains Health and Early Years Centre",
+   "osm_type": "yes"
+  },
+  "Woolworths Cornubia": {
+   "ll": [
+    153.191596,
+    -27.670268
+   ],
+   "osm_name": "Woolworths",
+   "osm_type": "supermarket"
+  },
+  "Supa IGA Rochedale": {
+   "ll": null
+  },
+  "Redbank Plains Shopping Centre": {
+   "ll": null
+  },
+  "Goodna Marketplace": {
+   "ll": null
+  },
+  "Bellara shops": {
+   "ll": null
+  },
+  "Woorim Beach": {
+   "ll": null
+  }
+ }
+}
