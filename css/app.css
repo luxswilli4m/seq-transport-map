@@ -245,3 +245,5 @@ em.flm{font-style:normal;color:var(--muted);font-size:12px;margin-left:4px}
 #info .vst.dep{background:transparent;color:var(--muted);opacity:.7;border:1px dashed var(--line)}
 #info .vst.arr{background:#dcfce7;color:#15803d}
 body:not(.light) #info .vst.arr{background:#16a34a33;color:#86efac}
+ol.stops li .tc{float:right;margin-left:10px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink);min-width:64px;text-align:right}
+ol.stops li .tc:empty{display:none}

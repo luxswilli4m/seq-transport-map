@@ -196,7 +196,15 @@ function setStar(t){starTarget=t;if(!t){pStar.style.display="none";return}pStar.
 pStar.onclick=()=>{if(!starTarget)return;const L=FAV[starTarget.list];const k=L.indexOf(starTarget.key);if(k>=0)L.splice(k,1);else L.push(starTarget.key);saveFav();setStar(starTarget)};
 function updateFavBtns(){document.getElementById("favStopsBtn").textContent="★ Stops"+(FAV.stops.length?" ("+FAV.stops.length+")":"");document.getElementById("favRoutesBtn").textContent="★ Routes"+(FAV.routes.length?" ("+FAV.routes.length+")":"")}
 const rowVeh=b=>{const tr=b.closest(".tr");const c=tr&&tr.querySelector("[data-trip]");return c&&LIVE.byTrip?LIVE.byTrip.get(c.dataset.trip)||null:null};
-function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,true,rowVeh(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,true,rowVeh(b)));
+// nearest live service still heading towards this stop on the row's route (or train line) and headsign
+function upstreamVeh(b){const tr=b.closest(".tr[data-k]");if(!tr||!ctx||!ctx.rows||!LIVE.veh)return null;const row=ctx.rows[+tr.dataset.k];if(!row)return null;
+  const here=new Set([ctx.id,...(KIDS[ctx.id]||[])].map(stopKey));const head=norm(cleanHead(TT.cal.hs[row.hi]||""));let best=null;
+  for(const v of LIVE.veh){if(row.kind==="train"?!(lineOf[v.ri]||[]).includes(row.line):v.ri!==row.ri)continue;const ns=v.stop&&stopKey(v.stop);if(!ns)continue;
+    R[v.ri].d.forEach(d=>{const a=d.s.indexOf(ns);if(a<0)return;const z=d.s.findIndex((x,j)=>j>=a&&here.has(x));if(z<0)return;
+      const hm=head&&d.h&&(norm(d.h).includes(head)||head.includes(norm(d.h)))?0:1;const sc=hm*1000+(z-a);if(!best||sc<best.sc)best={sc,v}})}
+  return best?best.v:null}
+async function rowVehFor(b){let v=rowVeh(b);if(v)return v;const tr=b.closest(".tr");if(tr&&tr.querySelector("[data-trip]")||!LIVE.vehAt||Date.now()-LIVE.vehAt>15000){await pollVehicles(true);v=rowVeh(b)}return v||upstreamVeh(b)}
+function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b)));
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
@@ -245,7 +253,7 @@ async function renderTT(id){const box=document.getElementById("ttBox");if(!box)r
   if(!rows.length){box.innerHTML=`<div class="sub">No scheduled departures from this stop in the current timetable.</div>`;return}
   const f=(document.getElementById("ttFilter")||{}).value||"";const q=f.trim().toLowerCase();
   box.innerHTML=`<div class="th"><div>Route</div><div title="Green = live, amber = running late, grey = scheduled">Next</div><div>Later departures (scheduled)</div></div>`+rows.map((r,k)=>{const lab=(r.kind==="train"?r.line+" "+TNAME[r.line]:R[r.ri].n)+" "+TT.cal.hs[r.hi];return (!q||lab.toLowerCase().includes(q))?rowHTML(r,nowMin,k):""}).join("");
-  box.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,true,rowVeh(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,true,rowVeh(b)));
+  box.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b)));
   if(typeof applyLive==="function")applyLive(id)}
 
 function openStop(id,fly,web,keepCam,noFit){const s=ST[id];if(!s)return;focusRoutes=null;rtFocus=false;syncVehVis();if(!keepCam)webCam=null;ctx={id,web:!!web};backState=null;pBack.style.display="none";clearHL();setSel(id);
@@ -301,7 +309,7 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
-  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tc"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
 // live vehicle progress along the stop list: Departed / Arriving (within 500 m) / Not arrived
 const stopKey=id=>ST[id]?id:(parentOf[id]||id);
 const kmTo=(a,b)=>{const kx=111.32*Math.cos(a[1]*Math.PI/180);return Math.hypot((a[0]-b[0])*kx,(a[1]-b[1])*110.57)};
@@ -312,23 +320,30 @@ function applyVehStatus(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol)
   const v=LIVE.byTrip&&LIVE.byTrip.get(vehFocus.trip);if(!v){clear();return}
   const ids=[...lis].map(li=>li.dataset.s);let idx=v.stop?ids.indexOf(stopKey(v.stop)):-1;
   if(idx<0){let b=-1,bd=1e9;ids.forEach((id,j)=>{const s=ST[id];if(!s)return;const dd=kmTo([v.lon,v.lat],[s[2],s[1]]);if(dd<bd){bd=dd;b=j}});idx=b}
-  lis.forEach((li,j)=>{const s=ST[ids[j]];let el=li.querySelector(".vst");if(!el){el=document.createElement("span");el.className="vst";li.insertBefore(el,li.querySelector(".tv").nextSibling)}
+  lis.forEach((li,j)=>{const s=ST[ids[j]];let el=li.querySelector(".vst");if(!el){el=document.createElement("span");el.className="vst";li.insertBefore(el,(li.querySelector(".tc")||li.querySelector(".tv")).nextSibling)}
     let st="Not arrived",c="na";if(j<idx){st="Departed";c="dep"}else if(s&&kmTo([v.lon,v.lat],[s[2],s[1]])<=0.5){st="Arriving";c="arr"}
     el.textContent=st;el.className="vst "+c;li.classList.toggle("done",j<idx)})}
 // travel time from the first stop, from the next full-length trip in the route timetable
 let tvKey=null;
 async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol||!tvKey)return;const key=tvKey;const r=R[+ol.dataset.ri],d=r.d[+ol.dataset.di];if(!d)return;
   try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json")).json()}catch(e){return}
+  // when following a vehicle, find its own scheduled run: start time, or one scheduled time from trip updates
+  let sm=null,anc=null;if(vehFocus){const fv=LIVE.byTrip&&LIVE.byTrip.get(vehFocus.trip);if(fv&&fv.start)sm=fv.start;
+    if(!sm){let tf=null;try{tf=await getTrips()}catch(e){}const tu=tf&&tf.entity.find(e=>e.tu&&e.tu.trip&&e.tu.trip.trip===vehFocus.trip);
+      if(tu&&tu.tu.trip.start)sm=tu.tu.trip.start;else if(tu){const u=(tu.tu.stu||[]).find(u=>(u.dep||u.arr)&&(u.dep||u.arr).time);if(u){const ev=u.dep||u.arr;anc={sid:stopKey(u.stop),m:bneMin(ev.time-(ev.delay||0))}}}}}
+  const smin=sm?(([h,m])=>(+h*60+ +m)%1440)(sm.split(":")):null;
   if(tvKey!==key||!ol.isConnected)return;const data=RTC[key],now=bneNow(),s0=d.s[0];let best=null;
   for(const k of Object.keys(data)){const o=data[k].o,ix=new Map(o.map((x,j)=>[x,j]));if(!ix.has(s0))continue;
     const idx=d.s.map(x=>ix.has(x)?ix.get(x):-1);if(idx[idx.length-1]>=0&&idx[idx.length-1]<idx[0])continue;
     const tr=data[k].t.map(t=>{const a=t[3+idx[0]];if(a==null||a<0)return null;const cov=idx.filter(j=>j>=0&&t[3+j]>=0).length;return {t,dep:t[2]+a,cov,today:t[1].some(si=>svcOn(si,now))}}).filter(Boolean);
     if(!tr.length)continue;const mx=Math.max(...tr.map(x=>x.cov));const full=tr.filter(x=>x.cov>=mx*0.9);
+    const ai=anc?data[k].o.indexOf(anc.sid):-1;
+    const own=smin!=null?tr.filter(x=>x.t[2]%1440===smin).sort((a,b)=>b.today-a.today||b.cov-a.cov)[0]:ai>=0?tr.filter(x=>x.t[3+ai]>=0&&(x.t[2]+x.t[3+ai])%1440===anc.m).sort((a,b)=>b.today-a.today||b.cov-a.cov)[0]:null;if(own){if(!best||!best.own)best={...own,idx,own:true};continue}
     const pick=full.filter(x=>x.today&&x.dep>=now.min).sort((a,b)=>a.dep-b.dep)[0]||full.filter(x=>x.today).sort((a,b)=>a.dep-b.dep)[0]||full.sort((a,b)=>a.dep-b.dep)[0];
-    if(!best||pick.cov>best.cov)best={...pick,idx}}
+    if(!best||(!best.own&&pick.cov>best.cov))best={...pick,idx}}
   if(!best)return;const a0=best.t[3+best.idx[0]];const lis=ol.querySelectorAll("li");
-  lis.forEach((li,n)=>{const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;li.querySelector(".tv").textContent=n===0?"Start":v>=0?(v-a0)+" min":""});
-  const note=document.getElementById("tvNote");if(note)note.textContent=`Minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`}
+  lis.forEach((li,n)=>{const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;li.querySelector(".tv").textContent=n===0?"Start":v>=0?(v-a0)+" min":"";const tc=li.querySelector(".tc");if(tc)tc.textContent=v>=0?clock(best.t[2]+v):"—"});
+  const note=document.getElementById("tvNote");if(note)note.textContent=best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`}
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
   return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)}
 function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepTop=pB.querySelector(".badges.svc");pB.innerHTML=(keepTop?keepTop.outerHTML:"")+routeBody(i,di);wire();wireDirs(i);routeArrows(i,di);applyTravel();applyVehStatus()})}
@@ -340,7 +355,7 @@ function showRoute(i,fromStop,veh){focusRoutes=new Set([i]);drawVehicles();const
   let di0=0;if(veh){const k=vehDir(i,veh);if(k>=0)di0=k}else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
   document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};tvKey=r.n;applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
-function showLine(nm,fromStop,veh){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=veh&&ids.includes(veh.ri)?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
+function showLine(nm,fromStop,veh){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=veh&&(ids.includes(veh.ri)||all.includes(veh.ri))?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);const vdi=veh?Math.max(0,vehDir(main,veh)):0;let h=routeBody(main,vdi);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
   openPanel(`${nm} ${TNAME[nm]}`,`Train line`+(veh&&veh.fleet?` · <b>Service number ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+h,{star:{list:"routes",key:nm},veh:veh?{ri:main,di:vdi,trip:veh.trip}:null});
@@ -359,8 +374,8 @@ function drawVehicles(){if(!map.getSource("veh"))return;const f=[];const now=Dat
     f.push({type:"Feature",properties:{trip:v.trip,c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
   if(focusRoutes)f.sort((a,b)=>a.properties.dim-b.properties.dim).reverse();
   map.getSource("veh").setData(FC(f))}
-async function pollVehicles(){if(document.hidden||(map.getLayoutProperty("veh-dot","visibility")==="none"&&!(panel.style.display!=="none"&&(view==="rt"||view==="favs"||vehFocus||ctx))))return;
-  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),trip:e.vp.trip.trip,dir:e.vp.trip.dir,stop:e.vp.stop,fleet:(e.vp.veh&&e.vp.veh.label)||"",lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles();if(view==="rt"&&rtState)renderRTLive();if(vehFocus)applyVehStatus();if(ctx&&ctx.rows&&ctx.id)applyLive(ctx.id)}catch(e){console.warn(e)}}
+async function pollVehicles(force){if(!force&&document.hidden||!force&&(map.getLayoutProperty("veh-dot","visibility")==="none"&&!(panel.style.display!=="none"&&(view==="rt"||view==="favs"||vehFocus||ctx))))return;
+  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),trip:e.vp.trip.trip,dir:e.vp.trip.dir,stop:e.vp.stop,fleet:(e.vp.veh&&e.vp.veh.label)||"",start:e.vp.trip.start||"",lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles();if(view==="rt"&&rtState)renderRTLive();if(vehFocus)applyVehStatus();if(ctx&&ctx.rows&&ctx.id)applyLive(ctx.id)}catch(e){console.warn(e)}}
 let vehFocus=null;
 const fleetOf=trip=>{const v=LIVE.byTrip&&LIVE.byTrip.get(trip);return v&&v.fleet?v.fleet:""};
 const fleetWord=ri=>{const t=R[ri]&&R[ri].t;return t==="train"?"Service":t==="tram"?"Tram":t==="ferry"?"Ferry":"Bus"};
@@ -448,7 +463,7 @@ async function refreshFavStops(){let d=null;try{d=await getTrips()}catch(e){}
     const {rows,nowMin}=buildRows(id,tile[id]||[]);const soon=rows;
     if(!soon.length){box.innerHTML=`<div class="sub">No scheduled departures from this stop.</div>`;continue}
     const sc=box.scrollTop;box.innerHTML=`<div class="th"><div>Route (${new Set(rows.map(r=>r.ri)).size})</div><div>Next</div><div>Later departures</div></div>`+soon.map((r,k)=>rowHTML(r,nowMin,k)).join("");box.scrollTop=sc;
-    box.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>showRoute(+b.dataset.r,false,rowVeh(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=()=>showLine(b.dataset.line,false,rowVeh(b)));
+    box.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,false,await rowVehFor(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,false,await rowVehFor(b)));
     if(d)computeLive(id,soon,d).forEach((v,k)=>{const c=box.querySelector(`[data-live="${k}"]`);if(c&&v){c.className=v.cls;c.innerHTML=v.html;c.title=v.title;if(v.trip)c.dataset.trip=v.trip;else delete c.dataset.trip}})}}
 // ---------- saved routes
 const keyIds=key=>TNAME[key]?(lineRoutes[key]||[]):(key in nameIdx?[nameIdx[key]]:[]);
