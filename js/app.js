@@ -87,7 +87,7 @@ const dotF = ZONES.dots.map(d=>Array.isArray(d)?{type:"Feature",properties:{},ge
 const loopF = ZONES.loop?[{type:"Feature",properties:{},geometry:{type:"LineString",coordinates:ZONES.loop.map(ll)}}]:[];
 const bwLineF = BUSWAY.pairs.map(([key,a,b,seg,road])=>({type:"Feature",properties:{c:(BUSWAY.colours&&BUSWAY.colours[key])||BWCOL[key],road:road?1:0},geometry:{type:"LineString",coordinates:seg.map(ll)}}));
 const net2 = {train:[],ferry:[],tram:[]};const seen=new Set();
-R.forEach((r,i)=>{if(r.t==="bus")return;r.d.forEach((d,di)=>{if(seen.has(d.p))return;seen.add(d.p);net2[r.t].push({type:"Feature",properties:{c:r.c},geometry:{type:"LineString",coordinates:path(i,di)}})})});
+R.forEach((r,i)=>{if(r.t==="bus")return;if(r.t==="train"&&!ownLine((lineOf[i]||["T1"])[0],i))return;/* through-running trains share track already drawn by each line's own routes */r.d.forEach((d,di)=>{if(seen.has(d.p))return;seen.add(d.p);net2[r.t].push({type:"Feature",properties:{c:r.c},geometry:{type:"LineString",coordinates:path(i,di)}})})});
 const shortName = n => n.replace(/ busway station$| bus station$| station$/i,"");
 const bwc=k=>(BUSWAY.colours&&BUSWAY.colours[k])||BWCOL[k]||"#888";if(BUSWAY.names)Object.assign(BWNAME,BUSWAY.names);
 const ptF = kind => Object.entries(ST).filter(([,s])=>s[3]===kind).map(([id,s])=>{const p={id,n:s[0],sn:shortName(s[0])};if(kind==="busway"){const b=BWS[id]||{b:["SE"],road:false};p.icon=ringIcon(b.b.map(bwc),b.road)}return {type:"Feature",properties:p,geometry:{type:"Point",coordinates:[s[2],s[1]]}}});
