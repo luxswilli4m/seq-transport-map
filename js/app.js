@@ -189,7 +189,7 @@ document.getElementById("themeBtn").onclick=()=>{
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
   const keep=new Set(L); map.getStyle().layers.map(l=>l.id).filter(id=>!keep.has(id)).forEach(id=>map.removeLayer(id));
   map.setSprite(BASE+"assets/sprites/v4/"+THEME[theme].sprite);
-  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();
+  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();
 };
 
 // ---------- layer toggles
@@ -220,7 +220,7 @@ allEl.onclick=()=>{setTimeout(saveChips,0);const anyOff=GROUPS.some(([g])=>MASS(
 GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
   chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});chipState.live="off";setGroup("live",false);renderChip("live");renderAll();
 // remember layer filters between visits (this device only)
-function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
+function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;if(typeof gcOn!=="undefined"&&gcOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
 try{const sv=JSON.parse(localStorage.getItem("seqmap_layers")||"null");
   if(sv&&sv.s){GROUPS.forEach(([g])=>{const v=sv.s[g];if(v==="on"||v==="off"||v==="only"){chipState[g]=v;setGroup(g,v!=="off");renderChip(g)}});soloKey=sv.k||null;soloSnap=sv.snap||null;renderAll()}}catch(e){}
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
@@ -704,6 +704,7 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=`<div class="odhow">${esc(
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
   if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od")closePanel();return}
+  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();
   if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json"+DV)).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
   odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   odOverview();odFit(odGroups().flatMap(x=>x.g.zones))}
@@ -839,6 +840,65 @@ function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.dis
   const chs=document.getElementById("cnCh");chs.oninput=()=>{PLAN.ch=+chs.value;document.getElementById("cnChV").textContent=["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch]};chs.onchange=planSearch;
   const rd=document.getElementById("cnRad");rd.oninput=()=>{PLAN.rad=+rd.value;document.getElementById("cnRadV").textContent=rd.value+" m"};rd.onchange=planSearch;
   document.getElementById("cnGo").onclick=planSearch;if(PLAN.from&&PLAN.to)planSearch();else document.getElementById("cnRes").innerHTML=""}
+// ---------- go card vendors (data/retailers.json from Translink's retailer feed, refreshed weekly)
+let GC=null,gcOn=false,gcSnap=null;const GCF={svc:"",card:""};
+const GC_CAP={gb:["go card","Buy"],gt:["go card","Top up"],gr:["go card","Refund"],ge:["go card","Change expiry date"],gg:["go card","Register"],gv:["go card","View balance"],gh:["go card","View history"],eb:["go explore card","Buy"],et:["go explore card","Top up"],el:["go explore card","Reload"]};
+const GC_MAIN={"go card":["gb","gt","gr","ge"],"go explore card":["eb","et"]};
+const gcCaps=c=>(c.match(/../g)||[]);
+const gcKind=r=>r[5]==="m"?"Fare machine":/ station$/i.test(r[1])&&!/smith|news|eleven|store|shop|iga\b|pharm|mart|cafe|kiosk/i.test(r[1])?"Station ticket office":"Retailer";
+function gcCodes(){const s=GCF.svc,c=GCF.card;const m={buy:["gb","eb"],top:["gt","et","el"],ref:["gr"],exp:["ge"]};
+  let codes=s?m[s]:null;if(c==="g")codes=(codes||GC_MAIN["go card"].concat(["gg","gv","gh"])).filter(x=>x[0]==="g");if(c==="e")codes=(codes||["eb","et","el"]).filter(x=>x[0]==="e");return codes}
+const gcPass=r=>{const k=gcCodes();if(!k)return true;const cs=gcCaps(r[6]);return k.some(x=>cs.includes(x))};
+function gcFilter(){const k=gcCodes();return k?["any",...k.map(x=>["in",","+x+",",["get","c"]])]:null}
+function gcSetup(){if(map.getSource("gcv"))return;
+  map.addSource("gcv",{type:"geojson",data:FC(GC.r.map((r,i)=>({type:"Feature",properties:{i,n:r[1],k:r[5],c:","+gcCaps(r[6]).join(",")+","},geometry:{type:"Point",coordinates:[r[3],r[4]]}})))});
+  map.addLayer({id:"gc-pin",type:"circle",source:"gcv",paint:{"circle-color":["match",["get","k"],"m","#64748b","#f97316"],"circle-radius":["interpolate",["linear"],["zoom"],9,["match",["get","k"],"m",2.5,3.5],14,["match",["get","k"],"m",5,7.5]],"circle-stroke-color":"#ffffff","circle-stroke-width":["interpolate",["linear"],["zoom"],9,.8,14,1.8]}},"sel");
+  map.addLayer({id:"gc-lbl",type:"symbol",source:"gcv",minzoom:14.5,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":11.5,"text-offset":[0,1.1],"text-anchor":"top","text-optional":true},paint:{"text-color":"#9a3412","text-halo-color":"#ffffff","text-halo-width":1.8}},"sel");
+  L.push("gc-pin","gc-lbl");gcPaint();
+  map.on("mouseenter","gc-pin",e=>{map.getCanvas().style.cursor="pointer";pop.setLngLat(e.lngLat).setText(e.features[0].properties.n).addTo(map)});
+  map.on("mouseleave","gc-pin",()=>{map.getCanvas().style.cursor="";pop.remove()});
+  map.on("moveend",()=>{if(gcOn&&view==="gc")gcList()})}
+function gcPaint(){if(!map.getLayer("gc-lbl"))return;const d=theme!=="light";map.setPaintProperty("gc-lbl","text-color",d?"#fdba74":"#9a3412");map.setPaintProperty("gc-lbl","text-halo-color",d?"#0b1220":"#ffffff");map.setPaintProperty("gc-pin","circle-stroke-color",d?"#0b1220":"#ffffff")}
+function gcVis(v){["gc-pin","gc-lbl"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",v?"visible":"none"))}
+function gcApply(){const f=gcFilter();["gc-pin","gc-lbl"].forEach(id=>map.getLayer(id)&&map.setFilter(id,f))}
+function gcLayers(on){if(on){if(gcSnap)return;gcSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{gcSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
+  else if(gcSnap){Object.entries(gcSnap).forEach(([g,v])=>{const st=v==="only"?"on":v;chipState[g]=st;if(g==="live")syncVehVis();else setGroup(g,st!=="off");renderChip(g)});gcSnap=null}
+  renderAll();hint()}
+function gcList(){const el=document.getElementById("gcList");if(!el)return;const b=map.getBounds(),c=map.getCenter();
+  const cos=Math.cos(c.lat*Math.PI/180);const inV=GC.r.filter(r=>gcPass(r)&&b.contains([r[3],r[4]]));
+  inV.sort((a,z)=>((a[3]-c.lng)*cos)**2+(a[4]-c.lat)**2-(((z[3]-c.lng)*cos)**2+(z[4]-c.lat)**2));
+  const n=GC.r.filter(gcPass).length;
+  document.getElementById("gcCount").textContent=`${n} location${n===1?"":"s"} match · ${inV.length} in this view`;
+  el.innerHTML=inV.length?`<div class="grp">Closest to the middle of the map</div>`+inV.slice(0,12).map(r=>`<a href="#" class="gce" data-gc="${GC.r.indexOf(r)}"><span class="gcd ${r[5]==="m"?"m":""}"></span><span><b>${esc(r[1])}</b><span class="gca">${esc(gcKind(r))} · ${esc(r[2])}</span></span></a>`).join(""):`<div class="sub">None in this part of the map. Zoom out or change the filters.</div>`;
+  el.querySelectorAll("[data-gc]").forEach(a=>a.onclick=e=>{e.preventDefault();gcCard(+a.dataset.gc,true)})}
+function gcOverview(){const sb=(k,t)=>`<button class="gcb${GCF.svc===k?" on":""}" data-svc="${k}">${t}</button>`,cb=(k,t)=>`<button class="gcb${GCF.card===k?" on":""}" data-card="${k}">${t}</button>`;
+  const h=`<div class="gcf"><div class="gcfl">I want to</div><div class="gcbs">${sb("","Anything")}${sb("buy","Buy")}${sb("top","Top up")}${sb("ref","Get a refund")}${sb("exp","Change expiry")}</div>
+   <div class="gcfl">Card type</div><div class="gcbs">${cb("","Any")}${cb("g","<i>go</i> card")}${cb("e","<i>go explore</i> card")}</div></div>
+   <div class="gcn" id="gcCount"></div><div id="gcList"></div>
+   <div class="odnote"><span class="gcd"></span> Orange: retailers and station ticket offices. <span class="gcd m"></span> Grey: fare machines. Tap a dot to see what that location can do. Refunds and expiry changes are for <i>go</i> cards only. From Translink's retailer list, ${esc(GC.updated)}; see <a href="https://translink.com.au/tickets-and-fares/go-card/locations" target="_blank" rel="noopener">translink.com.au</a>. <i>go</i> card services are also online and on 13 12 30.</div>`;
+  openPanel("go card vendors","Where to buy, top up, refund or change expiry",h,{view:"gc"});
+  pB.querySelectorAll("[data-svc]").forEach(x=>x.onclick=()=>{GCF.svc=x.dataset.svc;if(GCF.card==="e"&&(GCF.svc==="ref"||GCF.svc==="exp"))GCF.card="";gcApply();gcOverview()});
+  pB.querySelectorAll("[data-card]").forEach(x=>x.onclick=()=>{GCF.card=x.dataset.card;if(GCF.card==="e"&&(GCF.svc==="ref"||GCF.svc==="exp"))GCF.svc="";gcApply();gcOverview()});
+  gcList()}
+function gcCard(i,fly){const r=GC.r[i];const cs=gcCaps(r[6]);
+  const sec=card=>{const main=GC_MAIN[card],extra=cs.filter(x=>GC_CAP[x][0]===card&&!main.includes(x));const any=cs.some(x=>GC_CAP[x][0]===card);
+    if(!any&&card!=="go card")return "";const nm=card==="go card"?"<i>go</i> card":"<i>go explore</i> card";
+    return `<div class="grp">${nm}</div><ul class="gccap">`+main.map(x=>`<li class="${cs.includes(x)?"y":"n"}">${cs.includes(x)?"✓":"✗"} ${GC_CAP[x][1]}</li>`).join("")+extra.map(x=>`<li class="y">✓ ${GC_CAP[x][1]}</li>`).join("")+`</ul>`};
+  const h=`<div class="gcaddr">${esc(r[2])}</div>`+sec("go card")+sec("go explore card")
+   +(cs.some(x=>x[0]==="e")?"":`<div class="odnote">No <i>go explore</i> card services here.</div>`)
+   +`<p class="odlink"><a href="https://translink.com.au/tickets-and-fares/go-card/locations/${r[0]}/details" target="_blank" rel="noopener">This location on Translink's site ↗</a></p><div class="odnote"><a href="#" id="gcAll">‹ All go card vendors</a></div>`;
+  openPanel(r[1],esc(gcKind(r)),h,{view:"gcv"});selPt([r[3],r[4]]);
+  if(fly)map.flyTo({center:[r[3],r[4]],zoom:Math.max(map.getZoom(),15),duration:700});
+  document.getElementById("gcAll").onclick=e=>{e.preventDefault();gcOverview()}}
+async function toggleGC(){const btn=document.getElementById("gcBtn");
+  if(gcOn){gcOn=false;gcVis(false);gcLayers(false);btn.classList.remove("gcon");if(view==="gc"||view==="gcv")closePanel();return}
+  if(odOn)await toggleOD();
+  if(!GC){try{GC=await (await fetch(BASE+"data/retailers.json"+DV)).json()}catch(e){openPanel("go card vendors","",`<div class="sub">Vendor locations unavailable. See translink.com.au or call 13 12 30.</div>`);return}}
+  gcSetup();gcApply();gcOn=true;gcVis(true);gcLayers(true);btn.classList.add("gcon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  gcOverview()}
+document.getElementById("gcBtn").onclick=toggleGC;
+map.on("click",e=>{if(!gcOn)return;const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];
+  const f=map.queryRenderedFeatures(box,{layers:["gc-pin"]});if(!f.length)return;gcCard(+f[0].properties.i,false)});
 // ---------- lost property (data/lostproperty.json, edited by hand)
 let LOST=null;
 async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
@@ -943,6 +1003,6 @@ window.__ready=true;window.__map=map;
   document.getElementById("moreMenu").addEventListener("click",()=>set(false));
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
-  const od=document.getElementById("odBtn");new MutationObserver(()=>b.classList.toggle("on",od.classList.contains("odon"))).observe(od,{attributes:true,attributeFilter:["class"]});
-  b.title="More: on demand, school routes, lost property, Translink feedback"})();
+  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn");const mo=()=>b.classList.toggle("on",od.classList.contains("odon")||gc.classList.contains("gcon"));[od,gc].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
+  b.title="More: connections, on demand, go card vendors, school routes, lost property, feedback"})();
 

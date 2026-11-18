@@ -59,6 +59,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_ondemand.py gtfs .
 
+      - name: go card vendors (Translink retailer feed; keeps last file if the feed fails)
+        continue-on-error: true
+        run: python tools/build_retailers.py
+
       - name: Notify if parts of the map were held back
         if: hashFiles('zone_check.txt') != ''
         env:
