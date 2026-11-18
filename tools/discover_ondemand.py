@@ -136,7 +136,7 @@ def try_page(path, gtfs, save):
             try:
                 purl = T.find_picture(pic)
                 data = T.fetch(purl)
-                ring, fit = T.trace(data, guess, outline, os.environ.get("TRACE_DEBUG") and f"/tmp/discover_{slug}.png", wide=True)
+                ring, fit, aff = T.trace(data, guess, outline, os.environ.get("TRACE_DEBUG") and f"/tmp/discover_{slug}.png", wide=True)
             except Exception as e:
                 print(f"{path}: picture {pic['match'][:50]} ({outline}) not usable: {e}")
                 continue
@@ -150,7 +150,7 @@ def try_page(path, gtfs, save):
             if save:
                 import hashlib
                 T.TRACED[zid] = ring
-                T.META[zid] = {"url": purl, "sha": hashlib.sha1(data).hexdigest()}
+                T.META[zid] = {"url": purl, "sha": hashlib.sha1(data).hexdigest(), "affine": aff}
             return area, "map picture (traced)"
     return None, "no map files, and no map picture that lined up clearly with the roads"
 

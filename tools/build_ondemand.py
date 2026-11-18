@@ -212,6 +212,49 @@ def match(dest, stops, pois, near):
     return c
 
 
+def picture_pins(g, dests):
+    """Key locations Translink marks on its own map picture: read the labels next to the icons (OCR) and
+    place the ones not pinned exactly by a stop or base-map match. The picture is lined up using the key
+    locations whose position is known; failing that, with the road alignment saved when it was traced.
+    Re-read whenever the picture or the list of names changes."""
+    zid = g["zone"]
+    meta = TRACED.get("_pictures", {}).get(zid)
+    if not g.get("picture") or not meta or not meta.get("url"):
+        return
+    names = [d["n"] for d in dests]
+    key = meta.get("sha", "") + "|" + "|".join(names)
+    try:
+        sys.path.insert(0, os.path.join(REPO, "tools"))
+        import trace_ondemand as T
+        if meta.get("labels_key") != key:
+            px = T.read_labels(fetch(meta["url"]), names)
+            before = set(meta.get("labels", {}))
+            gone = sorted(before - set(px)) if meta.get("labels_key") and meta.get("labels_key", "").split("|")[0] != meta.get("sha") else []
+            if gone:
+                problems.append(f"{g['name']}: Translink's updated map no longer shows {', '.join(gone)}. "
+                                f"If it's been dropped as a key location, remove it from tools/ondemand.json.")
+            meta["labels"] = {n: list(v) for n, v in px.items()}; meta["labels_key"] = key
+            TRACED_CHANGED[0] = True
+        px = {n: tuple(v) for n, v in meta.get("labels", {}).items()}
+        known = {d["n"]: d["ll"] for d in dests if d["ll"] and not d.get("approx")}
+        to_ll = T.fit_labels(px, known)
+        if not to_ll and meta.get("affine"):
+            a = meta["affine"]
+            f = lambda x, y: [round((x - a["bx"]) / a["ax"] + a["lon0"], 6), round((y - a["by"]) / a["ay"] + a["lat0"], 6)]
+            if all(math.dist(f(*px[n]), known[n]) * 100000 <= 250 for n in px if n in known):
+                to_ll = f
+        if not to_ll:
+            return
+        for d in dests:
+            if d["n"] in px and not d["ll"]:
+                d["ll"], d["approx"] = to_ll(*px[d["n"]]), True
+                d.pop("src", None)
+    except Exception as e:
+        print(f"{g['name']}: key locations not read from the map picture ({e})")
+
+
+TRACED_CHANGED = [False]
+
 # ---------- build
 try:
     stops = load_stops()
@@ -232,8 +275,9 @@ try:
                 z = TRACED[g["zone"]]
                 b = [min(p[0] for p in z) - 0.08, min(p[1] for p in z) - 0.08, max(p[0] for p in z) + 0.08, max(p[1] for p in z) + 0.08]
                 pois = load_pois(b)
-                groups.append({"name": g["name"], "zones": [z], "hours": g.get("hours"),
-                               "dests": [dest_pin(d, stops, pois, centroid(z), [z], 2.0) for d in g["dests"]]})
+                dl = [dest_pin(d, stops, pois, centroid(z), [z], 2.0) for d in g["dests"]]
+                picture_pins(g, dl)
+                groups.append({"name": g["name"], "zones": [z], "hours": g.get("hours"), "dests": dl})
             out = {k: a[k] for k in ("id", "name", "page", "how")}
             out.update({"groups": groups, "traced": True, "dlabel": "Key locations"})
             if a.get("auto"):
@@ -244,7 +288,7 @@ try:
             print(f"{a['name']}: traced, {len(groups)} groups")
             for g in groups:
                 for d in g["dests"]:
-                    print(f"   {('osm ' if d.get('approx') else 'pin ') if d['ll'] else '----'} {d['n']}")
+                    print(f"   {('appx' if d.get('approx') else 'pin ') if d['ll'] else '----'} {d['n']}")
             continue
         page = fetch(BASE + a["map_page"]).decode("utf-8", "replace")
         feats = []
@@ -287,7 +331,7 @@ try:
         print(f"{a['name']}: {len(polys)} areas, {len(groups)} groups")
         for g in groups:
             for d in (g["dests"] or []):
-                print(f"   {('osm ' if d.get('approx') else 'pin ') if d['ll'] else '----'} {d['n']}")
+                print(f"   {('appx' if d.get('approx') else 'pin ') if d['ll'] else '----'} {d['n']}")
         for d in out.get("dests", []):
             print(f"   pin  {d['n']}")
 except Exception as e:
@@ -301,6 +345,9 @@ if problems:
         f.write("\n### On-demand service areas\n\n" + "\n".join("- " + p for p in problems) +
                 "\n\nCheck Translink's on-demand pages (translink.com.au/ondemand) and update tools/ondemand.json if a page has moved.\n")
     print("\n".join(problems))
+
+if TRACED_CHANGED[0]:
+    json.dump(TRACED, open(os.path.join(REPO, "tools", "ondemand_traced.json"), "w"), indent=0)
 
 if PLACES:
     PLACES.save()

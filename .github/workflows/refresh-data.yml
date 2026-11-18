@@ -27,7 +27,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install tools
-        run: pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless
+        run: |
+          sudo apt-get install -y -qq tesseract-ocr
+          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract
 
       - name: Download Translink SEQ GTFS
         run: |

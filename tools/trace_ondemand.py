@@ -24,7 +24,7 @@ Needs: numpy, scipy, shapely, pillow, opencv-python-headless, pmtiles, mapbox-ve
 import sys, os, re, json, math, gzip, hashlib, subprocess, html, io
 import numpy as np
 
-REPO = sys.argv[1]
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))   # this file lives in <repo>/tools
 FORCE = sys.argv[sys.argv.index("--force") + 1] if "--force" in sys.argv else None
 CFG = json.load(open(os.path.join(REPO, "tools", "ondemand.json")))
 _AUTO = os.path.join(REPO, "tools", "ondemand_auto.json")
@@ -117,8 +117,9 @@ def load_roads(bbox):
     return np.array(pts)
 
 
-def trace(img_bytes, old_zone, outline="navy", debug=None, wide=False):
-    """Return (outline [[lon,lat],...], fit) for the largest navy-outlined area in the picture."""
+def trace(img_bytes, old_zone, outline="navy", debug=None, wide=False, need_outline=True):
+    """Return (outline [[lon,lat],...], fit, affine) for the largest navy-outlined area in the picture.
+    With need_outline=False the picture is only lined up (outline None), e.g. to read key locations."""
     import cv2
     from scipy.optimize import minimize
     from PIL import Image
@@ -165,12 +166,17 @@ def trace(img_bytes, old_zone, outline="navy", debug=None, wide=False):
             big = max(a for _, a in parts)
             inside = np.isin(lab, [i for i, a in parts if a >= 0.02 * big]).astype(np.uint8); kk = k
             break
-    if inside is None:
+    if inside is None and need_outline:
         raise RuntimeError("couldn't find a closed navy roam-zone outline in the picture")
-    m = cv2.dilate(inside, np.ones((kk, kk), np.uint8))   # back out to the middle of the outline
-    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((kk + 10, kk + 10), np.uint8))   # rejoin parts split by a label across the zone
-    cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    poly = cv2.approxPolyDP(max(cs, key=cv2.contourArea), 2.0, True)[:, 0, :].astype(float)
+    if inside is None:
+        poly = None
+        if not wide:
+            wide, old_zone = True, [old_zone]
+    else:
+        m = cv2.dilate(inside, np.ones((kk, kk), np.uint8))   # back out to the middle of the outline
+        m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((kk + 10, kk + 10), np.uint8))   # rejoin parts split by a label across the zone
+        cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        poly = cv2.approxPolyDP(max(cs, key=cv2.contourArea), 2.0, True)[:, 0, :].astype(float)
 
     # roads in the picture: white lines (legend box masked out by keeping only the map part)
     mn = im.min(axis=2).astype(np.uint8)
@@ -204,7 +210,10 @@ def trace(img_bytes, old_zone, outline="navy", debug=None, wide=False):
         return float(np.mean(np.minimum(dt[y[ok].astype(int), x[ok].astype(int)], cap)))
 
     # first guess: the new outline's box sits where the old area's box was
-    px0, px1, py0, py1 = poly[:, 0].min(), poly[:, 0].max(), poly[:, 1].min(), poly[:, 1].max()
+    if poly is not None:
+        px0, px1, py0, py1 = poly[:, 0].min(), poly[:, 0].max(), poly[:, 1].min(), poly[:, 1].max()
+    else:
+        px0, px1, py0, py1 = W * 0.2, W * 0.8, H * 0.2, H * 0.8
     ax = (px1 - px0) / (max(ox) - min(ox)); ay = -(py1 - py0) / (max(oy) - min(oy))
     s = (abs(ax) + abs(ay) * math.cos(math.radians(lat0))) / 2
     ax, ay = s, -s / math.cos(math.radians(lat0))
@@ -293,11 +302,110 @@ def trace(img_bytes, old_zone, outline="navy", debug=None, wide=False):
         x, y = proj(res.x)
         for xi, yi in zip(x.astype(int), y.astype(int)):
             if 0 <= xi < W and 0 <= yi < H: v[yi, xi] = (0, 0, 255)
-        _c.polylines(v, [poly.astype(np.int32)], True, (0, 200, 0), 3)
+        if poly is not None:
+            _c.polylines(v, [poly.astype(np.int32)], True, (0, 200, 0), 3)
         _c.imwrite(debug, v)
+    aff = {"ax": float(ax), "ay": float(ay), "bx": float(bx), "by": float(by), "lon0": float(lon0), "lat0": float(lat0), "w": W, "h": H}
+    if poly is None:
+        return None, fit, aff
     ring = [[round((x - bx) / ax + lon0, 5), round((y - by) / ay + lat0, 5)] for x, y in poly]
     ring.append(ring[0])
-    return ring, fit
+    return ring, fit, aff
+
+
+def read_labels(img_bytes, names):
+    """Read the picture's text (OCR) and find, for each key-location name, the icon or numbered circle
+    next to its label. Returns {name: (x, y)} in picture pixels for the names it could find."""
+    import cv2, difflib, pytesseract
+    from PIL import Image
+    pim = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    im = np.array(pim).astype(int); H, W = im.shape[:2]
+    s1 = max(1, math.ceil(1500 / W))
+    words = []
+    # several OCR passes (sizes, page modes, colour/grey) catch more labels than any single one
+    for sc, psm, grey in ((s1, 11, True), (s1, 3, False), (s1, 12, False), (2 * s1, 12, False), (2 * s1, 11, True)):
+        big = pim.resize((W * sc, H * sc))
+        if grey:
+            big = big.convert("L")
+        d = pytesseract.image_to_data(big, output_type=pytesseract.Output.DICT, config=f"--psm {psm}")
+        for i, t in enumerate(d["text"]):
+            t = re.sub(r"[^a-z0-9']", "", t.lower())
+            if len(t) >= 2 and float(d["conf"][i]) > 30:
+                w = (t, d["left"][i] / sc, d["top"][i] / sc, d["width"][i] / sc, d["height"][i] / sc)
+                if not any(o[0] == t and abs(o[1] - w[1]) < 5 and abs(o[2] - w[2]) < 5 for o in words):
+                    words.append(w)
+    # markers: black icons and filled navy number circles
+    dark = ((im.max(axis=2) < 90) | ((im[..., 0] < 90) & (im[..., 1] < 100) & (im[..., 2] > 55) & (im[..., 2] - im[..., 0] > 18))).astype(np.uint8)
+    ke = max(3, round(W / 266))
+    blob = cv2.dilate(cv2.erode(dark, np.ones((ke, ke), np.uint8)), np.ones((ke + 4, ke + 4), np.uint8))
+    nb, lb, sb, cen = cv2.connectedComponentsWithStats(blob)
+    marks = [tuple(cen[i]) for i in range(1, nb) if 0.008 * W <= sb[i, 3] <= 0.035 * W and sb[i, 2] < 4 * sb[i, 3]]
+
+    def like(t, w):
+        return difflib.SequenceMatcher(None, t, w).ratio() >= 0.8 or (len(t) >= 5 and len(w) >= 4 and (t.startswith(w) or w.startswith(t)))
+
+    found = {}
+    for name in names:
+        toks = [t for t in re.split(r"[^a-z0-9']+", name.lower().replace(".", "")) if len(t) >= 2]
+        if not toks:
+            continue
+        need = 1 if len(toks) == 1 else max(2, math.ceil(0.75 * len(toks)))
+        cand = {t: [w for w in words if like(t, w[0])] for t in toks}
+        best = None
+        for t0 in toks:
+            for w0 in cand[t0]:           # build the label around each place a word of the name appears
+                pick, lh = [w0], w0[4]
+                for t in toks:
+                    if t == t0:
+                        continue
+                    near = [w for w in cand[t] if abs(w[2] - w0[2]) < 4.5 * lh and abs(w[1] - w0[1]) < 14 * lh and w not in pick]
+                    if near:
+                        pick.append(min(near, key=lambda w: abs(w[2] - w0[2]) + abs(w[1] - w0[1])))
+                if len(pick) < need:
+                    continue
+                x0 = min(w[1] for w in pick); y0 = min(w[2] for w in pick)
+                x1 = max(w[1] + w[3] for w in pick); y1 = max(w[2] + w[4] for w in pick)
+                key = (-len(pick) / len(toks), (x1 - x0) + (y1 - y0))
+                if best is None or key < best[0]:
+                    best = (key, (x0, y0, x1, y1), lh)
+        if not best:
+            continue
+        x0, y0, x1, y1 = best[1]; lh = best[2]
+        gap = lambda m: math.hypot(max(x0 - m[0], 0, m[0] - x1), max(y0 - m[1], 0, m[1] - y1))
+        near = [m for m in marks if gap(m) < 4 * lh]
+        if near:
+            m = min(near, key=gap)
+            found[name] = (m[0], m[1], gap(m), best[0][0])
+    # one icon belongs to one label: if two names landed on the same icon, keep the better-read one
+    out = {}
+    for n, (x, y, g, k) in found.items():
+        rival = [o for o, v in found.items() if o != n and abs(v[0] - x) < 2 and abs(v[1] - y) < 2]
+        if all((k, g) < (found[o][3], found[o][2]) for o in rival):
+            out[n] = (round(x, 1), round(y, 1))
+    return out
+
+
+def fit_labels(px, known):
+    """Line the picture up from key locations whose real position is known (Translink stops etc.).
+    px: {name: (x, y)}, known: {name: [lon, lat]}. Returns a pixel -> [lon, lat] function, or None."""
+    pts = [(px[n], known[n]) for n in px if n in known]
+    if len(pts) < 2:
+        return None
+    lat0 = sum(ll[1] for _, ll in pts) / len(pts); c = math.cos(math.radians(lat0))
+    # north-up map with true proportions: x = s*lon*c + bx, y = -s*lat + by
+    A, b = [], []
+    for (x, y), (lon, lat) in pts:
+        A.append([lon * c, 1, 0]); b.append(x)
+        A.append([-lat, 0, 1]); b.append(y)
+    sol, *_ = np.linalg.lstsq(np.array(A), np.array(b), rcond=None)
+    s_, bx, by = sol
+    if s_ <= 0:
+        return None
+    to_ll = lambda x, y: [round((x - bx) / (s_ * c), 6), round((by - y) / s_, 6)]
+    err = [math.dist(to_ll(*p), ll) * 100000 for p, ll in pts]    # metres, roughly
+    if max(err) > 250:
+        return None
+    return to_ll
 
 
 def overlap(a, b):
@@ -334,7 +442,7 @@ def main():
                                  f"Ask for it to be re-traced. Picture: {url}")
                     META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
                     continue
-                ring, fit = trace(data, TRACED[zid], pic.get("outline", "navy"), os.environ.get("TRACE_DEBUG") and f"/tmp/trace_{zid}.png")
+                ring, fit, aff = trace(data, TRACED[zid], pic.get("outline", "navy"), os.environ.get("TRACE_DEBUG") and f"/tmp/trace_{zid}.png")
                 iou, ratio = overlap(ring, TRACED[zid])
                 print(f"{zid}: re-traced, roads matched {fit['hit']:.0%} (vs {fit['base']:.0%} when nudged), overlap {iou:.2f}, size x{ratio:.2f}")
                 if not fit["ok"] or iou < 0.6 or not 0.5 < ratio < 2:
@@ -344,7 +452,7 @@ def main():
                     META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
                     continue
                 TRACED[zid] = ring
-                META[zid] = {"url": url, "sha": sha}; changed = True
+                META[zid] = {"url": url, "sha": sha, "affine": aff}; changed = True
                 if iou < 0.97:
                     notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, so the outline was re-traced "
                                  f"automatically ({abs(ratio - 1):.0%} {'bigger' if ratio >= 1 else 'smaller'}; {iou:.0%} overlap with the old one). "

@@ -2351,19 +2351,125 @@
 "_pictures": {
 "ipswich_c": {
 "url": "https://translink.widen.net/content/hanslask1f/jpeg/Ipswich_Flexilink_Zone%20C%20Map_2025.jpeg?w=2048",
-"sha": "a070638392939c1c340b2dcdde26ca4683721067"
+"sha": "a070638392939c1c340b2dcdde26ca4683721067",
+"affine": {
+"ax": 30685.423132109696,
+"ay": -34614.501384142,
+"bx": 849.1971537197214,
+"by": 840.1636356872984,
+"lon0": 152.887175,
+"lat0": -27.627565,
+"w": 2048,
+"h": 1567
+},
+"labels": {
+"Goodna station": [
+1262.0,
+101.7
+],
+"Redbank Plains Shopping Centre": [
+264.3,
+1444.7
+],
+"Redbank Plaza": [
+255.0,
+67.2
+],
+"Goodna Marketplace": [
+1189.1,
+230.3
+]
+},
+"labels_key": "a070638392939c1c340b2dcdde26ca4683721067|Goodna station|Redbank Plains Shopping Centre|Redbank Plaza|Goodna Marketplace|Club Parkview"
 },
 "ipswich_d": {
 "url": "https://translink.widen.net/content/cacd6udih0/jpeg/Ipswich%20Flexilink%20roam%20zone%20D%20map.jpeg?w=2048",
-"sha": "ac1e729ccfbaa28514d3cbcfa520a59366a1b533"
+"sha": "ac1e729ccfbaa28514d3cbcfa520a59366a1b533",
+"affine": {
+"ax": 18688.57254934271,
+"ay": -21060.528836279165,
+"bx": 1279.516210253883,
+"by": 539.3975757174533,
+"lon0": 152.81633499999998,
+"lat0": -27.55663,
+"w": 2048,
+"h": 1783
+},
+"labels": {
+"Riverlink Shopping Centre": [
+196.5,
+1602.9
+]
+},
+"labels_key": "ac1e729ccfbaa28514d3cbcfa520a59366a1b533|Ipswich station|Riverlink Shopping Centre"
 },
 "bribie": {
 "url": "https://translink.com.au/sites/default/files/acquiadam-assets/Bribie%20ODT%20roam%20zone%20map.png",
-"sha": "1580b90f364e3f60d5a247e73ebce19d875ce4dd"
+"sha": "1580b90f364e3f60d5a247e73ebce19d875ce4dd",
+"labels": {
+"Bribie Island Central": [
+629.3,
+511.3
+],
+"Bribie Island Community Arts Centre": [
+597.0,
+332.6
+],
+"Bongaree Jetty": [
+629.5,
+736.1
+],
+"Bongaree Plaza": [
+622.1,
+642.5
+],
+"Bellara shops": [
+560.3,
+523.3
+],
+"Banksia Beach shops": [
+410.8,
+287.7
+],
+"Bribie Island Satellite Health Centre": [
+741.4,
+708.9
+],
+"Bribie Island Sports Complex": [
+785.5,
+715.0
+],
+"Woorim Beach": [
+1086.4,
+565.9
+]
+},
+"labels_key": "1580b90f364e3f60d5a247e73ebce19d875ce4dd|Bribie Island Central|Bribie Island Community Arts Centre|Bongaree Jetty|Bongaree Plaza|Bellara shops|Banksia Beach shops|Bribie Island RSL Club|Bribie Island Satellite Health Centre|Bribie Island Sports Complex|Woorim Beach"
 },
 "yarrabilba": {
 "url": "https://translink.widen.net/content/tfsramzcce/png/Yarrabilba-on-demand-transport-map.png?w=2048",
-"sha": "f4050790b6c8fab8f4311dbe02b5e4ce64c7652c"
+"sha": "f4050790b6c8fab8f4311dbe02b5e4ce64c7652c",
+"affine": {
+"ax": 21904.58943471205,
+"ay": -24776.5521660343,
+"bx": 1028.9549905324861,
+"by": 776.4861105887477,
+"lon0": 153.12800499999997,
+"lat0": -27.823275000000002,
+"w": 2048,
+"h": 1564
+},
+"labels": {
+"Yarrabilba Drive Shopping Precinct": [
+436.4,
+248.6
+],
+"The Buzz at Yarrabilba (community centre)": [
+1558.9,
+420.9
+]
+},
+"labels_key": "f4050790b6c8fab8f4311dbe02b5e4ce64c7652c|Yarrabilba Drive Shopping Precinct|The Buzz at Yarrabilba (community centre)|Dixon Circuit Retail Precinct"
 }
 }
 }
