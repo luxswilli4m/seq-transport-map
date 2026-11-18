@@ -12,16 +12,14 @@ pattern that picks the right picture on that page). Every week this script:
   3. if it changed, re-traces it: picks out the dark navy roam-zone outline, lines the
      picture up with the real road network from the base map (tiles/seq.pmtiles), and
      turns the outline into map coordinates;
-     (Bribie Island's picture has too many labels across its outline for this, so it is
-     marked "auto": false and a change there only raises an issue.)
-  4. checks the result. If the picture lined up well and the area is still in the same
-     place (overlaps the old one), the new outline replaces the old one in
-     tools/ondemand_traced.json and a note goes into zone_check.txt so a GitHub issue
-     tells you it changed. If not, the old outline is kept and the issue asks for a look.
+  4. checks the result. If the picture lined up well with the roads and the area still overlaps the
+     old one, the new outline replaces the old one in tools/ondemand_traced.json. If not, the previous
+     outline is kept and an amber note on the map's On demand card says Translink's map changed but
+     couldn't be traced confidently. It's tried again whenever Translink changes the picture again.
 
 Needs: numpy, scipy, shapely, pillow, opencv-python-headless, pmtiles, mapbox-vector-tile.
 """
-import sys, os, re, json, math, gzip, hashlib, subprocess, html, io
+import sys, os, re, json, math, gzip, hashlib, subprocess, html, io, datetime
 import numpy as np
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))   # this file lives in <repo>/tools
@@ -436,27 +434,30 @@ def main():
                     META[zid] = {"url": url, "sha": sha}; changed = True     # first run: remember the picture
                     print(f"{zid}: picture recorded")
                     continue
+                today = datetime.date.today().isoformat()
                 if pic.get("auto") is False:
-                    notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture. This one can't be re-traced "
-                                 f"automatically (labels and icons sit across the outline), so the map keeps the previous outline. "
-                                 f"Ask for it to be re-traced. Picture: {url}")
-                    META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
+                    # shown on the map's on-demand card (see build_ondemand.py), not raised as an issue
+                    if old.get("pending_sha") != sha:
+                        META[zid] = {**old, "pending_url": url, "pending_sha": sha, "pending_since": today,
+                                     "pending_why": "Translink's map for this area has labels drawn across its edge, so it can't be re-traced automatically"}
+                        changed = True
+                    print(f"{zid}: picture changed, can't be re-traced automatically; noted on the map")
                     continue
                 ring, fit, aff = trace(data, TRACED[zid], pic.get("outline", "navy"), os.environ.get("TRACE_DEBUG") and f"/tmp/trace_{zid}.png")
                 iou, ratio = overlap(ring, TRACED[zid])
                 print(f"{zid}: re-traced, roads matched {fit['hit']:.0%} (vs {fit['base']:.0%} when nudged), overlap {iou:.2f}, size x{ratio:.2f}")
                 if not fit["ok"] or iou < 0.6 or not 0.5 < ratio < 2:
-                    notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, but the automatic re-trace "
-                                 f"didn't line up confidently (roads matched {fit['hit']:.0%}, overlap {iou:.0%}). The map keeps the previous outline. "
-                                 f"Picture: {url}")
-                    META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
+                    # not confident: keep the previous outline and say so on the map's on-demand card
+                    if old.get("pending_sha") != sha:
+                        META[zid] = {**old, "pending_url": url, "pending_sha": sha, "pending_since": today,
+                                     "pending_why": "the new map couldn't be lined up with the roads confidently" if not fit["ok"]
+                                     else "the new area was too different from the old one to accept without a check"}
+                        changed = True
                     continue
                 TRACED[zid] = ring
-                META[zid] = {"url": url, "sha": sha, "affine": aff}; changed = True
-                if iou < 0.97:
-                    notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, so the outline was re-traced "
-                                 f"automatically ({abs(ratio - 1):.0%} {'bigger' if ratio >= 1 else 'smaller'}; {iou:.0%} overlap with the old one). "
-                                 f"Worth a quick look on the map. Picture: {url}")
+                keep = {k: v for k, v in old.items() if k in ("labels", "labels_key", "dropped")}   # lets the build spot key locations Translink removed
+                META[zid] = {**keep, "url": url, "sha": sha, "affine": aff, "updated": today}; changed = True
+                print(f"{zid}: outline updated from Translink's new map")
             except Exception as e:
                 notes.append(f"{area['name']} ({g['name']}): couldn't check the map picture ({e}). The map keeps the current outline.")
 

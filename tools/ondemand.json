@@ -85,8 +85,7 @@
      ],
      "picture": {
       "page": "https://translink.com.au/bribie-on-demand",
-      "match": "roam zone map",
-      "auto": false
+      "match": "roam zone map"
      }
     }
    ]

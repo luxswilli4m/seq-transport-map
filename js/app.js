@@ -233,7 +233,8 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-function openPanel(t,s,html,opt){opt=opt||{};{const g=opt.view==="gc"||opt.view==="gcv",xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+const MINI_VIEWS=new Set(["gc","gcv","od","odv"]);   // map-layer cards that shrink instead of closing
+function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
@@ -259,10 +260,10 @@ function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSour
 function closePanel(){panel.classList.remove("mini");if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 const pCloseBtn=document.getElementById("pClose"),pCloseTxt=pCloseBtn.textContent,pCloseLbl=pCloseBtn.getAttribute("aria-label")||"Close";
 function setMini(on){panel.classList.toggle("mini",on);pCloseBtn.textContent=on?"+":"–";pCloseBtn.setAttribute("aria-label",on?"Expand":"Minimise");pCloseBtn.title=on?"Expand":"Minimise"}
-pCloseBtn.onclick=()=>{if(view==="gc"||view==="gcv")return setMini(!panel.classList.contains("mini"));closePanel()};
+pCloseBtn.onclick=()=>{if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
 panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
-  if(b.kind==="gc")return gcOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
+  if(b.kind==="gc")return gcOverview();if(b.kind==="od")return odOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
 function dist(a,b){const k=Math.PI/180,x=(b[2]-a[2])*Math.cos((a[1]+b[1])/2*k),y=b[1]-a[1];return Math.sqrt(x*x+y*y)*111320}
@@ -716,11 +717,12 @@ function odWire(){pB.querySelectorAll("[data-odll]").forEach(a=>a.onclick=e=>{e.
   pB.querySelectorAll("[data-odg]").forEach(a=>a.onclick=e=>{e.preventDefault();const [ai,gi]=a.dataset.odg.split(",").map(Number);odCard(ai,gi,true)})}
 const odLink=a=>`<p class="odlink"><a href="${esc(a.page)}" target="_blank" rel="noopener">Hours, booking and details at Translink ↗</a></p>`;
 function odStarts(a){if(!a.starts)return "";const t=bneNow().ymd,d=a.starts.replace(/-/g,"");if(t>=d)return "";const dt=new Date(a.starts+"T00:00:00+10:00");return "Starts "+dt.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",timeZone:"Australia/Brisbane"})}
+const odNotes=list=>list&&list.length?`<div class="odwarn">${list.map(n=>`<p>⚠ ${esc(n)}</p>`).join("")}</div>`:"";
 function odOverview(){const others="";
-  const h=OD.areas.map((a,ai)=>`<div class="grp">${esc(a.name)}</div>${odStarts(a)?`<div class="odstart">${odStarts(a)}</div>`:""}<div class="odhow">${esc(a.how)}</div>`+a.groups.map((g,gi)=>`<div class="odg"><a href="#" data-odg="${ai},${gi}">${esc(g.name)}</a></div>`).join("")+odLink(a)).join("")
+  const h=odNotes([...(OD.notes||[]),...OD.areas.flatMap(a=>(a.notes||[]).map(n=>a.name+": "+n))])+OD.areas.map((a,ai)=>`<div class="grp">${esc(a.name)}</div>${odStarts(a)?`<div class="odstart">${odStarts(a)}</div>`:""}<div class="odhow">${esc(a.how)}</div>`+a.groups.map((g,gi)=>`<div class="odg"><a href="#" data-odg="${ai},${gi}">${esc(g.name)}</a></div>`).join("")+odLink(a)).join("")
    +`<div class="odnote">Shaded navy areas are where on-demand buses pick up. Yellow dots are destinations and key locations; tap an area for its list. Tamborine Mountain also has an on-demand service, to Helensvale and Beenleigh stations, that isn't drawn because Translink doesn't publish a map of its area. Ipswich, Bribie Island and Yarrabilba areas are traced from Translink's map pictures, so their edges are approximate; see <a href="https://translink.com.au/ondemand" target="_blank" rel="noopener">translink.com.au/ondemand</a>.</div>`;
-  openPanel("On-demand services",`Flexible, pre-booked buses · Translink map files, ${esc(OD.updated)}`,h,{view:"od"});odWire()}
-function odCard(ai,gi,fit){const a=OD.areas[ai];let h=`<div class="odhow">${esc(a.how)}</div>`,sub="On-demand service area";
+  openPanel("On-demand services",`Flexible, pre-booked buses · Translink map files, ${esc(OD.updated)}`,h,{view:"od"});backState=null;pBack.style.display="none";odWire()}
+function odCard(ai,gi,fit){const a=OD.areas[ai];let h=odNotes(a.notes)+`<div class="odhow">${esc(a.how)}</div>`,sub="On-demand service area";
   if(odStarts(a))h=`<div class="odstart">${odStarts(a)}</div>`+h;
   if(gi>=0){const g=a.groups[gi];sub=esc(g.name);if(g.hours)h+=`<div class="grp">Hours</div><div class="odhow">${esc(g.hours)}</div>`;
     if(g.dests){h+=(g.pickup?`<div class="grp">Picks up in</div><div class="odhow">${esc(g.pickup)}</div>`:"")+`<div class="grp">${esc(a.dlabel||"Destinations")}</div>`+odDestHTML(g.dests,ai)}
@@ -728,9 +730,9 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=`<div class="odhow">${esc(
   else h+=`<div class="grp">Key locations</div>`+odDestHTML(a.dests||[],ai);
   if(a.traced)h+=`<div class="odnote">Area traced from Translink's map picture, so the edges are approximate.</div>`;
   if(a.auto)h+=`<div class="odnote">This service was added to the map automatically from Translink's website and hasn't been checked yet. See Translink for full details.</div>`;
-  openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
+  openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"odv"});setBack({kind:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
-  if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od")closePanel();return}
+  if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od"||view==="odv")closePanel();return}
   if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();
   if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json"+DV)).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
   odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;

@@ -228,14 +228,22 @@ def picture_pins(g, dests):
         import trace_ondemand as T
         if meta.get("labels_key") != key:
             px = T.read_labels(fetch(meta["url"]), names)
-            before = set(meta.get("labels", {}))
-            gone = sorted(before - set(px)) if meta.get("labels_key") and meta.get("labels_key", "").split("|")[0] != meta.get("sha") else []
-            if gone:
-                problems.append(f"{g['name']}: Translink's updated map no longer shows {', '.join(gone)}. "
-                                f"If it's been dropped as a key location, remove it from tools/ondemand.json.")
+            # Translink published a new picture: key locations that were on the old one and aren't on the new
+            # one have been removed, so they come off the map. (Only if the new picture was read about as well
+            # as the old one, so a poor read can't remove things; anything that reappears comes back.)
+            before, now = set(meta.get("labels", {})), set(px)
+            dropped = set(meta.get("dropped", []))
+            if meta.get("labels_key") and meta["labels_key"].split("|")[0] != meta.get("sha") and before and len(before & now) >= 0.5 * len(before):
+                gone = before - now
+                if gone:
+                    print(f"{g['name']}: removed from Translink's updated map: {', '.join(sorted(gone))}")
+                dropped |= gone
+            meta["dropped"] = sorted(dropped - now)
             meta["labels"] = {n: list(v) for n, v in px.items()}; meta["labels_key"] = key
             TRACED_CHANGED[0] = True
         px = {n: tuple(v) for n, v in meta.get("labels", {}).items()}
+        if meta.get("dropped"):
+            dests[:] = [d for d in dests if d["n"] not in set(meta["dropped"])]
         known = {d["n"]: d["ll"] for d in dests if d["ll"] and not d.get("approx")}
         to_ll = T.fit_labels(px, known)
         if not to_ll and meta.get("affine"):
@@ -303,6 +311,15 @@ try:
                 groups.append({"name": g["name"], "zones": [z], "hours": g.get("hours"), "dests": dl})
             out = {k: a[k] for k in ("id", "name", "page", "how")}
             out.update({"groups": groups, "traced": True, "dlabel": "Key locations"})
+            notes = []
+            for g in a["groups"]:
+                m = TRACED.get("_pictures", {}).get(g["zone"], {})
+                if m.get("pending_sha"):
+                    d_ = datetime.date.fromisoformat(m.get("pending_since", datetime.date.today().isoformat()))
+                    notes.append(f"Translink updated the map for {g['name']} around {d_.day} {d_:%B %Y}, but {m.get('pending_why', 'it could not be traced confidently')}. "
+                                 f"The area shown is from Translink's previous map, so check Translink's page for the latest.")
+            if notes:
+                out["notes"] = notes
             if a.get("auto"):
                 out["auto"] = True
             if a.get("starts"):
@@ -388,6 +405,11 @@ if PLACES:
     for l in PLACES.log:
         print("place search:", l)
 
+top_notes = []
+if os.path.exists(_AUTO):
+    for path, why in json.load(open(_AUTO)).get("failed", {}).items():
+        top_notes.append(f"Translink lists an on-demand service that isn't drawn here yet ({BASE + path}): {why}.")
+
 if areas is not None:
-    json.dump({"updated": datetime.date.today().isoformat(), "areas": areas}, open(OUT, "w"), separators=(",", ":"))
+    json.dump({"updated": datetime.date.today().isoformat(), "areas": areas, "notes": top_notes}, open(OUT, "w"), separators=(",", ":"))
     print("wrote", OUT, os.path.getsize(OUT), "bytes")

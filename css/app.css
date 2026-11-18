@@ -322,3 +322,6 @@ ol.stops li .tf:empty{display:none}
 ol.stops.hasfrom li .tf:empty{display:inline-block;height:1px}
 body:not(.light) ol.stops li .tf{color:#7fb0ff}
 ol.stops li.origin{background:#2563eb14}
+.odwarn{background:#fef3c7;color:#78350f;border-radius:8px;padding:8px 10px;margin:2px 0 10px;font-size:12.5px;line-height:1.45}
+.odwarn p{margin:2px 0}
+body:not(.light) .odwarn{background:#f59e0b22;color:#fcd34d}

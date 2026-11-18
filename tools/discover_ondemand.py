@@ -15,8 +15,8 @@ it tries, in order:
 
 Hours ("When you can travel") and key locations given with stop IDs are read from the page text.
 What it adds goes into tools/ondemand_auto.json (and the outline into tools/ondemand_traced.json),
-and a GitHub issue lists what was added so someone can check the wording. If neither works, the
-issue says so and the service is left off until it's added by hand.
+and its card on the map says it was added automatically. If neither works, the service is listed
+on the map's on-demand card as not drawn yet, and left off until it's added by hand.
 
 --try PAGE_PATH runs the steps for one page (even one already on the map) without saving, for testing.
 """
@@ -190,9 +190,7 @@ def main():
     if changed:
         json.dump(AUTO, open(AUTOP, "w"), indent=1, ensure_ascii=False)
         json.dump(T.TRACED, open(T.TPATH, "w"), indent=0)
-    if notes:
-        with open(os.path.join(REPO, "zone_check.txt"), "a") as f:
-            f.write("\n### New on-demand services\n\n" + "\n".join("- " + n for n in notes) + "\n")
+    if notes:   # shown on the map (auto-added cards say so; failures are listed on the on-demand card), not raised as issues
         print("\n".join(notes))
     else:
         print("no new on-demand services")
