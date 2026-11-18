@@ -780,14 +780,17 @@ async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.
       r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const x of r){if(!o.some(y=>y.leave===x.leave&&y.arr===x.arr&&y.changes===x.changes))o.push(x)}t=Math.min(...r.map(x=>x.dep))+1}return o};
   let opts=run(0),wide=false,extra=null;
   if(!opts.length){opts=run(maxM);wide=opts.length>0}
-  // a single service goes all the way: only suggest direct services (the next few departures), never a transfer
-  if(opts.some(x=>x.changes===0)){const sm=wide?maxM:0;let dir=opts.filter(x=>x.changes===0);let t=Math.max(...dir.map(x=>x.dep))+1;
+  // Changes slider: 0 = direct only (falls back to the fewest changes if nothing is direct), 1-3, or any
+  const maxCh=+document.getElementById("cnCh").value>=4?99:+document.getElementById("cnCh").value;let chNote="";
+  if(maxCh>0&&maxCh<99){const f=opts.filter(x=>x.changes<=maxCh);if(f.length)opts=f;else if(opts.length)chNote=`Nothing gets there with ${maxCh} change${maxCh>1?"s":""} or fewer; showing the options with the fewest changes.`}
+  if(maxCh===0&&opts.length&&!opts.some(x=>x.changes===0))chNote="No single service goes all the way, so these include changes.";
+  if(maxCh===0&&opts.some(x=>x.changes===0)){const sm=wide?maxM:0;let dir=opts.filter(x=>x.changes===0);let t=Math.max(...dir.map(x=>x.dep))+1;
     for(let i=0;i<8&&dir.length<3;i++){const r=raptor(d,fk,tk,t,maxM,1,sm);if(!r.length)break;const x=r.sort((a,b)=>a.arr-b.arr)[0];if(!dir.some(y=>y.dep===x.dep&&y.arr===x.arr))dir.push(x);t=x.dep+1}
     opts=dir}
   else{const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
   opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const pick=opts.slice(0,4);const show=pick.sort((a,b)=>a.changes-b.changes||a.arr-b.arr).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
   if(!show.length){box.innerHTML=`<div class="sub">No connection found${maxM<1000?" — try a larger walking distance":""}. Services may have finished for the day; try a later day or check Translink's journey planner.</div>`;return}
-  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=wide?`<div class="odnote" style="margin-top:0">No services from ${esc(shortName(ST[PLAN.from][0]))} itself get there, so these start from stops within ${maxM} m.</div>`:"";
+  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=(wide?`<div class="odnote" style="margin-top:0">No services from ${esc(shortName(ST[PLAN.from][0]))} itself get there, so these start from stops within ${maxM} m.</div>`:"")+(chNote?`<div class="odnote" style="margin-top:0">${chNote}</div>`:"");
   const main=show.filter(x=>!x.walkFirst);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&x.arr===minArr),minCh=show[0].changes;
   box.innerHTML=wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
     const tags=o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((oi===0&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
@@ -825,11 +828,13 @@ function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.dis
     <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.to?esc(ST[PLAN.to][0]):""}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
     <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="today">Leave today at…</option><option value="tom">Leave tomorrow at…</option></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
     <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="1000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
+    <div class="cnf"><label>Changes</label><input id="cnCh" type="range" min="0" max="4" step="1" value="${PLAN.ch??0}"><span id="cnChV" class="cnrv">${["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch??0]}</span></div>
     <div class="cnhelp">Starts from your chosen stop or station; nearby stops within this distance are used to change, to finish, and to start only if nothing leaves from your stop.</div>
     <div class="webrow"><button class="btn" id="cnGo">Find connections</button></div><div id="cnRes"></div>`,{view:"cn"});
   placePicker("cnFrom","cnFromR",id=>{PLAN.from=id;planSearch()});placePicker("cnTo","cnToR",id=>{PLAN.to=id;planSearch()});
   document.getElementById("cnSwap").onclick=()=>{[PLAN.from,PLAN.to]=[PLAN.to,PLAN.from];document.getElementById("cnFrom").value=PLAN.from?ST[PLAN.from][0]:"";document.getElementById("cnTo").value=PLAN.to?ST[PLAN.to][0]:"";planSearch()};
   const w=document.getElementById("cnWhen");w.onchange=()=>{document.getElementById("cnTime").style.display=w.value==="now"?"none":"";planSearch()};document.getElementById("cnTime").onchange=planSearch;
+  const chs=document.getElementById("cnCh");chs.oninput=()=>{PLAN.ch=+chs.value;document.getElementById("cnChV").textContent=["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch]};chs.onchange=planSearch;
   const rd=document.getElementById("cnRad");rd.oninput=()=>{PLAN.rad=+rd.value;document.getElementById("cnRadV").textContent=rd.value+" m"};rd.onchange=planSearch;
   document.getElementById("cnGo").onclick=planSearch;if(PLAN.from&&PLAN.to)planSearch();else document.getElementById("cnRes").innerHTML=""}
 // ---------- lost property (data/lostproperty.json, edited by hand)

@@ -283,7 +283,7 @@ body:not(.light) .tt .hd .plat.chg{color:#fbbf24}
 .cnsw{flex:none;padding:6px 10px}
 .cnsel{flex:1;margin:0}.cntime{width:110px;flex:none;margin:0}
 .cnf input[type=range]{flex:1}
-.cnrv{width:60px;font-size:13px;font-weight:600;text-align:right}
+.cnrv{width:66px;font-size:13px;font-weight:600;text-align:right}
 .cnhelp{font-size:12px;color:var(--muted);margin:-2px 0 8px 86px}
 .cno{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:8px 0;cursor:pointer}
 .cno.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
