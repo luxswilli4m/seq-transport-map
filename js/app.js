@@ -332,7 +332,7 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
   openPanel(s[0],sub,h,{star:{list:"stops",key:id}});
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
   const tf=document.getElementById("ttFilter");if(tf)tf.oninput=()=>renderTT(id);
-  const pc=document.getElementById("pCn");pc.style.display="";pc.onclick=()=>{const b={id,web:!!ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};PLAN.to=PLAN.to===id?null:PLAN.to;showConnections(id);setBack(b)};
+  const pc=document.getElementById("pCn");pc.style.display="";pc.onclick=()=>{const b={id,web:!!ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};showConnections(id);setBack(b)};
   pB.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{const m=b.dataset.mode;ctx.mode=m;ctx.liveIds=m===own?[id,...(KIDS[id]||[])]:links[m].flatMap(k=>[k,...(KIDS[k]||[])]);
     pB.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("on",x===b));const bx=document.getElementById("ttBox");if(bx)bx.innerHTML=`<div class="sub">Loading timetable…</div>`;renderTT(id)});
   if(s[5].length)renderTT(id);
@@ -808,7 +808,7 @@ async function planLive(show){let tf;try{tf=await getTrips()}catch(e){return}con
 function placePicker(inpId,resId,onPick){const inp=document.getElementById(inpId),res=document.getElementById(resId);
   inp.oninput=()=>{const items=searchPlaces(inp.value).filter(e=>e.k==="s").slice(0,12);res.innerHTML=items.map((e,k)=>`<div class="r" data-k="${k}">${e.html}<span class="ty">${esc(e.ty)}</span></div>`).join("")||(inp.value.length>1?`<div class="empty">No stops or stations match</div>`:"");res.style.display=res.innerHTML?"block":"none";
     res.querySelectorAll(".r").forEach(d=>d.onclick=()=>{const e=items[+d.dataset.k];inp.value=ST[e.id][0];res.style.display="none";onPick(e.id)})}}
-function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;if(fromId)PLAN.from=fromId;
+function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;PLAN.from=fromId||null;PLAN.to=null;PLAN.last=null;   /* each visit starts fresh */
   const now=bneNow();const hh=String(Math.floor(now.min/60)).padStart(2,"0"),mm=String(now.min%60).padStart(2,"0");
   openPanel("Best connections","Stop or station to stop or station · unofficial",`
     <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.from?esc(ST[PLAN.from][0]):""}"><div class="results" id="cnFromR"></div></div></div>
