@@ -739,9 +739,9 @@ const mDist=(a,b)=>Math.hypot((a[0]-b[0])*98.7,(a[1]-b[1])*110.6)*1000;
 const walkMin=m=>Math.max(1,Math.ceil(m*1.25/80));   // 80 m a minute, 25% allowance for street layout
 function nearIdx(d,xy,maxM){const out=[];const gx=Math.floor(xy[0]*98.7),gy=Math.floor(xy[1]*110.6);const r=Math.ceil(maxM/1000);
   for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const a=d.grid.get((gx+i)+","+(gy+j));if(a)for(const s of a){const m=mDist(xy,d.xy[s]);if(m<=maxM)out.push([s,m])}}return out}
-function raptor(d,fromKeys,toKeys,t0,maxM,K=5){const n=d.s.length,INF=1e9;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
+function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,INF=1e9;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
   const fromXY=fromKeys.map(k=>[ST[k][2],ST[k][1]]),toXY=toKeys.map(k=>[ST[k][2],ST[k][1]]);
-  const start=new Map();fromXY.forEach(xy=>nearIdx(d,xy,maxM).forEach(([s,m])=>{const t=t0+(m<30?0:walkMin(m));if(!start.has(s)||start.get(s).t>t)start.set(s,{t,m})}));
+  const start=new Map();if(startM<=0)fromKeys.forEach(k=>{if(d.idx.has(k))start.set(d.idx.get(k),{t:t0,m:0})});else fromXY.forEach(xy=>nearIdx(d,xy,startM).forEach(([s,m])=>{const t=t0+(m<30?0:walkMin(m));if(!start.has(s)||start.get(s).t>t)start.set(s,{t,m})}));
   const end=new Map();toXY.forEach(xy=>nearIdx(d,xy,maxM).forEach(([s,m])=>{const w=m<30?0:walkMin(m);if(!end.has(s)||end.get(s).w>w)end.set(s,{w,m})}));
   arr[0]=new Float64Array(n).fill(INF);par[0]=new Array(n);let marked=new Set();
   for(const [s,v] of start){arr[0][s]=v.t;best[s]=v.t;par[0][s]={type:"start",m:v.m};marked.add(s)}
@@ -774,16 +774,19 @@ async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.
   let t0=now.min;if(mode!=="now"){const v=document.getElementById("cnTime").value||"08:00";const [h,m]=v.split(":").map(Number);t0=h*60+m}
   const day=shiftDay(now.ymd,now.dow,dayOff);const maxM=+document.getElementById("cnRad").value;
   let d;try{d=await planData(day.ymd)}catch(e){box.innerHTML=`<div class="sub">Connection data for that day isn't available yet.</div>`;return}
-  const fk=[PLAN.from],tk=[PLAN.to];const opts=[];let t=t0;
-  for(let i=0;i<4&&opts.length<3;i++){const r=raptor(d,fk,tk,t,maxM);if(!r.length)break;
-    r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const o of r){if(!opts.some(x=>x.leave===o.leave&&x.arr===o.arr&&x.changes===o.changes))opts.push(o)}
-    t=Math.min(...r.map(o=>o.dep))+1}
-  opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const pick=opts.slice(0,4);const show=pick.sort((a,b)=>a.changes-b.changes||a.arr-b.arr).slice(0,3);
+  const fk=[PLAN.from],tk=[PLAN.to];
+  // services leaving from the chosen stop or station itself come first; nearby stops are only used if nothing leaves from there
+  const run=startM=>{const o=[];let t=t0;for(let i=0;i<4&&o.length<3;i++){const r=raptor(d,fk,tk,t,maxM,5,startM);if(!r.length)break;
+      r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const x of r){if(!o.some(y=>y.leave===x.leave&&y.arr===x.arr&&y.changes===x.changes))o.push(x)}t=Math.min(...r.map(x=>x.dep))+1}return o};
+  let opts=run(0),wide=false,extra=null;
+  if(!opts.length){opts=run(maxM);wide=opts.length>0}
+  else{const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
+  opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const pick=opts.slice(0,4);const show=pick.sort((a,b)=>a.changes-b.changes||a.arr-b.arr).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
   if(!show.length){box.innerHTML=`<div class="sub">No connection found${maxM<1000?" — try a larger walking distance":""}. Services may have finished for the day; try a later day or check Translink's journey planner.</div>`;return}
-  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));
-  const minArr=Math.min(...show.map(x=>x.arr)),fastI=show.findIndex(x=>x.arr===minArr),minCh=show[0].changes;
-  box.innerHTML=show.map((o,oi)=>{const dur=o.arr-o.leave;
-    const tags=(oi===0&&show.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&(fastI>0||show.some(x=>x.arr>minArr))?`<span class="cnt">Fastest</span>`:"");
+  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=wide?`<div class="odnote" style="margin-top:0">No services from ${esc(shortName(ST[PLAN.from][0]))} itself get there, so these start from stops within ${maxM} m.</div>`:"";
+  const main=show.filter(x=>!x.walkFirst);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&x.arr===minArr),minCh=show[0].changes;
+  box.innerHTML=wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
+    const tags=o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((oi===0&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&(fastI>0||main.some(x=>x.arr>minArr))?`<span class="cnt">Fastest</span>`:""));
     return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}</div>`+
       o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(shortName(ST[PLAN.from][0])):"from "+nm(l.from);const b=l.to==null?"to "+esc(shortName(ST[PLAN.to][0])):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
         const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
@@ -818,7 +821,7 @@ function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.dis
     <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.to?esc(ST[PLAN.to][0]):""}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
     <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="today">Leave today at…</option><option value="tom">Leave tomorrow at…</option></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
     <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="1000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
-    <div class="cnhelp">Also starts from, changes between and finishes at stops within this walking distance.</div>
+    <div class="cnhelp">Starts from your chosen stop or station; nearby stops within this distance are used to change, to finish, and to start only if nothing leaves from your stop.</div>
     <div class="webrow"><button class="btn" id="cnGo">Find connections</button></div><div id="cnRes"></div>`,{view:"cn"});
   placePicker("cnFrom","cnFromR",id=>{PLAN.from=id;planSearch()});placePicker("cnTo","cnToR",id=>{PLAN.to=id;planSearch()});
   document.getElementById("cnSwap").onclick=()=>{[PLAN.from,PLAN.to]=[PLAN.to,PLAN.from];document.getElementById("cnFrom").value=PLAN.from?ST[PLAN.from][0]:"";document.getElementById("cnTo").value=PLAN.to?ST[PLAN.to][0]:"";planSearch()};
