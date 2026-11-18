@@ -267,3 +267,7 @@ ol.stops li .tc:empty{display:none}
 .lpa{font-size:12.5px;color:var(--muted)}
 .lpc{font-size:13px;color:var(--muted)}
 .lpc a{color:var(--accent)}
+.tt .hd .plat{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-top:1px}
+.tt .hd .plat.chg{color:#b45309}
+body:not(.light) .tt .hd .plat.chg{color:#fbbf24}
+.tt .tc3 .plx{font-style:normal;font-size:10px;font-weight:700;color:var(--muted);margin-left:3px;padding:0 3px;border:1px solid var(--line);border-radius:4px}

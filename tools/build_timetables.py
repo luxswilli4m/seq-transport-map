@@ -20,6 +20,27 @@ stops = pd.read_csv(os.path.join(G, "stops.txt"), dtype=str, usecols=["stop_id",
 parent = {a: (b if isinstance(b, str) and b and b != "nan" else a) for a, b in zip(stops.stop_id, stops.parent_station)}
 for c in net.get("detached", []): parent[c] = c
 
+# platform / bay labels for stops inside a station (e.g. "Platform 7", "Stop 2a", "Stop A")
+import re as _re
+_sx = pd.read_csv(os.path.join(G, "stops.txt"), dtype=str, usecols=["stop_id", "stop_name", "parent_station", "platform_code"])
+def plabel(name, code):
+    name = str(name or "")
+    m = _re.search(r",\s*platform\s+(\w+)\s*$", name, _re.I)
+    if m: return "Platform " + m.group(1)
+    m = _re.search(r"\bstop\s+(\w{1,4})\b", name, _re.I)
+    if m: return "Stop " + m.group(1)
+    m = _re.search(r",\s*(\w{1,3})\s*$", name)
+    if m: return "Stop " + m.group(1)
+    if isinstance(code, str) and code.strip() and code != "nan" and len(code) <= 3: return "Stop " + code.strip()
+    return None
+PL = {}
+for sid_, nm_, par_, code_ in zip(_sx.stop_id, _sx.stop_name, _sx.parent_station, _sx.platform_code):
+    if isinstance(par_, str) and par_ and par_ != "nan" and parent.get(sid_) != sid_:
+        lb = plabel(nm_, code_)
+        if lb: PL[sid_] = lb
+plabels = sorted(set(PL.values())); pl_index = {l: k for k, l in enumerate(plabels)}
+print("platform labels", len(PL), "distinct", len(plabels))
+
 # calendar
 cal = pd.read_csv(os.path.join(G, "calendar.txt"), dtype=str)
 cdates = pd.read_csv(os.path.join(G, "calendar_dates.txt"), dtype=str)
@@ -57,23 +78,25 @@ seqs = pd.read_csv(os.path.join(G, "stop_times.txt"), dtype={"trip_id": str}, us
 last_seq = seqs.groupby("trip_id").stop_sequence.max().to_dict(); del seqs
 print("stop_times rows (all trips):", sum(1 for _ in open(os.path.join(G, "stop_times.txt"))) - 1)
 # stop_times in chunks
-groups = defaultdict(list)  # (stop, ri, hi, si) -> [minutes]
+groups = defaultdict(list)  # (stop, ri, hi, si, platform) -> [minutes]
 for chunk in pd.read_csv(os.path.join(G, "stop_times.txt"), dtype=str, usecols=["trip_id", "departure_time", "stop_id", "stop_sequence", "pickup_type"], chunksize=2_000_000):
     chunk = chunk[chunk.trip_id.isin(tinfo.index)]
     chunk = chunk[chunk.pickup_type.fillna("0") != "1"]  # skip set-down-only stops
     chunk = chunk.join(tinfo, on="trip_id")
     chunk = chunk[chunk.stop_sequence.astype(int) != chunk.trip_id.map(last_seq)]
     chunk["sid"] = chunk.stop_id.map(parent)
-    for sid, ri, hi, si, dep in zip(chunk.sid, chunk.ri, chunk.hi, chunk.si, chunk.departure_time):
+    for sid, ri, hi, si, dep, raw in zip(chunk.sid, chunk.ri, chunk.hi, chunk.si, chunk.departure_time, chunk.stop_id):
         if sid in ST:
-            groups[(sid, int(ri), int(hi), int(si))].append(mins(dep))
+            lb = PL.get(raw) if raw != sid else None
+            groups[(sid, int(ri), int(hi), int(si), pl_index[lb] if lb else -1)].append(mins(dep))
 
 tiles = defaultdict(dict)
 def tile_of(s): return f"{math.floor(s[1]*20)}_{math.floor(s[2]*20)}"
-for (sid, ri, hi, si), times in groups.items():
+for (sid, ri, hi, si, pi), times in groups.items():
     times = sorted(set(times))
     deltas = [times[0]] + [b - a for a, b in zip(times, times[1:])]
-    tiles[tile_of(ST[sid])].setdefault(sid, []).append([ri, hi, si] + deltas)
+    # a negative 4th value marks the platform: -(index+1) into calendar.json "pl"
+    tiles[tile_of(ST[sid])].setdefault(sid, []).append([ri, hi, si] + ([-(pi + 1)] if pi >= 0 else []) + deltas)
 
 odir = os.path.join(OUT, "data/tt"); os.makedirs(odir, exist_ok=True)
 for f in os.listdir(odir): os.remove(os.path.join(odir, f))
@@ -81,7 +104,7 @@ total = 0
 for t, d in tiles.items():
     s = json.dumps(d, separators=(",", ":")); total += len(s)
     open(os.path.join(odir, t + ".json"), "w").write(s)
-json.dump({"svc": svc, "hs": headsigns}, open(os.path.join(odir, "calendar.json"), "w"), separators=(",", ":"))
+json.dump({"svc": svc, "hs": headsigns, "pl": plabels, "plid": {k: pl_index[v] for k, v in PL.items()}}, open(os.path.join(odir, "calendar.json"), "w"), separators=(",", ":"))
 print("tiles", len(tiles), "MB", round(total / 1e6, 1), "services", len(svc), "headsigns", len(headsigns))
 
 # ---------------------------------------------------------------------------

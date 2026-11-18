@@ -39,6 +39,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Route cards.** Each stop shows the scheduled time and minutes from the first stop for one run: the next full-length trip, or the exact service you're following.
 
+**Platforms.** At stations and multi-bay stops, each row shows the platform or stop for the next departure (for example "Platform 9" or "Stop 1f"), taken from Translink's timetable. Later departures that leave from a different platform show a small tag beside the time. If the live feed says a service is using a different platform, the label turns amber and reads "Now platform 7".
+
 **Times.** In the Next column, green is a live prediction from the bus or train itself, amber means it's running late, and grey is the scheduled time. A dash means nothing more is running today.
 
 **Fleet numbers.** Every bus carries a fleet number from its operator (Brisbane City Council buses use 4 digits; other operators number their own fleets, so short numbers like 10 or 101 are normal). Once a bus is on the road, its number appears in three places: in the subtitle when you tap a live vehicle ("Fleet number 1234"), in a "Fleet number" row on saved-route timetables, and under live times on stop cards ("Bus 1234"). Trains send a service code (for example 1A57) rather than a train-set number, so train lines show "Service number" instead, and stop cards don't show it. Ferries send the vessel's name, shown as "Vessel".

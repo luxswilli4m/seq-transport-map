@@ -274,21 +274,22 @@ function clock(m){m=((m%1440)+1440)%1440;const h=Math.floor(m/60),mm=m%60;return
 function shortClock(m){m=((m%1440)+1440)%1440;const h=Math.floor(m/60),mm=m%60;return (h%12||12)+":"+String(mm).padStart(2,"0")+(h<12?" am":" pm")}
 const cleanHead=h=>shortName(String(h||"").replace(/\s*,\s*stop\s+\w+$/i,""));
 function buildRows(id,entries){const now=bneNow(),today={ymd:now.ymd,dow:now.dow},yest=shiftDay(now.ymd,now.dow,-1),tom=shiftDay(now.ymd,now.dow,1);const rows=new Map();
-  for(const e of entries){const ri=e[0],hi=e[1],si=e[2];const r=R[ri];if(!r)continue;const times=[];let acc=0;for(let k=3;k<e.length;k++){acc+=e[k];times.push(acc)}
+  for(const e of entries){const ri=e[0],hi=e[1],si=e[2];const r=R[ri];if(!r)continue;let k0=3,pl=null;if(e[3]<0){pl=(TT.cal.pl||[])[-e[3]-1]||null;k0=4}const times=[];let acc=0;for(let k=k0;k<e.length;k++){acc+=e[k];times.push(acc)}
     const key=(r.t==="train"?lineAt(ri,id):"r"+ri)+"|"+hi;
-    let row=rows.get(key);if(!row){row={ri,hi,kind:r.t,line:r.t==="train"?lineAt(ri,id):null,up:[],tomorrow:[]};rows.set(key,row)}
-    if(svcOn(si,today))times.forEach(t=>{if(t>=now.min)row.up.push(t)});
-    if(svcOn(si,yest))times.forEach(t=>{if(t>=1440&&t-1440>=now.min)row.up.push(t-1440)});
-    if(svcOn(si,tom))times.forEach(t=>row.tomorrow.push(t))}
+    let row=rows.get(key);if(!row){row={ri,hi,kind:r.t,line:r.t==="train"?lineAt(ri,id):null,up:[],tomorrow:[],pl:{},plT:{}};rows.set(key,row)}
+    if(svcOn(si,today))times.forEach(t=>{if(t>=now.min){row.up.push(t);if(pl)row.pl[t]=pl}});
+    if(svcOn(si,yest))times.forEach(t=>{if(t>=1440&&t-1440>=now.min){row.up.push(t-1440);if(pl)row.pl[t-1440]=pl}});
+    if(svcOn(si,tom))times.forEach(t=>{row.tomorrow.push(t);if(pl)row.plT[t]=pl})}
   const out=[...rows.values()];out.forEach(r=>{r.up=[...new Set(r.up)].sort((a,b)=>a-b);r.tomorrow.sort((a,b)=>a-b)});
   const grp={train:0,bus:1,ferry:2,tram:3};
   out.sort((a,b)=>grp[a.kind]-grp[b.kind]||(a.kind==="train"?LINE_ORDER.indexOf(a.line)-LINE_ORDER.indexOf(b.line):cmpRoute(R[a.ri].n,R[b.ri].n))||TT.cal.hs[a.hi].localeCompare(TT.cal.hs[b.hi]));
   return {rows:out.filter(r=>r.up.length||r.tomorrow.length),nowMin:now.min}}
 function rowHTML(r,nowMin,k){const rt=R[r.ri];const bdg=r.kind==="train"?lineBadge(r.line):badge(r.ri,rt.t==="tram"?"G:link":rt.n);
   let next,list;
-  if(r.up.length){const d=r.up[0]-nowMin;next=`<div class="nx sched" data-live="${k}">${d<=0?"Now":d<60?d+" min":clock(r.up[0])}</div>`;list=r.up.slice(1).map(t=>`<span>${shortClock(t)}</span>`).join("")||`<em>Last service</em>`}
+  const p0=r.up.length?r.pl[r.up[0]]:(r.tomorrow.length?r.plT[r.tomorrow[0]]:null);const pshort=x=>x?x.replace(/^Platform /,"P").replace(/^Stop /,""):"";
+  if(r.up.length){const d=r.up[0]-nowMin;next=`<div class="nx sched" data-live="${k}">${d<=0?"Now":d<60?d+" min":clock(r.up[0])}</div>`;list=r.up.slice(1).map(t=>`<span>${shortClock(t)}${r.pl[t]&&r.pl[t]!==p0?`<i class="plx" title="${esc(r.pl[t])}">${esc(pshort(r.pl[t]))}</i>`:""}</span>`).join("")||`<em>Last service</em>`}
   else{next=`<div class="nx none" data-live="${k}">—</div>`;list=`<em>None today · tomorrow ${clock(r.tomorrow[0])}</em>`}
-  return `<div class="tr" data-k="${k}"><div class="tc1">${bdg}<span class="hd">→ ${esc(cleanHead(TT.cal.hs[r.hi]))}</span></div>${next}<div class="tc3">${list}</div></div>`}
+  return `<div class="tr" data-k="${k}"><div class="tc1">${bdg}<span class="hd">→ ${esc(cleanHead(TT.cal.hs[r.hi]))}${p0?`<span class="plat" data-plat="${k}">${esc(p0)}</span>`:""}</span></div>${next}<div class="tc3">${list}</div></div>`}
 let ttTimer=null;
 async function renderTT(id){const box=document.getElementById("ttBox");if(!box)return;const s=ST[id];
   let tile;try{tile=await loadTT(s)}catch(e){box.innerHTML=`<div class="sub">Timetable unavailable.</div>`;return}
@@ -458,16 +459,19 @@ async function getTrips(){if(LIVE.trips&&Date.now()-LIVE.tripsAt<25000)return LI
 const bneMin=sec=>Math.floor(((sec+36000)%86400)/60);
 function computeLive(id,rows,d){const ids=new Set([id,...(KIDS[id]||[])]);const preds=[];const nowS=Date.now()/1000;
   for(const e of d.entity){const tu=e.tu;if(!tu||!tu.stu)continue;const ri=riOfRoute(tu.trip&&tu.trip.route);if(ri<0)continue;const tripCx=tu.trip.sr===3;
-    for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;const delay=ev.delay||0;preds.push({ri,trip:tu.trip.trip,pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
+    for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;const delay=ev.delay||0;preds.push({ri,trip:tu.trip.trip,lpl:(TT.cal.plid||{})[u.stop],pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
   return rows.map(row=>{if(!row.up.length)return null;const same=p=>row.kind==="train"?lineAt(p.ri,id)===row.line:p.ri===row.ri;
     const t0=row.up[0]%1440;const p=preds.find(x=>same(x)&&x.sched===t0);if(!p)return null;
     if(p.cx)return {cls:"nx cx",html:"Cancelled",title:"Cancelled"};
     const mins=Math.round((p.pred-nowS)/60);const late=p.delay>=120,early=p.delay<=-60;
-    return {trip:p.trip,cls:"nx "+(late?"late":"live"),title:late?`${Math.round(p.delay/60)} min late (scheduled ${clock(row.up[0])})`:early?`${Math.round(-p.delay/60)} min early`:"On time (live)",
+    const lp=p.lpl!=null?(TT.cal.pl||[])[p.lpl]:null;
+    return {trip:p.trip,lpl:lp,cls:"nx "+(late?"late":"live"),title:late?`${Math.round(p.delay/60)} min late (scheduled ${clock(row.up[0])})`:early?`${Math.round(-p.delay/60)} min early`:"On time (live)",
       html:`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")+((fl=>fl&&R[p.ri].t!=="train"?`<small class="fln">${fleetWord(p.ri)} ${esc(fl)}</small>`:"")(fleetOf(p.trip)))}})}
 async function applyLive(id){const box=document.getElementById("ttBox");if(!box||!ctx||ctx.id!==id||!ctx.rows)return;let d;if(!LIVE.vehAt&&!applyLive.p){applyLive.p=1;pollVehicles()}
   try{d=await getTrips()}catch(e){return}
-  if(!ctx||ctx.id!==id)return;computeLive(id,ctx.rows,d).forEach((v,k)=>{const cell=box.querySelector(`[data-live="${k}"]`);if(!cell||!v)return;cell.className=v.cls;cell.innerHTML=v.html;cell.title=v.title;if(v.trip)cell.dataset.trip=v.trip;else delete cell.dataset.trip})}
+  if(!ctx||ctx.id!==id)return;computeLive(id,ctx.rows,d).forEach((v,k)=>{const cell=box.querySelector(`[data-live="${k}"]`);if(!cell||!v)return;cell.className=v.cls;cell.innerHTML=v.html;cell.title=v.title;if(v.trip)cell.dataset.trip=v.trip;else delete cell.dataset.trip;livePlat(box,k,v)})}
+function livePlat(box,k,v){const el=box.querySelector(`[data-plat="${k}"]`);if(!el||!v||!v.lpl)return;if(!el.dataset.sch)el.dataset.sch=el.textContent;
+  if(v.lpl!==el.dataset.sch){el.textContent="Now "+v.lpl.charAt(0).toLowerCase()+v.lpl.slice(1);el.classList.add("chg");el.title="Changed from "+el.dataset.sch}else{el.textContent=v.lpl;el.classList.remove("chg");el.title=""}}
 // alerts
 async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
   LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn();if(typeof applyFavStatus==="function")applyFavStatus()}catch(e){console.warn(e)}}
@@ -548,7 +552,7 @@ async function refreshFavStops(){let d=null;try{d=await getTrips()}catch(e){}
     if(!soon.length){box.innerHTML=`<div class="sub">No scheduled departures from this stop.</div>`;continue}
     const sc=box.scrollTop;box.innerHTML=`<div class="th"><div>Route (${new Set(rows.map(r=>r.ri)).size})</div><div>Next</div><div>Later departures</div></div>`+soon.map((r,k)=>rowHTML(r,nowMin,k)).join("");box.scrollTop=sc;
     box.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,false,await rowVehFor(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,false,await rowVehFor(b)));
-    if(d)computeLive(id,soon,d).forEach((v,k)=>{const c=box.querySelector(`[data-live="${k}"]`);if(c&&v){c.className=v.cls;c.innerHTML=v.html;c.title=v.title;if(v.trip)c.dataset.trip=v.trip;else delete c.dataset.trip}})}}
+    if(d)computeLive(id,soon,d).forEach((v,k)=>{const c=box.querySelector(`[data-live="${k}"]`);if(c&&v){c.className=v.cls;c.innerHTML=v.html;c.title=v.title;if(v.trip)c.dataset.trip=v.trip;else delete c.dataset.trip;livePlat(box,k,v)}})}}
 // ---------- saved routes
 const keyIds=key=>TNAME[key]?(lineRoutes[key]||[]):(key in nameIdx?[nameIdx[key]]:[]);
 function keyBadge(key){if(TNAME[key])return lineBadge(key);const i=nameIdx[key];return i===undefined?esc(key):badge(i,R[i].t==="tram"?"G:link":R[i].n)}
