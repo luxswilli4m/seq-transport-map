@@ -314,3 +314,6 @@ a.gce b{display:block;font-weight:600}.gca{display:block;font-size:12.5px;color:
 ul.gccap{list-style:none;margin:2px 0 10px;padding:0;font-size:14px;line-height:1.7}
 ul.gccap li.y{color:inherit}ul.gccap li.y::first-letter{color:#16a34a}
 ul.gccap li.n{color:var(--muted)}
+#panel.mini .pb{display:none}
+#panel.mini .ph{border-bottom:0}
+#panel.mini .pht{cursor:pointer}

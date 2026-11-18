@@ -233,7 +233,7 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-function openPanel(t,s,html,opt){opt=opt||{};if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+function openPanel(t,s,html,opt){opt=opt||{};{const g=opt.view==="gc"||opt.view==="gcv",xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
@@ -255,10 +255,13 @@ function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
-function closePanel(){if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
-document.getElementById("pClose").onclick=closePanel;
+function closePanel(){panel.classList.remove("mini");if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
+const pCloseBtn=document.getElementById("pClose"),pCloseTxt=pCloseBtn.textContent,pCloseLbl=pCloseBtn.getAttribute("aria-label")||"Close";
+function setMini(on){panel.classList.toggle("mini",on);pCloseBtn.textContent=on?"+":"–";pCloseBtn.setAttribute("aria-label",on?"Expand":"Minimise");pCloseBtn.title=on?"Expand":"Minimise"}
+pCloseBtn.onclick=()=>{if(view==="gc"||view==="gcv")return setMini(!panel.classList.contains("mini"));closePanel()};
+panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
-  if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
+  if(b.kind==="gc")return gcOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
 function dist(a,b){const k=Math.PI/180,x=(b[2]-a[2])*Math.cos((a[1]+b[1])/2*k),y=b[1]-a[1];return Math.sqrt(x*x+y*y)*111320}
@@ -848,8 +851,8 @@ const gcCaps=c=>(c.match(/../g)||[]);
 const gcKind=r=>r[5]==="m"?"Fare machine":/ station$/i.test(r[1])&&!/smith|news|eleven|store|shop|iga\b|pharm|mart|cafe|kiosk/i.test(r[1])?"Station ticket office":"Retailer";
 function gcCodes(){const s=GCF.svc,c=GCF.card;const m={buy:["gb","eb"],top:["gt","et","el"],ref:["gr"],exp:["ge"]};
   let codes=s?m[s]:null;if(c==="g")codes=(codes||GC_MAIN["go card"].concat(["gg","gv","gh"])).filter(x=>x[0]==="g");if(c==="e")codes=(codes||["eb","et","el"]).filter(x=>x[0]==="e");return codes}
-const gcPass=r=>{const k=gcCodes();if(!k)return true;const cs=gcCaps(r[6]);return k.some(x=>cs.includes(x))};
-function gcFilter(){const k=gcCodes();return k?["any",...k.map(x=>["in",","+x+",",["get","c"]])]:null}
+const gcPass=r=>{if(GCF.card==="m"&&r[5]!=="m")return false;const k=gcCodes();if(!k)return true;const cs=gcCaps(r[6]);return k.some(x=>cs.includes(x))};
+function gcFilter(){const k=gcCodes();const f=k?["any",...k.map(x=>["in",","+x+",",["get","c"]])]:null;if(GCF.card!=="m")return f;const m=["==",["get","k"],"m"];return f?["all",m,f]:m}
 function gcSetup(){if(map.getSource("gcv"))return;
   map.addSource("gcv",{type:"geojson",data:FC(GC.r.map((r,i)=>({type:"Feature",properties:{i,n:r[1],k:r[5],c:","+gcCaps(r[6]).join(",")+","},geometry:{type:"Point",coordinates:[r[3],r[4]]}})))});
   map.addLayer({id:"gc-pin",type:"circle",source:"gcv",paint:{"circle-color":["match",["get","k"],"m","#64748b","#f97316"],"circle-radius":["interpolate",["linear"],["zoom"],9,["match",["get","k"],"m",2.5,3.5],14,["match",["get","k"],"m",5,7.5]],"circle-stroke-color":"#ffffff","circle-stroke-width":["interpolate",["linear"],["zoom"],9,.8,14,1.8]}},"sel");
@@ -873,10 +876,10 @@ function gcList(){const el=document.getElementById("gcList");if(!el)return;const
   el.querySelectorAll("[data-gc]").forEach(a=>a.onclick=e=>{e.preventDefault();gcCard(+a.dataset.gc,true)})}
 function gcOverview(){const sb=(k,t)=>`<button class="gcb${GCF.svc===k?" on":""}" data-svc="${k}">${t}</button>`,cb=(k,t)=>`<button class="gcb${GCF.card===k?" on":""}" data-card="${k}">${t}</button>`;
   const h=`<div class="gcf"><div class="gcfl">I want to</div><div class="gcbs">${sb("","Anything")}${sb("buy","Buy")}${sb("top","Top up")}${sb("ref","Get a refund")}${sb("exp","Change expiry")}</div>
-   <div class="gcfl">Card type</div><div class="gcbs">${cb("","Any")}${cb("g","<i>go</i> card")}${cb("e","<i>go explore</i> card")}</div></div>
+   <div class="gcfl">Card type</div><div class="gcbs">${cb("","Any")}${cb("g","<i>go</i> card")}${cb("e","<i>go explore</i> card")}${cb("m","Fare machines")}</div></div>
    <div class="gcn" id="gcCount"></div><div id="gcList"></div>
-   <div class="odnote"><span class="gcd"></span> Orange: retailers and station ticket offices. <span class="gcd m"></span> Grey: fare machines. Tap a dot to see what that location can do. Refunds and expiry changes are for <i>go</i> cards only. From Translink's retailer list, ${esc(GC.updated)}; see <a href="https://translink.com.au/tickets-and-fares/go-card/locations" target="_blank" rel="noopener">translink.com.au</a>. <i>go</i> card services are also online and on 13 12 30.</div>`;
-  openPanel("go card vendors","Where to buy, top up, refund or change expiry",h,{view:"gc"});
+   <div class="odnote"><span class="gcd"></span> Orange: retailers and station ticket offices. <span class="gcd m"></span> Grey: fare machines. Tap a dot to see what that location can do. Refunds and expiry changes are for <i>go</i> cards only. Fare machines shows only the machines at stations, busways and tram stops. Use – to shrink this card and tap its title to bring it back. From Translink's retailer list, ${esc(GC.updated)}; see <a href="https://translink.com.au/tickets-and-fares/go-card/locations" target="_blank" rel="noopener">translink.com.au</a>. <i>go</i> card services are also online and on 13 12 30.</div>`;
+  openPanel("go card vendors","Where to buy, top up, refund or change expiry",h,{view:"gc"});backState=null;pBack.style.display="none";
   pB.querySelectorAll("[data-svc]").forEach(x=>x.onclick=()=>{GCF.svc=x.dataset.svc;if(GCF.card==="e"&&(GCF.svc==="ref"||GCF.svc==="exp"))GCF.card="";gcApply();gcOverview()});
   pB.querySelectorAll("[data-card]").forEach(x=>x.onclick=()=>{GCF.card=x.dataset.card;if(GCF.card==="e"&&(GCF.svc==="ref"||GCF.svc==="exp"))GCF.svc="";gcApply();gcOverview()});
   gcList()}
@@ -887,7 +890,7 @@ function gcCard(i,fly){const r=GC.r[i];const cs=gcCaps(r[6]);
   const h=`<div class="gcaddr">${esc(r[2])}</div>`+sec("go card")+sec("go explore card")
    +(cs.some(x=>x[0]==="e")?"":`<div class="odnote">No <i>go explore</i> card services here.</div>`)
    +`<p class="odlink"><a href="https://translink.com.au/tickets-and-fares/go-card/locations/${r[0]}/details" target="_blank" rel="noopener">This location on Translink's site ↗</a></p><div class="odnote"><a href="#" id="gcAll">‹ All go card vendors</a></div>`;
-  openPanel(r[1],esc(gcKind(r)),h,{view:"gcv"});selPt([r[3],r[4]]);
+  openPanel(r[1],esc(gcKind(r)),h,{view:"gcv"});setBack({kind:"gc"});selPt([r[3],r[4]]);
   if(fly)map.flyTo({center:[r[3],r[4]],zoom:Math.max(map.getZoom(),15),duration:700});
   document.getElementById("gcAll").onclick=e=>{e.preventDefault();gcOverview()}}
 async function toggleGC(){const btn=document.getElementById("gcBtn");
