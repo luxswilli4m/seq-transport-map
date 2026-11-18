@@ -173,17 +173,22 @@ def add_dot(part, tag):
         if seg.is_empty or seg.length < 0.004 or seg.geom_type != "LineString": continue
         OUT["dots"].append({"c": [[round(y, 5), round(x, 5)] for x, y in seg.coords], **tag})
         drawn = seg.buffer(0.0015) if drawn is None else drawn.union(seg.buffer(0.0015))
-loops = []
+def is_loop(rt):
+    mains = [q for q in paths.get(rt, []) if q[2] < 0]
+    return len(mains) == 1 and Point(mains[0][0][0]).distance(Point(mains[0][0][-1])) < 0.003 and LineString(mains[0][0]).length > 0.02
+loop_rts = [rt for rt in rr if is_loop(rt)]
+# the longest one-way loop (e.g. 652 Beachmere) is drawn whole with arrows; other loops get ordinary dotted links
+arrow_rt = max(loop_rts, key=lambda rt: LineString([q for q in paths[rt] if q[2] < 0][0][0]).length) if loop_rts else None
+loops = [[q for q in paths[arrow_rt] if q[2] < 0][0][0]] if arrow_rt else []
 for rt, pl in rr.items():
+    if rt == arrow_rt: continue
     near = unary_union([q.buffer(0.012) for q in pl])
-    ps = paths.get(rt, []); mains = [q for q in ps if q[2] < 0]
-    if len(mains) == 1 and Point(mains[0][0][0]).distance(Point(mains[0][0][-1])) < 0.003 and LineString(mains[0][0]).length > 0.02:
-        loops.append(mains[0][0]); continue  # one-way loop: drawn whole with arrows
+    ps = paths.get(rt, [])
     for pth, di, vi in ps:
         if len(pth) < 2: continue
         diff = LineString(pth).difference(ZB)
         for part in getattr(diff, "geoms", [diff]):
-            if part.is_empty or part.length < 0.008 or not part.intersects(near): continue
+            if part.is_empty or part.length < 0.004 or not part.intersects(near): continue
             if drawn is not None: part = part.difference(drawn)
             add_dot(part, {"r": rt, "d": di, "v": vi})
 by = defaultdict(list)
