@@ -32,6 +32,8 @@ const TLINES=[["T1","Ipswich / Rosewood – Caboolture / Nambour","27855A"],["T2
 const TNAME=Object.fromEntries(TLINES.map(([t,n])=>[t,n])), TCOL={T1:"#2E9C69",T2:"#6DC7E9",T3:"#A769AB",T4:"#4E85C5",T5:"#FFC628",T6:"#EF474F"};
 const lineOf={}, lineRoutes={};
 // colours as shown on Translink's network map legend (the feed's route colours are only used to tell the lines apart)
+// Brisbane Metro colours as on Translink's network map (the feed gives them the standard bus pink)
+const MDISP={M1:["#7EC241","#0b1a05"],M2:["#5DBEB6","#06201e"]};R.forEach(r=>{if(MDISP[r.n]){r.c=MDISP[r.n][0];r.tc=MDISP[r.n][1]}});
 const TDISP={T1:"#2E9C69",T2:"#6DC7E9",T3:"#A769AB",T4:"#4E85C5",T5:"#FFC628",T6:"#EF474F"};
 R.forEach((r,i)=>{if(r.t!=="train")return;const hit=TLINES.find(x=>("#"+x[2]).toLowerCase()===r.c.toLowerCase());const t=hit?hit[0]:"T1";lineOf[i]=[t];(lineRoutes[t]=lineRoutes[t]||[]).push(i);r.c=TDISP[t]});
 const TKW={T1:/Ipswich|Rosewood|Caboolture|Nambour|Gympie|Brisbane City|Roma Street/,T2:/Springfield|Redcliffe|Kippa|Brisbane City|Roma Street/,T3:/Doomben|Brisbane City|Roma Street/,T4:/Cleveland|Shorncliffe|Brisbane City|Roma Street/,T5:/Varsity|Airport|Gold Coast|Brisbane City|Roma Street/,T6:/Beenleigh|Ferny Grove|Brisbane City|Roma Street/};
