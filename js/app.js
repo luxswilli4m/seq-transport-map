@@ -686,6 +686,12 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
   const f=map.queryRenderedFeatures(box,{layers:["od-pin","od-fill"]});if(!f.length)return;const p=f.find(x=>x.layer.id==="od-pin")||f[0];
   odCard(+p.properties.ai,+p.properties.gi,false);if(p.layer.id==="od-pin")selPt(p.geometry.coordinates)});
 
+// ---------- BAU menu: quick zoom to key stations (ids from data/network.json)
+(()=>{const w=document.getElementById("bauWrap"),b=document.getElementById("bauBtn");if(!w)return;
+  const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
+  b.onclick=e=>{e.stopPropagation();document.getElementById("moreWrap").classList.remove("open");set(!w.classList.contains("open"))};
+  w.querySelectorAll("[data-bau]").forEach(x=>x.onclick=()=>{set(false);const id=x.dataset.bau;if(!ST[id])return;webCam=null;openStop(id,true)});
+  document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
 // ---------- lost property (data/lostproperty.json, edited by hand)
 let LOST=null;
 async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
@@ -785,7 +791,7 @@ window.__ready=true;window.__map=map;
 // ---------- "More" menu (School routes, On demand, future extras)
 (()=>{const w=document.getElementById("moreWrap"),b=document.getElementById("moreBtn");
   const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
-  b.onclick=e=>{e.stopPropagation();set(!w.classList.contains("open"))};
+  b.onclick=e=>{e.stopPropagation();const bw=document.getElementById("bauWrap");if(bw)bw.classList.remove("open");set(!w.classList.contains("open"))};
   document.getElementById("moreMenu").addEventListener("click",()=>set(false));
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
