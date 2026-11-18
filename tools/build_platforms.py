@@ -116,7 +116,9 @@ def overture_platforms():
         print("Overture platform outlines not updated:", e)
         return cache.get("polys", [])
 
-OV_POLYS = [Polygon(p["c"]).buffer(0) for p in overture_platforms()]
+OV_RAW = overture_platforms()
+OV_POLYS = [Polygon(p["c"]).buffer(0) for p in OV_RAW]
+OV_NAMED = [(re.sub(r"\s+", " ", p["n"].lower()).strip(), Polygon(p["c"]).buffer(0)) for p in OV_RAW if p.get("n")]
 
 out = []
 for sid in BAU + EXTRA:
@@ -162,6 +164,13 @@ for sid in BAU + EXTRA:
         for g in getattr(area, "geoms", [area]):
             if g.area <= 0: continue
             if any(g.distance(Point(p["ll"])) * 111000 < MATCH for p in pts):
+                keep.append([[round(a, 6), round(b, 6)] for a, b in g.exterior.coords])
+    # a station drawn beside a BAU station only takes outlines named exactly as its own platforms
+    # ("Roma Street busway, platform 1"), so it can't pick up the neighbouring station's platform shapes
+    if sid in EXTRA:
+        own = {re.sub(r"\s+", " ", s["stop_name"].lower()).strip() for s in stops.values() if s.get("parent_station") == sid}
+        for nm_, g in OV_NAMED:
+            if nm_ in own and g.distance(Point(lo0, la0)) * 111000 < RADIUS * 1000:
                 keep.append([[round(a, 6), round(b, 6)] for a, b in g.exterior.coords])
     # where the base map has no platform shape, mark the platform/bay with a small box (about 12 m square)
     from shapely.affinity import scale
