@@ -61,6 +61,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **BAU ▾ menu.** Quick zoom to key stations: Queen Street bus station, Cultural Centre, Roma Street and Helensvale. Each opens that station's card. To change the list, edit the `data-bau` buttons in `index.html` (each uses the station's id from `data/network.json`).
 
+**Platform areas (BAU stations).** Zoomed right in on Queen Street, Cultural Centre, Roma Street or Helensvale, platforms are shaded blue with numbered badges (1, 2 … or bays like 1a, A). Shaded shapes come from OpenStreetMap's platform outlines where they exist (Roma Street and Helensvale train platforms); elsewhere a small box marks each platform or bay at Translink's position. Built by `tools/build_platforms.py` (station list at the top of that file) and refreshed weekly.
+
 **More ▾ menu.** Extras live under **More ▾** in the top bar: On demand, School routes, Lost property and a link to Translink's feedback form, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
 
 **School routes.** School routes (under More ▾) lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.

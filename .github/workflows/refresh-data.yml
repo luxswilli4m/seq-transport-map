@@ -50,6 +50,10 @@ jobs:
           unzip -q school.zip -d school
           python tools/build_school.py school gtfs .
 
+      - name: Rebuild BAU platform areas
+        continue-on-error: true
+        run: python tools/build_platforms.py gtfs .
+
       - name: Rebuild on-demand service areas
         continue-on-error: true
         run: python tools/build_ondemand.py gtfs .

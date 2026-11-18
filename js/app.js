@@ -710,6 +710,17 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
   const f=map.queryRenderedFeatures(box,{layers:["od-pin","od-fill"]});if(!f.length)return;const p=f.find(x=>x.layer.id==="od-pin")||f[0];
   odCard(+p.properties.ai,+p.properties.gi,false);if(p.layer.id==="od-pin")selPt(p.geometry.coordinates)});
 
+// ---------- platform areas and numbers at BAU stations (data/platforms.json), shown when zoomed in
+(async()=>{let P;try{P=await (await fetch(BASE+"data/platforms.json"+DV)).json()}catch(e){return}
+  const af=[],pf=[];P.stations.forEach(st=>{st.areas.forEach(a=>af.push({type:"Feature",properties:{},geometry:{type:"Polygon",coordinates:[a]}}));st.pts.forEach(p=>pf.push({type:"Feature",properties:{n:p.n},geometry:{type:"Point",coordinates:p.ll}}))});
+  const add_=()=>{if(map.getSource("platA"))return;map.addSource("platA",{type:"geojson",data:FC(af)});map.addSource("platP",{type:"geojson",data:FC(pf)});
+    const before=map.getLayer("bw-case")?"bw-case":undefined;
+    map.addLayer({id:"plat-fill",type:"fill",source:"platA",minzoom:15.5,paint:{"fill-color":"#2563eb","fill-opacity":["interpolate",["linear"],["zoom"],15.5,0,16.2,.28]}},before);
+    map.addLayer({id:"plat-line",type:"line",source:"platA",minzoom:15.5,paint:{"line-color":"#1d4ed8","line-width":1.4,"line-opacity":["interpolate",["linear"],["zoom"],15.5,0,16.2,.9]}},before);
+    map.addLayer({id:"plat-dot",type:"circle",source:"platP",minzoom:16,paint:{"circle-color":"#1d4ed8","circle-radius":["interpolate",["linear"],["zoom"],16,8,18,11],"circle-stroke-color":"#ffffff","circle-stroke-width":1.5}});
+    map.addLayer({id:"plat-num",type:"symbol",source:"platP",minzoom:16,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":["interpolate",["linear"],["zoom"],16,10.5,18,13],"text-allow-overlap":true,"text-ignore-placement":true},paint:{"text-color":"#ffffff"}});
+    L.push("plat-fill","plat-line","plat-dot","plat-num")};
+  if(map.isStyleLoaded())add_();else map.once("idle",add_)})();
 // ---------- BAU menu: quick zoom to key stations (ids from data/network.json)
 (()=>{const w=document.getElementById("bauWrap"),b=document.getElementById("bauBtn");if(!w)return;
   const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
