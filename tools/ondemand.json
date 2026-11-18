@@ -1,81 +1,141 @@
 {
-  "_help": "On-demand areas shown by the 'On demand' button. Each area points at Translink's page that links to its map files (KML). The weekly refresh re-reads these pages. 'how' is the short explanation shown on the card. See README.md, section 'On-demand areas'.",
-  "areas": [
+ "_help": "On-demand areas shown by the 'On demand' button. Each area points at Translink's page that links to its map files (KML). The weekly refresh re-reads these pages. 'how' is the short explanation shown on the card. See README.md, section 'On-demand areas'. Traced areas: 'picture' says which Translink page shows the area's map picture; tools/trace_ondemand.py re-traces it when the picture changes. 'not_drawn' lists on-demand pages that are deliberately left off the map (outside SEQ, or no map), so they don't raise an issue.",
+ "areas": [
+  {
+   "id": "gc",
+   "name": "Gold Coast on demand",
+   "page": "https://translink.com.au/travel-with-us/on-demand/ondemandgoldcoast",
+   "map_page": "/travel-with-us/on-demand/gold-coast/maps",
+   "zone_names": {
+    "SmallPacificPinesZone_AH": "Roam zone A: Pacific Pines and parts of Oxenford, Maudsland and Gaven",
+    "NerangZone_AH": "Roam zone B: Nerang, Highland Park and parts of Worongary"
+   },
+   "how": "Pre-booked shared service. It picks you up close to home inside the roam zone and takes you to a key location, and back again."
+  },
+  {
+   "id": "logan",
+   "name": "Logan on demand (DRT)",
+   "page": "https://translink.com.au/travel-with-us/on-demand/logan",
+   "map_page": "/travel-with-us/on-demand/logan/trial-sites",
+   "destinations_page": "/travel-with-us/on-demand/logan/trial-sites/destinations",
+   "how": "Pre-booked shared service. It picks you up near home in these suburbs and drops you at one of the destinations below. For the trip home, you're picked up at the destination. Book at least two hours ahead."
+  },
+  {
+   "id": "ipswich",
+   "name": "Ipswich Flexilink",
+   "page": "https://translink.com.au/travel-with-us/on-demand/ipswich",
+   "traced": true,
+   "how": "Shared service that runs hourly. It picks you up from home and drops you anywhere in the roam zone or at a key location. Book at least two hours ahead with Logan Coaches on 1800 228 287; the trip back is a separate booking.",
+   "groups": [
     {
-      "id": "gc",
-      "name": "Gold Coast on demand",
-      "page": "https://translink.com.au/travel-with-us/on-demand/ondemandgoldcoast",
-      "map_page": "/travel-with-us/on-demand/gold-coast/maps",
-      "zone_names": {
-        "SmallPacificPinesZone_AH": "Roam zone A: Pacific Pines and parts of Oxenford, Maudsland and Gaven",
-        "NerangZone_AH": "Roam zone B: Nerang, Highland Park and parts of Worongary"
-      },
-      "how": "Pre-booked shared service. It picks you up close to home inside the roam zone and takes you to a key location, and back again."
-    },
-    {
-      "id": "logan",
-      "name": "Logan on demand (DRT)",
-      "page": "https://translink.com.au/travel-with-us/on-demand/logan",
-      "map_page": "/travel-with-us/on-demand/logan/trial-sites",
-      "destinations_page": "/travel-with-us/on-demand/logan/trial-sites/destinations",
-      "how": "Pre-booked shared service. It picks you up near home in these suburbs and drops you at one of the destinations below. For the trip home, you're picked up at the destination. Book at least two hours ahead."
-    },
-    {
-      "id": "ipswich",
-      "name": "Ipswich Flexilink",
+     "name": "Roam zone C: parts of Goodna and Bellbird Park",
+     "zone": "ipswich_c",
+     "hours": "Monday to Friday 6am to 7pm; Saturday 7am to 5:30pm",
+     "dests": [
+      "Goodna station",
+      "Redbank Plains Shopping Centre",
+      "Redbank Plaza",
+      "Goodna Marketplace",
+      "Club Parkview"
+     ],
+     "picture": {
       "page": "https://translink.com.au/travel-with-us/on-demand/ipswich",
-      "traced": true,
-      "how": "Shared service that runs hourly. It picks you up from home and drops you anywhere in the roam zone or at a key location. Book at least two hours ahead with Logan Coaches on 1800 228 287; the trip back is a separate booking.",
-      "groups": [
-        {
-          "name": "Roam zone C: parts of Goodna and Bellbird Park",
-          "zone": "ipswich_c",
-          "hours": "Monday to Friday 6am to 7pm; Saturday 7am to 5:30pm",
-          "dests": [
-            "Goodna station",
-            "Redbank Plains Shopping Centre",
-            "Redbank Plaza",
-            "Goodna Marketplace",
-            "Club Parkview"
-          ]
-        },
-        {
-          "name": "Roam zone D: parts of Barellan Point, Karalee and Chuwar",
-          "zone": "ipswich_d",
-          "hours": "Weekday peaks only: 6am to 9am and 4pm to 6:30pm",
-          "dests": [
-            "Ipswich station",
-            "Riverlink Shopping Centre"
-          ]
-        }
-      ]
+      "match": "zone c map"
+     }
     },
     {
-      "id": "bribie",
-      "name": "Bribie Island on demand",
-      "page": "https://translink.com.au/bribie-on-demand",
-      "traced": true,
-      "starts": "2026-11-30",
-      "how": "Pre-booked shared service. It takes you from anywhere in the roam zone to a key location, from a key location back to anywhere in the zone, or between two key locations. Book ahead, including your trip back.",
-      "groups": [
-        {
-          "name": "Bribie Island roam zone",
-          "zone": "bribie",
-          "hours": "Monday to Friday 4:30am to 10pm; Saturday 7am to 10pm; Sunday and public holidays 7am to 7pm",
-          "dests": [
-            "Bribie Island Central",
-            "Bribie Island Community Arts Centre",
-            "Bongaree Jetty",
-            "Bongaree Plaza",
-            "Bellara shops",
-            "Banksia Beach shops",
-            "Bribie Island RSL Club",
-            "Bribie Island Satellite Health Centre",
-            "Bribie Island Sports Complex",
-            "Woorim Beach"
-          ]
-        }
-      ]
+     "name": "Roam zone D: parts of Barellan Point, Karalee and Chuwar",
+     "zone": "ipswich_d",
+     "hours": "Weekday peaks only: 6am to 9am and 4pm to 6:30pm",
+     "dests": [
+      "Ipswich station",
+      "Riverlink Shopping Centre"
+     ],
+     "picture": {
+      "page": "https://translink.com.au/travel-with-us/on-demand/ipswich",
+      "match": "roam zone d map",
+      "outline": "pink"
+     }
     }
-  ]
+   ]
+  },
+  {
+   "id": "bribie",
+   "name": "Bribie Island on demand",
+   "page": "https://translink.com.au/bribie-on-demand",
+   "traced": true,
+   "starts": "2026-11-30",
+   "how": "Pre-booked shared service. It takes you from anywhere in the roam zone to a key location, from a key location back to anywhere in the zone, or between two key locations. Book ahead, including your trip back.",
+   "groups": [
+    {
+     "name": "Bribie Island roam zone",
+     "zone": "bribie",
+     "hours": "Monday to Friday 4:30am to 10pm; Saturday 7am to 10pm; Sunday and public holidays 7am to 7pm",
+     "dests": [
+      "Bribie Island Central",
+      "Bribie Island Community Arts Centre",
+      "Bongaree Jetty",
+      "Bongaree Plaza",
+      "Bellara shops",
+      "Banksia Beach shops",
+      "Bribie Island RSL Club",
+      "Bribie Island Satellite Health Centre",
+      "Bribie Island Sports Complex",
+      "Woorim Beach"
+     ],
+     "picture": {
+      "page": "https://translink.com.au/bribie-on-demand",
+      "match": "roam zone map",
+      "auto": false
+     }
+    }
+   ]
+  },
+  {
+   "id": "yarrabilba",
+   "name": "Yarrabilba on demand",
+   "page": "https://translink.com.au/travel-with-us/on-demand/yarrabilba",
+   "traced": true,
+   "how": "Pre-booked shared service. It takes you from anywhere in the roam zone to a key location, from a key location back into the zone, or between two key locations. It uses set pick-up and drop-off points rather than your front door. Key locations connect with route 587. Flat 50c fare; book ahead, including your trip back.",
+   "groups": [
+    {
+     "name": "Yarrabilba roam zone",
+     "zone": "yarrabilba",
+     "hours": "Monday to Friday 5am to 10pm; Saturday 6am to 10pm; Sunday and public holidays 7am to 9pm",
+     "picture": {
+      "page": "https://translink.com.au/travel-with-us/on-demand/yarrabilba",
+      "match": "widen\\.net/s/.*yarrabilba"
+     },
+     "dests": [
+      {
+       "n": "Yarrabilba Drive Shopping Precinct",
+       "stops": [
+        "320619",
+        "320620"
+       ]
+      },
+      {
+       "n": "The Buzz at Yarrabilba (community centre)",
+       "stops": [
+        "320611",
+        "320612"
+       ]
+      },
+      {
+       "n": "Dixon Circuit Retail Precinct",
+       "stops": [
+        "320637",
+        "320638"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "not_drawn": {
+  "/travel-with-us/on-demand/toowoomba": "outside SEQ",
+  "/travel-with-us/on-demand/hervey-bay": "outside SEQ",
+  "/travel-with-us/on-demand/mt-tamborine": "no published service-area map (runs to Helensvale and Beenleigh stations)"
+ }
 }

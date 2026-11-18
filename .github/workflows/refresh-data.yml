@@ -27,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install tools
-        run: pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile
+        run: pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless
 
       - name: Download Translink SEQ GTFS
         run: |
@@ -55,6 +55,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_platforms.py gtfs .
 
+      - name: Re-trace on-demand areas whose Translink map picture changed
+        continue-on-error: true
+        run: python tools/trace_ondemand.py .
+
       - name: Rebuild on-demand service areas
         continue-on-error: true
         run: python tools/build_ondemand.py gtfs .
@@ -80,7 +84,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             python tools/stamp.py   # new version tag so browsers fetch the fresh data
-            git add data index.html
+            git add data index.html tools/ondemand_traced.json
             git commit -m "Weekly Translink data refresh"
             git push
           fi

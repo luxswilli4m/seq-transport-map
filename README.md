@@ -144,7 +144,15 @@ Destinations are pinned automatically when their name confidently matches a Tran
 
 The list of areas, the links to Translink's pages, and the short "how it works" text on each card live in **`tools/ondemand.json`**.
 
-**Traced areas (Ipswich, Bribie Island).** Translink only publishes these as pictures, so their outlines were traced once, by lining each picture up with the real road network and picking out the boundary line, and are stored in **`tools/ondemand_traced.json`**. They don't update themselves. If Translink changes one of these areas, it needs re-tracing (ask for it to be redone). Their key locations, hours and start date are in `tools/ondemand.json`; edit those by hand if Translink's page changes. If Translink moves a page, the refresh keeps the previous areas on the map and opens a GitHub issue. Fix the page address in that file, then run the workflow.
+**Traced areas (Ipswich, Bribie Island, Yarrabilba).** Translink only publishes these as map pictures, so their outlines are traced from the pictures and stored in **`tools/ondemand_traced.json`**. Each week `tools/trace_ondemand.py` finds the current picture on Translink's page (the `picture` entry in `tools/ondemand.json` says which page and which picture) and compares it with last week's.
+
+- **Picture unchanged:** nothing happens.
+- **Picture changed (Ipswich, Yarrabilba):** the outline is re-traced automatically. The script picks out the roam-zone outline, lines the picture up with the real road network, and converts it to map coordinates. If it lines up well and the new area still overlaps the old one by at least 60 %, the map updates. You also get a GitHub issue saying it changed, so you can glance at it. If the new outline doesn't line up confidently, the map keeps the old one and the issue asks for a look.
+- **Picture changed (Bribie Island):** Bribie's picture has labels and icons drawn across its outline, which the automatic tracer can't untangle reliably. A change there opens an issue asking for a re-trace, and the map keeps the current outline until then.
+
+Key locations, hours and start dates for traced areas are in `tools/ondemand.json`. Yarrabilba's key locations are pinned at the stop IDs Translink lists for them. Edit hours or key locations by hand if Translink's page changes.
+
+**New services.** The refresh also reads Translink's on-demand hub page (translink.com.au/travel-with-us/on-demand). If it links to a service that isn't on the map and isn't in the `not_drawn` list in `tools/ondemand.json` (currently Toowoomba and Hervey Bay, which are outside SEQ, and Tamborine Mountain, which has no area map), you get a GitHub issue. If Translink moves a page, the refresh keeps the previous areas on the map and opens an issue; fix the page address in that file, then run the workflow.
 
 ### Other things you can change by hand
 

@@ -84,12 +84,31 @@ def centroid(pts):
     return [round(sum(p[0] for p in pts) / len(pts), 5), round(sum(p[1] for p in pts) / len(pts), 5)]
 
 
+STOP_LL = {}
+
+
 def load_stops():
     out = []
     with open(os.path.join(GTFS, "stops.txt"), encoding="utf-8-sig") as f:
         for r in csv.DictReader(f):
-            out.append((r["stop_name"], [float(r["stop_lon"]), float(r["stop_lat"])]))
+            ll = [float(r["stop_lon"]), float(r["stop_lat"])]
+            out.append((r["stop_name"], ll))
+            STOP_LL[r["stop_id"]] = ll
+            if r.get("stop_code"):
+                STOP_LL.setdefault(r["stop_code"], ll)
     return out
+
+
+def dest_pin(d, stops, pois, near):
+    """A destination is a name (matched automatically) or {"n": name, "stops": [stop ids Translink gives]}."""
+    if isinstance(d, dict):
+        lls = [STOP_LL[s] for s in d.get("stops", []) if s in STOP_LL]
+        if lls:
+            return {"n": d["n"], "ll": [round(sum(p[0] for p in lls) / len(lls), 6), round(sum(p[1] for p in lls) / len(lls), 6)]}
+        if d.get("stops"):
+            problems.append(f"{d['n']}: stop {', '.join(d['stops'])} isn't in Translink's stop list any more.")
+        return {"n": d["n"], "ll": match(d["n"], stops, pois, near)}
+    return {"n": d, "ll": match(d, stops, pois, near)}
 
 
 def load_pois(bbox):
@@ -177,7 +196,7 @@ try:
                 b = [min(p[0] for p in z) - 0.08, min(p[1] for p in z) - 0.08, max(p[0] for p in z) + 0.08, max(p[1] for p in z) + 0.08]
                 pois = load_pois(b)
                 groups.append({"name": g["name"], "zones": [z], "hours": g.get("hours"),
-                               "dests": [{"n": d, "ll": match(d, stops, pois, centroid(z))} for d in g["dests"]]})
+                               "dests": [dest_pin(d, stops, pois, centroid(z)) for d in g["dests"]]})
             out = {k: a[k] for k in ("id", "name", "page", "how")}
             out.update({"groups": groups, "traced": True, "dlabel": "Key locations"})
             if a.get("starts"):
@@ -233,6 +252,24 @@ try:
 except Exception as e:
     problems.append(f"On-demand areas could not be updated: {e}. The map keeps showing the previous version.")
     areas = None
+
+# ---------- new on-demand services: any page linked from Translink's on-demand hub that isn't on the map or on the "not_drawn" list
+try:
+    hub = fetch(BASE + "/travel-with-us/on-demand").decode("utf-8", "replace")
+    known = {urllib.parse.urlparse(a["page"]).path.rstrip("/") for a in CFG["areas"]} | set(CFG.get("not_drawn", {}))
+    known |= {a.get("map_page", "").rstrip("/") for a in CFG["areas"]}
+    seen = set()
+    for u in re.findall(r'href="([^"]+)"', hub):
+        path = urllib.parse.urlparse(urllib.parse.urljoin(BASE, html.unescape(u))).path.rstrip("/")
+        if not (re.match(r"^/travel-with-us/on-demand/[a-z0-9-]+$", path) or re.match(r"^/[a-z0-9-]*on-demand$", path)):
+            continue
+        if path in ("/travel-with-us/on-demand", "/travel-with-us/on-demand/terms-and-conditions") or path in known or path in seen:
+            continue
+        seen.add(path)
+        problems.append(f"Translink lists an on-demand service that isn't on this map yet: {BASE + path}. "
+                        f"Ask for it to be added, or list it under \"not_drawn\" in tools/ondemand.json if it's outside SEQ.")
+except Exception as e:
+    print("on-demand hub page not checked:", e)
 
 if problems:
     with open(os.path.join(REPO, "zone_check.txt"), "a") as f:
