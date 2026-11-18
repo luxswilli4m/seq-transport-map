@@ -47,6 +47,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Alerts.** The ⚠ Alerts button turns orange when Translink has posted alerts. Each alert is tagged with when it applies, what it affects (a train line, bus route, station or stop) and whether it's a Disruption (unplanned, including cancelled trips) or Planned works.
 
+**Layer filters** (the buttons under the search bars) are remembered on your device, so the map opens the way you left it. Light/dark is remembered too.
+
 **Saved stops and routes.** Tap ☆ to save. Saved items are kept in your browser on this device only. The ★ Stops and ★ Routes buttons and the saved items themselves change colour:
 
 - **Orange:** there's a current alert for that stop or route.

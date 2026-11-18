@@ -96,29 +96,35 @@ function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
 // ---------- train lines drawn side by side where they share track (like Translink's network map)
 function stackTrains(){
-  const KX=111.32*Math.cos(-27.5*Math.PI/180),KY=110.57,STEP=0.04,NEAR=0.13,CELL=0.13;   // km
+  const KX=111.32*Math.cos(-27.5*Math.PI/180),KY=110.57,STEP=0.04,NEAR=0.13,CELL=0.13,SM=5;   // km; SM = samples of smoothing each side (~200 m)
   const ROMA=Object.values(ST).find(s=>s[3]==="train"&&/^Roma Street station/.test(s[0]));const C0=ROMA?[ROMA[2],ROMA[1]]:[153.019,-27.465];
   const km=(a,b)=>Math.hypot((a[0]-b[0])*KX,(a[1]-b[1])*KY);
-  const resample=pts=>{const out=[pts[0]];let carry=0;for(let k=1;k<pts.length;k++){const a=pts[k-1],b=pts[k];const d=km(a,b);let t=STEP-carry;while(t<=d){out.push([a[0]+(b[0]-a[0])*t/d,a[1]+(b[1]-a[1])*t/d]);t+=STEP}carry=d-(t-STEP)}const last=pts[pts.length-1];if(km(out[out.length-1],last)>0.01)out.push(last);return out};
-  // own-route paths per line, one per distinct shape
-  const L2=TLINES.map(x=>x[0]);const paths={};const seenP=new Set();
-  R.forEach((r,i)=>{if(r.t!=="train")return;const L=(lineOf[i]||[])[0];if(!L||!ownLine(L,i))return;r.d.forEach((d,di)=>{if(seenP.has(d.p))return;seenP.add(d.p);(paths[L]=paths[L]||[]).push(resample(path(i,di)))})});
-  // spatial grid of every line's track points
-  const grid=new Map();const gk=(x,y)=>Math.floor(x*KX/CELL)+","+Math.floor(y*KY/CELL);
-  for(const L of L2)(paths[L]||[]).forEach(P=>P.forEach(pt=>{const k=gk(pt[0],pt[1]);let g=grid.get(k);if(!g)grid.set(k,g=[]);g.push([pt,L])}));
-  const linesNear=pt=>{const cx=Math.floor(pt[0]*KX/CELL),cy=Math.floor(pt[1]*KY/CELL);const set=new Set();
-    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){const g=grid.get((cx+dx)+","+(cy+dy));if(g)for(const [q,L] of g)if(!set.has(L)&&km(pt,q)<NEAR)set.add(L)}return set};
+  const resample=pts=>{const out=[pts[0]];let carry=0;for(let k=1;k<pts.length;k++){const a=pts[k-1],b=pts[k];const d=km(a,b);if(!d)continue;let t=STEP-carry;while(t<=d){out.push([a[0]+(b[0]-a[0])*t/d,a[1]+(b[1]-a[1])*t/d]);t+=STEP}carry=d-(t-STEP)}const last=pts[pts.length-1];if(km(out[out.length-1],last)>0.01)out.push(last);return out};
+  // each line's own-route paths, split at Roma Street and oriented outbound from it; s = +1 for north/east halves, -1 for south/west
+  // (so a line keeps the same physical side straight through Roma Street, and every line in a corridor agrees on direction)
+  const L2=TLINES.map(x=>x[0]);const halves=[];const seenP=new Set();
+  const bearing=(a,b)=>(Math.atan2((b[0]-a[0])*KX,(b[1]-a[1])*KY)*180/Math.PI+360)%360;
+  const addHalf=(L,P)=>{if(P.length<8)return;   /* skip stubs under ~300 m (trips starting at Roma Street) */const end=P[P.length-1];const br=bearing(C0,end);halves.push({L,P,s:(br>=90&&br<270)?-1:1})};
+  R.forEach((r,i)=>{if(r.t!=="train")return;const L=(lineOf[i]||[])[0];if(!L||!ownLine(L,i))return;
+    r.d.forEach((d,di)=>{if(seenP.has(d.p))return;seenP.add(d.p);const P=resample(path(i,di));
+      let j=0,bd=1e9;P.forEach((q,k)=>{const dd=km(q,C0);if(dd<bd){bd=dd;j=k}});
+      if(bd<1.5){addHalf(L,P.slice(0,Math.min(P.length,j+4)).reverse());addHalf(L,P.slice(Math.max(0,j-3)))}   /* halves overlap ~120 m so they meet cleanly */
+      else addHalf(L,km(P[0],C0)<=km(P[P.length-1],C0)?P:P.slice().reverse())})});
+  // spatial grid of raw track points
+  const grid=new Map();const gk=(cx,cy)=>cx+","+cy;
+  halves.forEach(h=>h.P.forEach(pt=>{const k=gk(Math.floor(pt[0]*KX/CELL),Math.floor(pt[1]*KY/CELL));let g=grid.get(k);if(!g)grid.set(k,g=[]);g.push([pt,h.L])}));
+  const near=pt=>{const cx=Math.floor(pt[0]*KX/CELL),cy=Math.floor(pt[1]*KY/CELL);const best={};
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){const g=grid.get(gk(cx+dx,cy+dy));if(g)for(const [q,L] of g){const d=km(pt,q);if(d<NEAR&&(!best[L]||d<best[L][0]))best[L]=[d,q]}}return best};
   const feats=[];
-  for(const L of L2)(paths[L]||[]).forEach(P=>{
-    let sets=P.map(pt=>{const s=linesNear(pt);s.add(L);return [...s].sort((a,b)=>L2.indexOf(a)-L2.indexOf(b)).join(",")});
-    // smooth out brief flickers at junctions (majority over a small window)
-    const W=6;sets=sets.map((_,k)=>{const c={};for(let j=Math.max(0,k-W);j<=Math.min(sets.length-1,k+W);j++)c[sets[j]]=(c[sets[j]]||0)+1;return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]});
-    let st=0;for(let k=1;k<=P.length;k++){if(k<P.length&&sets[k]===sets[st])continue;
-      let seg=P.slice(st,Math.min(k+1,P.length));if(seg.length>1){
-        if(km(seg[0],C0)>km(seg[seg.length-1],C0))seg=seg.slice().reverse();   // same corridor -> same direction, so offsets line up
-        const on=sets[st].split(",");const n=on.length;const kk=on.indexOf(L)-(n-1)/2;
-        feats.push({type:"Feature",properties:{c:TCOL[L],k:kk},geometry:{type:"LineString",coordinates:seg}})}
-      st=k}});
+  for(const h of halves){const P=h.P,n=P.length;
+    const info=P.map(pt=>{const nb=near(pt);nb[h.L]=nb[h.L]||[0,pt];const on=Object.keys(nb).sort((a,b)=>L2.indexOf(a)-L2.indexOf(b));
+      const c=[0,0];on.forEach(L=>{c[0]+=nb[L][1][0];c[1]+=nb[L][1][1]});return {c:[c[0]/on.length,c[1]/on.length],k:on.indexOf(h.L)-(on.length-1)/2}});
+    // shared centreline (average of the nearest point on every line in the corridor), smoothed along the track
+    const cen=info.map((_,i)=>{let x=0,y=0,m=0;for(let j=Math.max(0,i-2);j<=Math.min(n-1,i+2);j++){x+=info[j].c[0];y+=info[j].c[1];m++}return [x/m,y/m]});
+    cen[n-1]=P[n-1];
+    // offsets eased over ~200 m so lines slide in and out of bundles instead of jumping
+    const k=info.map((_,i)=>{let t=0,m=0;for(let j=Math.max(0,i-SM);j<=Math.min(n-1,i+SM);j++){t+=info[j].k;m++}return Math.round(t/m*10)/10*h.s});
+    let st=0;for(let i=1;i<=n;i++){if(i<n&&k[i]===k[st])continue;const seg=cen.slice(st,Math.min(i+1,n));if(seg.length>1)feats.push({type:"Feature",properties:{c:TCOL[h.L],k:k[st]},geometry:{type:"LineString",coordinates:seg}});st=i}}
   return feats}
 const trainStack=stackTrains();
 src("bwlines",FC(bwLineF));src("trainl",FC(trainStack));src("ferryl",FC(net2.ferry));src("traml",FC(net2.tram));
@@ -197,7 +203,7 @@ const chipBox=document.getElementById("chips");const chipState={};const chipEl={
 function setGroup(k,vis){GROUPS.find(g=>g[0]===k)[3].forEach(id=>map.setLayoutProperty(id,"visibility",vis?"visible":"none"))}
 function renderChip(k){const el=chipEl[k],st=chipState[k];el.classList.toggle("on",st!=="off");el.classList.toggle("only",st==="only");el.title=k==="live"?(st==="on"?"Click to hide live vehicles":"Click to show live vehicles"):st==="on"?"Click to hide":st==="off"?"Click to show only this layer":"Click to show all layers again"}
 const MASS=g=>g!=="live";
-function clickChip(k){
+function clickChip(k){setTimeout(saveChips,0);
   if(k==="live"){chipState.live=chipState.live==="off"?"on":"off";setGroup("live",chipState.live==="on");renderChip("live");if(chipState.live==="on")pollVehicles();return}
   if(soloKey&&soloKey!==k){chipState[soloKey]="on";renderChip(soloKey);soloKey=null;soloSnap=null}
   const st=chipState[k];
@@ -207,9 +213,13 @@ function clickChip(k){
   renderChip(k);renderAll();hint()}
 const allEl=document.createElement("div");allEl.className="chip allchip";allEl.innerHTML="All";chipBox.appendChild(allEl);
 function renderAll(){const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");allEl.textContent=anyOff?"Show all":"Hide all";allEl.title=anyOff?"Turn every layer on":"Turn every layer off"}
-allEl.onclick=()=>{const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{if(!MASS(g))return;chipState[g]=anyOff?"on":"off";setGroup(g,anyOff);renderChip(g)});renderAll();hint()};
+allEl.onclick=()=>{setTimeout(saveChips,0);const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{if(!MASS(g))return;chipState[g]=anyOff?"on":"off";setGroup(g,anyOff);renderChip(g)});renderAll();hint()};
 GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
   chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});chipState.live="off";setGroup("live",false);renderChip("live");renderAll();
+// remember layer filters between visits (this device only)
+function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
+try{const sv=JSON.parse(localStorage.getItem("seqmap_layers")||"null");
+  if(sv&&sv.s){GROUPS.forEach(([g])=>{const v=sv.s[g];if(v==="on"||v==="off"||v==="only"){chipState[g]=v;setGroup(g,v!=="off");renderChip(g)}});soloKey=sv.k||null;soloSnap=sv.snap||null;renderAll()}}catch(e){}
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
 function hint(){const z=map.getZoom();document.getElementById("hint").style.display=(stopsOn()&&z>=12&&z<13.5)?"block":"none"}
 map.on("zoomend",hint);hint();
