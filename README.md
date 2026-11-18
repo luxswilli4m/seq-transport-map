@@ -39,6 +39,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Route cards.** Each stop shows the scheduled time and minutes from the first stop for one run: the next full-length trip, or the exact service you're following.
 
+**Interchanges.** Stations that share a name with nearby stops (within 300 m) get mode buttons beside Show all routes, for example Helensvale: Train · Bus · G:link, and Roma Street: Train · Bus. Each button shows that mode's departures from all of the station's stops, labelled with the stop or platform (Stop A to F, L1 bus stop, Platform 4). Worked out automatically from Translink's stop names.
+
 **Platforms.** At stations and multi-bay stops, each row shows the platform or stop for the next departure (for example "Platform 9" or "Stop 1f"), taken from Translink's timetable. Later departures that leave from a different platform show a small tag beside the time. If the live feed says a service is using a different platform, the label turns amber and reads "Now platform 7".
 
 **Times.** In the Next column, green is a live prediction from the bus or train itself, amber means it's running late, and grey is the scheduled time. A dash means nothing more is running today.

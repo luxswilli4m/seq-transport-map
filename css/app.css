@@ -271,3 +271,7 @@ ol.stops li .tc:empty{display:none}
 .tt .hd .plat.chg{color:#b45309}
 body:not(.light) .tt .hd .plat.chg{color:#fbbf24}
 .tt .tc3 .plx{font-style:normal;font-size:10px;font-weight:700;color:var(--muted);margin-left:3px;padding:0 3px;border:1px solid var(--line);border-radius:4px}
+.modeseg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.modeseg button{border:0;background:var(--panel);color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:7px 12px;cursor:pointer}
+.modeseg button+button{border-left:1px solid var(--line)}
+.modeseg button.on{background:var(--accent);color:#fff}
