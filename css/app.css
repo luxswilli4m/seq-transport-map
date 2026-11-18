@@ -230,3 +230,13 @@ ul.odd{margin:2px 0 10px;padding-left:20px;font-size:14px;line-height:1.6}
 #panel a{color:var(--accent)}
 .odstart{display:inline-block;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-size:12.5px;font-weight:600;margin:2px 0 6px}
 body:not(.light) .odstart{background:#f59e0b22;color:#fbbf24}
+ol.stops li .vst{float:right;margin-left:10px;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:10px;background:var(--hover);color:var(--muted);min-width:72px;text-align:center}
+ol.stops li .vst.dep{background:transparent;color:var(--muted)}
+ol.stops li .vst.arr{background:#dcfce7;color:#15803d}
+body:not(.light) ol.stops li .vst.arr{background:#16a34a33;color:#86efac}
+ol.stops li.done{opacity:.45}
+ol.stops li.done::before{background:var(--rc,#888)}
+.tt .nx small.fln{color:var(--muted);font-weight:600;font-size:10px}
+tr.lv.fl th{font-size:12px;font-weight:700;color:var(--ink)}
+tr.lv.fl th.sn{color:var(--muted);font-weight:600}
+em.flm{font-style:normal;color:var(--muted);font-size:12px;margin-left:4px}

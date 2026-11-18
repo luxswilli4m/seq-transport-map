@@ -35,6 +35,10 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Times.** In the Next column, green is a live prediction from the bus or train itself, amber means it's running late, and grey is the scheduled time. A dash means nothing more is running today.
 
+**Fleet numbers.** Every bus carries a fleet number from its operator (Brisbane City Council buses use 4 digits; other operators number their own fleets, so short numbers like 10 or 101 are normal). Once a bus is on the road, its number appears in three places: in the subtitle when you tap a live vehicle ("Fleet number 1234"), in a "Fleet number" row on saved-route timetables, and under live times on stop cards ("Bus 1234"). Trains send a service code (for example 1A57) rather than a train-set number, so train lines show "Service number" instead, and stop cards don't show it.
+
+**Following a live vehicle.** Tap a moving bus and its route card shows that bus's progress: stops it has already served are greyed out and marked **Departed**, stops it's within 500 m of say **Arriving**, and the rest say **Not arrived**. It updates every 20 seconds.
+
 **Alerts.** The ⚠ Alerts button turns orange when Translink has posted alerts. Each alert is tagged with when it applies, what it affects (a train line, bus route, station or stop) and whether it's a Disruption (unplanned, including cancelled trips) or Planned works.
 
 **Saved stops and routes.** Tap ☆ to save. Saved items are kept in your browser on this device only. The ★ Stops and ★ Routes buttons and the saved items themselves change colour:
