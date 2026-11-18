@@ -38,6 +38,7 @@ jobs:
         run: |
           python tools/build_network.py gtfs .
           python tools/build_timetables.py gtfs .
+          python tools/build_planner.py gtfs .
 
       - name: Rebuild bus zones and busways (with safety check)
         run: |

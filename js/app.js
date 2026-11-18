@@ -325,13 +325,14 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
   let h="";
   if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,25).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
   const modeBtns=modes.length>1?`<div class="modeseg">${modes.map(m=>`<button data-mode="${m}" class="${m===mode?"on":""}">${MODE_LBL[m]}</button>`).join("")}</div>`:"";
-  if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>${modeBtns}`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
+  if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>${modeBtns}<button class="btn" id="cnHere" title="Best connections from here">Connections</button>`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
     h+=`<div id="ttBox" class="tt"><div class="sub">Loading timetable…</div></div>`}
   else h+=`<div class="sub">No scheduled services in this timetable.</div>`;
   let sub=KIND[s[3]];if(s[3]==="busway"&&BWS[id])sub+=" · "+BWS[id].b.map(k=>BWNAME[k]).join(" / ")+(BWS[id].road?" (on-road section)":"");if(s[4])sub+=" · "+esc(s[4]);
   openPanel(s[0],sub,h,{star:{list:"stops",key:id}});
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
   const tf=document.getElementById("ttFilter");if(tf)tf.oninput=()=>renderTT(id);
+  const ch=document.getElementById("cnHere");if(ch)ch.onclick=()=>showConnections(id);
   pB.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{const m=b.dataset.mode;ctx.mode=m;ctx.liveIds=m===own?[id,...(KIDS[id]||[])]:links[m].flatMap(k=>[k,...(KIDS[k]||[])]);
     pB.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("on",x===b));const bx=document.getElementById("ttBox");if(bx)bx.innerHTML=`<div class="sub">Loading timetable…</div>`;renderTT(id)});
   if(s[5].length)renderTT(id);
@@ -727,6 +728,100 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
   b.onclick=e=>{e.stopPropagation();document.getElementById("moreWrap").classList.remove("open");set(!w.classList.contains("open"))};
   w.querySelectorAll("[data-bau]").forEach(x=>x.onclick=()=>{set(false);const id=x.dataset.bau;if(!ST[id])return;webCam=null;openStop(id,true)});
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
+// ---------- Best connections: stop/station to stop/station planner (data/plan/<day>.json, built weekly)
+const PLAN={cache:{},from:null,to:null};
+async function planData(ymd){if(PLAN.cache[ymd])return PLAN.cache[ymd];const d=await (await fetch(BASE+"data/plan/"+ymd+".json"+DV)).json();
+  d.idx=new Map(d.s.map((k,i)=>[k,i]));d.sp=d.s.map(()=>[]);
+  d.p.forEach((p,pi)=>{p.s.forEach((s,pos)=>d.sp[s].push([pi,pos]));p.tt=p.t.map(r=>{const a=new Array(r.length);let c=0;for(let i=0;i<r.length;i++){c+=r[i];a[i]=c}return a})});
+  d.xy=d.s.map(k=>ST[k]?[ST[k][2],ST[k][1]]:[0,0]);d.grid=new Map();d.xy.forEach(([x,y],i)=>{const g=Math.floor(x*98.7)+","+Math.floor(y*110.6);let a=d.grid.get(g);if(!a)d.grid.set(g,a=[]);a.push(i)});
+  return PLAN.cache[ymd]=d}
+const mDist=(a,b)=>Math.hypot((a[0]-b[0])*98.7,(a[1]-b[1])*110.6)*1000;
+const walkMin=m=>Math.max(1,Math.ceil(m*1.25/80));   // 80 m a minute, 25% allowance for street layout
+function nearIdx(d,xy,maxM){const out=[];const gx=Math.floor(xy[0]*98.7),gy=Math.floor(xy[1]*110.6);const r=Math.ceil(maxM/1000);
+  for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const a=d.grid.get((gx+i)+","+(gy+j));if(a)for(const s of a){const m=mDist(xy,d.xy[s]);if(m<=maxM)out.push([s,m])}}return out}
+function raptor(d,fromKeys,toKeys,t0,maxM,K=5){const n=d.s.length,INF=1e9;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
+  const fromXY=fromKeys.map(k=>[ST[k][2],ST[k][1]]),toXY=toKeys.map(k=>[ST[k][2],ST[k][1]]);
+  const start=new Map();fromXY.forEach(xy=>nearIdx(d,xy,maxM).forEach(([s,m])=>{const t=t0+(m<30?0:walkMin(m));if(!start.has(s)||start.get(s).t>t)start.set(s,{t,m})}));
+  const end=new Map();toXY.forEach(xy=>nearIdx(d,xy,maxM).forEach(([s,m])=>{const w=m<30?0:walkMin(m);if(!end.has(s)||end.get(s).w>w)end.set(s,{w,m})}));
+  arr[0]=new Float64Array(n).fill(INF);par[0]=new Array(n);let marked=new Set();
+  for(const [s,v] of start){arr[0][s]=v.t;best[s]=v.t;par[0][s]={type:"start",m:v.m};marked.add(s)}
+  let bestT=INF;const res=[];
+  for(let k=1;k<=K&&marked.size;k++){arr[k]=new Float64Array(n).fill(INF);par[k]=new Array(n);const Q=new Map();
+    for(const s of marked)for(const [pi,pos] of d.sp[s]){if(!Q.has(pi)||Q.get(pi)>pos)Q.set(pi,pos)}
+    const newly=new Set();
+    for(const [pi,pos0] of Q){const p=d.p[pi];let trip=-1,bpos=-1,bstop=-1;
+      for(let i=pos0;i<p.s.length;i++){const s=p.s[i];
+        if(trip>=0){const t=p.tt[trip][i];if(t<best[s]&&t<bestT){arr[k][s]=t;best[s]=t;par[k][s]={type:"ride",pi,trip,from:bstop,bpos,apos:i};newly.add(s)}}
+        const prev=arr[k-1][s];if(prev<INF){const ready=prev+(par[k-1][s]&&par[k-1][s].type==="start"?0:1);
+          if(trip<0||ready<p.tt[trip][i]){let found=-1;for(let j=0;j<p.tt.length;j++){const tj=p.tt[j][i];if(tj>=ready&&(found<0||tj<p.tt[found][i]))found=j}
+            if(found>=0&&(trip<0||p.tt[found][i]<p.tt[trip][i])){trip=found;bpos=i;bstop=s}}}}}
+    // walking transfers from stops reached by a vehicle this round
+    const walked=new Set();
+    for(const s of newly){const t=arr[k][s];for(const [s2,m] of nearIdx(d,d.xy[s],maxM)){if(s2===s)continue;const t2=t+walkMin(m);if(t2<best[s2]&&t2<bestT){arr[k][s2]=t2;best[s2]=t2;par[k][s2]={type:"walk",from:s,m};walked.add(s2)}}}
+    marked=new Set([...newly,...walked]);
+    let kb=INF,ks=-1;for(const [s,v] of end){if(arr[k][s]<INF&&par[k][s]&&par[k][s].type==="ride"){const t=arr[k][s]+v.w;if(t<kb){kb=t;ks=s}}}
+    if(ks>=0&&kb<bestT){bestT=kb;res.push({k,stop:ks,arr:kb,endWalk:end.get(ks)})}}
+  return res.map(r=>{const legs=[];let s=r.stop,k=r.k;
+    if(r.endWalk.m>=30)legs.push({type:"walk",from:s,toKey:null,m:r.endWalk.m});
+    while(k>0){const pr=par[k][s];if(!pr)break;if(pr.type==="walk"){legs.push({type:"walk",from:pr.from,to:s,m:pr.m});s=pr.from;continue}
+      if(pr.type==="ride"){const p=d.p[pr.pi];legs.push({type:"ride",pi:pr.pi,trip:pr.trip,bpos:pr.bpos,apos:pr.apos,from:pr.from,to:s,dep:p.tt[pr.trip][pr.bpos],arr:p.tt[pr.trip][pr.apos]});s=pr.from;k--}}
+    const st0=par[0][s];if(st0&&st0.m>=30)legs.push({type:"walk",from:null,to:s,m:st0.m});
+    legs.reverse();const rides=legs.filter(l=>l.type==="ride");const dep=rides.length?rides[0].dep:t0;const lw=legs[0]&&legs[0].type==="walk"?walkMin(legs[0].m):0;
+    return {legs,arr:r.arr,dep,leave:dep-lw,changes:rides.length-1}})}
+async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.from||!PLAN.to){box.innerHTML=`<div class="sub">Choose where you're starting and where you're going.</div>`;return}
+  box.innerHTML=`<div class="sub">Finding connections…</div>`;await ensureCal();
+  const now=bneNow();const mode=document.getElementById("cnWhen").value;const dayOff=mode==="tom"?1:0;
+  let t0=now.min;if(mode!=="now"){const v=document.getElementById("cnTime").value||"08:00";const [h,m]=v.split(":").map(Number);t0=h*60+m}
+  const day=shiftDay(now.ymd,now.dow,dayOff);const maxM=+document.getElementById("cnRad").value;
+  let d;try{d=await planData(day.ymd)}catch(e){box.innerHTML=`<div class="sub">Connection data for that day isn't available yet.</div>`;return}
+  const fk=[PLAN.from],tk=[PLAN.to];const opts=[];let t=t0;
+  for(let i=0;i<4&&opts.length<3;i++){const r=raptor(d,fk,tk,t,maxM);if(!r.length)break;
+    r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const o of r){if(!opts.some(x=>x.leave===o.leave&&x.arr===o.arr&&x.changes===o.changes))opts.push(o)}
+    t=Math.min(...r.map(o=>o.dep))+1}
+  opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const show=opts.slice(0,3);
+  if(!show.length){box.innerHTML=`<div class="sub">No connection found${maxM<1000?" — try a larger walking distance":""}. Services may have finished for the day; try a later day or check Translink's journey planner.</div>`;return}
+  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));
+  const minCh=Math.min(...show.map(x=>x.changes)),fewI=show.findIndex(x=>x.changes===minCh);
+  box.innerHTML=show.map((o,oi)=>{const dur=o.arr-o.leave;
+    const tags=(oi===0?`<span class="cnt">Fastest</span>`:"")+(oi===fewI&&minCh<show[0].changes?`<span class="cnt">Fewest changes</span>`:"");
+    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}</div>`+
+      o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(shortName(ST[PLAN.from][0])):"from "+nm(l.from);const b=l.to==null?"to "+esc(shortName(ST[PLAN.to][0])):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
+        const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
+        return `<div class="cnl" data-leg="${oi},${li}">${bd}<div class="cnlt"><b>${clock(l.dep)}</b> ${nm(l.from)}${pl?` <span class="cnpl">${esc(pl)}</span>`:""} <span class="cnto">→ ${esc(cleanHead(TT.cal.hs[p.h]))}</span><br><b>${clock(l.arr)}</b> ${nm(l.to)} <span class="cnto">· ${l.apos-l.bpos} stop${l.apos-l.bpos>1?"s":""}</span>${li===o.legs.findIndex(x=>x.type==="ride")&&dayOff===0?`<span class="cnlive" id="cnLive${oi}"></span>`:""}</div></div>`}).join("")+`</div>`}).join("")+
+    `<div class="odnote">Unofficial: always check times with Translink before travelling. Walking times are estimates. <a href="https://jp.translink.com.au/plan-your-journey/journey-planner" target="_blank" rel="noopener">Translink journey planner ↗</a></div>`;
+  box.querySelectorAll(".cno").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-leg]"))return;drawOption(+el.dataset.o)});
+  box.querySelectorAll("[data-leg]").forEach(el=>el.onclick=()=>{const [oi,li]=el.dataset.leg.split(",").map(Number);drawOption(oi,li)});
+  drawOption(0);if(dayOff===0)planLive(show)}
+function drawOption(oi,li){const {d,show}=PLAN.last;const o=show[oi];document.querySelectorAll(".cno").forEach(x=>x.classList.toggle("on",+x.dataset.o===oi));
+  const lines=[],walks=[];let bb=null;const ext=c=>{bb=bb?[Math.min(bb[0],c[0]),Math.min(bb[1],c[1]),Math.max(bb[2],c[0]),Math.max(bb[3],c[1])]:[c[0],c[1],c[0],c[1]]};
+  const xyOf=k=>[ST[k][2],ST[k][1]];
+  o.legs.forEach((l,i)=>{if(li!=null&&i!==li)return;if(l.type==="ride"){const p=d.p[l.pi];const c=p.s.slice(l.bpos,l.apos+1).map(s=>d.xy[s]);c.forEach(ext);lines.push({type:"Feature",properties:{c:R[p.r].c,mode:"route"},geometry:{type:"LineString",coordinates:c}})}
+    else{const a=l.from==null?xyOf(PLAN.from):d.xy[l.from],b=l.to==null?xyOf(PLAN.to):d.xy[l.to];ext(a);ext(b);walks.push({type:"Feature",properties:{c:"#475569"},geometry:{type:"LineString",coordinates:[a,b]}})}});
+  map.getSource("hl").setData(FC(lines));map.getSource("hlvar").setData(FC(walks));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));
+  const ss=[];o.legs.forEach(l=>{if(l.type==="ride"){ss.push(d.xy[l.from],d.xy[l.to])}});map.getSource("hlstops").setData(FC(ss.map(c=>({type:"Feature",properties:{c:"#111827"},geometry:{type:"Point",coordinates:c}}))));
+  if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:16})}
+async function planLive(show){let tf;try{tf=await getTrips()}catch(e){return}const {d}=PLAN.last;
+  show.forEach((o,oi)=>{const l=o.legs.find(x=>x.type==="ride");const el=document.getElementById("cnLive"+oi);if(!l||!el)return;const p=d.p[l.pi];const key=d.s[l.from];const ids=new Set([key,...(KIDS[key]||[])]);
+    for(const e of tf.entity){const tu=e.tu;if(!tu||!tu.stu||riOfRoute(tu.trip&&tu.trip.route)!==p.r)continue;
+      for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;if(bneMin(ev.time-(ev.delay||0))!==l.dep%1440)continue;
+        const dl=Math.round((ev.delay||0)/60);el.innerHTML=tu.trip.sr===3||u.sr===1?` <span class="lvx">Cancelled</span>`:dl>=2?` <span class="lvl">● ${dl} min late</span>`:` <span class="lvo">● On time</span>`;return}}})}
+function placePicker(inpId,resId,onPick){const inp=document.getElementById(inpId),res=document.getElementById(resId);
+  inp.oninput=()=>{const items=searchPlaces(inp.value).filter(e=>e.k==="s").slice(0,12);res.innerHTML=items.map((e,k)=>`<div class="r" data-k="${k}">${e.html}<span class="ty">${esc(e.ty)}</span></div>`).join("")||(inp.value.length>1?`<div class="empty">No stops or stations match</div>`:"");res.style.display=res.innerHTML?"block":"none";
+    res.querySelectorAll(".r").forEach(d=>d.onclick=()=>{const e=items[+d.dataset.k];inp.value=ST[e.id][0];res.style.display="none";onPick(e.id)})}}
+function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;if(fromId)PLAN.from=fromId;
+  const now=bneNow();const hh=String(Math.floor(now.min/60)).padStart(2,"0"),mm=String(now.min%60).padStart(2,"0");
+  openPanel("Best connections","Stop or station to stop or station · unofficial",`
+    <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.from?esc(ST[PLAN.from][0]):""}"><div class="results" id="cnFromR"></div></div></div>
+    <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.to?esc(ST[PLAN.to][0]):""}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
+    <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="today">Leave today at…</option><option value="tom">Leave tomorrow at…</option></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
+    <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="1000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
+    <div class="cnhelp">Also starts from, changes between and finishes at stops within this walking distance.</div>
+    <div class="webrow"><button class="btn" id="cnGo">Find connections</button></div><div id="cnRes"></div>`,{view:"cn"});
+  placePicker("cnFrom","cnFromR",id=>{PLAN.from=id;planSearch()});placePicker("cnTo","cnToR",id=>{PLAN.to=id;planSearch()});
+  document.getElementById("cnSwap").onclick=()=>{[PLAN.from,PLAN.to]=[PLAN.to,PLAN.from];document.getElementById("cnFrom").value=PLAN.from?ST[PLAN.from][0]:"";document.getElementById("cnTo").value=PLAN.to?ST[PLAN.to][0]:"";planSearch()};
+  const w=document.getElementById("cnWhen");w.onchange=()=>{document.getElementById("cnTime").style.display=w.value==="now"?"none":"";planSearch()};document.getElementById("cnTime").onchange=planSearch;
+  const rd=document.getElementById("cnRad");rd.oninput=()=>{PLAN.rad=+rd.value;document.getElementById("cnRadV").textContent=rd.value+" m"};rd.onchange=planSearch;
+  document.getElementById("cnGo").onclick=planSearch;if(PLAN.from&&PLAN.to)planSearch();else document.getElementById("cnRes").innerHTML=""}
 // ---------- lost property (data/lostproperty.json, edited by hand)
 let LOST=null;
 async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
@@ -740,6 +835,7 @@ async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="
     document.getElementById("lpQ").oninput=e=>showLost(e.target.value)}
   document.getElementById("lpList").innerHTML=body}
 document.getElementById("lostBtn").onclick=()=>showLost("");
+document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
 function startMin(tu){const t=tu.trip.start;if(!t)return null;const [h,m]=t.split(":").map(Number);return h*60+m}
