@@ -380,7 +380,7 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
-  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tc"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tf"></span><span class="tc"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
 // tapped dotted line / variant: which route, which trips, today's times
 async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const r=R[i];const d=r.d[di];
   if(!d||vi<0||!d.v||!d.v[vi]){showRoute(i,false);return}
@@ -420,6 +420,10 @@ function applyVehStatus(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol)
   lis.forEach((li,j)=>{const s=ST[ids[j]];let el=li.querySelector(".vst");if(!el){el=document.createElement("span");el.className="vst";li.insertBefore(el,(li.querySelector(".tc")||li.querySelector(".tv")).nextSibling)}
     let st="Not arrived",c="na";if(j<idx){st="Departed";c="dep"}else if(s&&kmTo([v.lon,v.lat],[s[2],s[1]])<=0.5){st="Arriving";c="arr"}
     el.textContent=st;el.className="vst "+c;li.classList.toggle("done",j<idx)})}
+// which row of a route card is the stop or station the route was opened from (same stop, its platforms, or the same-named station nearby)
+function originRow(ids){const o=backState&&backState.id;if(!o||!ST[o])return -1;const set=new Set([o,...(KIDS[o]||[])]);let j=ids.findIndex(x=>set.has(x));if(j>=0)return j;
+  const base=ST[o][0].toLowerCase().replace(/,.*$/,"").replace(/ (busway |bus )?station$/,"").trim();
+  return ids.findIndex(x=>{const s=ST[x];if(!s)return false;const n=s[0].toLowerCase().replace(/,.*$/,"").replace(/ (busway |bus )?station$/,"").trim();return n===base&&dist(s,ST[o])<400})}
 // travel time from the first stop, from the next full-length trip in the route timetable
 let tvKey=null;
 async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol||!tvKey)return;const key=tvKey;const r=R[+ol.dataset.ri],d=r.d[+ol.dataset.di];if(!d)return;
@@ -440,7 +444,11 @@ async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!
     if(!best||(!best.own&&pick.cov>best.cov))best={...pick,idx}}
   if(!best)return;const a0=best.t[3+best.idx[0]];const lis=ol.querySelectorAll("li");
   lis.forEach((li,n)=>{const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;li.querySelector(".tv").textContent=n===0?"Start":v>=0?(v-a0)+" min":"";const tc=li.querySelector(".tc");if(tc)tc.textContent=v>=0?clock(best.t[2]+v):"—"});
-  const note=document.getElementById("tvNote");if(note)note.textContent=best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`}
+  // minutes from the stop or station this route was opened from
+  const oj=originRow([...lis].map(li=>li.dataset.s));const ojv=oj>=0&&best.idx[oj]>=0?best.t[3+best.idx[oj]]:-1;ol.classList.toggle("hasfrom",ojv>=0);
+  lis.forEach((li,n)=>{const tf=li.querySelector(".tf");if(!tf)return;li.classList.toggle("origin",ojv>=0&&n===oj);if(ojv<0||n<oj){tf.textContent="";return}const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;tf.textContent=n===oj?"Here":v>=0?(v-ojv)+" min":""});
+  const fromNm=ojv>=0?ST[lis[oj].dataset.s][0]:null;
+  const note=document.getElementById("tvNote");if(note)note.textContent=(best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`)+(fromNm?` The blue column counts minutes from ${fromNm}.`:"")}
 function variantHTML(i,di){const d=R[i].d[di];if(!d||!d.v||!d.v.length)return "";
   return `<div class="grp">Some trips also run via</div>`+d.v.map((v,k)=>{const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;
     return `<div class="varbox"><div class="varh"><a href="#" data-var="${i},${di},${k}">${esc(v.x.length)} extra stop${v.x.length>1?"s":""}${v.h&&v.h!==d.h?" · to "+esc(v.h):""}</a>${pct!=null?`<span class="varpct">about ${pct}% of trips</span>`:""}</div>

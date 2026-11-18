@@ -317,3 +317,8 @@ ul.gccap li.n{color:var(--muted)}
 #panel.mini .pb{display:none}
 #panel.mini .ph{border-bottom:0}
 #panel.mini .pht{cursor:pointer}
+ol.stops li .tf{float:right;margin-left:10px;font-size:13px;font-variant-numeric:tabular-nums;color:#2563eb;font-weight:700;min-width:46px;text-align:right}
+ol.stops li .tf:empty{display:none}
+ol.stops.hasfrom li .tf:empty{display:inline-block;height:1px}
+body:not(.light) ol.stops li .tf{color:#7fb0ff}
+ol.stops li.origin{background:#2563eb14}
