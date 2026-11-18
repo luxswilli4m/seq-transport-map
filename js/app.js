@@ -332,9 +332,10 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
   let h="";
   if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,25).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
   const modeBtns=modes.length>1?`<div class="modeseg">${modes.map(m=>`<button data-mode="${m}" class="${m===mode?"on":""}">${MODE_LBL[m]}</button>`).join("")}</div>`:"";
-  if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>${modeBtns}`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
+  const locB=locBtns(id);
+  if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>${locB}${modeBtns}`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
     h+=`<div id="ttBox" class="tt"><div class="sub">Loading timetable…</div></div>`}
-  else h+=`<div class="sub">No scheduled services in this timetable.</div>`;
+  else h+=(locB?`<div class="webrow">${locB}</div>`:"")+`<div class="sub">No scheduled services in this timetable.</div>`;
   let sub=KIND[s[3]];if(s[3]==="busway"&&BWS[id])sub+=" · "+BWS[id].b.map(k=>BWNAME[k]).join(" / ")+(BWS[id].road?" (on-road section)":"");if(s[4])sub+=" · "+esc(s[4]);
   openPanel(s[0],sub,h,{star:{list:"stops",key:id}});
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
@@ -532,6 +533,10 @@ function updateAlertBtn(){const b=document.getElementById("alertBtn");if(!b)retu
 const EFFECT={1:"No service",2:"Reduced service",3:"Significant delays",4:"Detour",5:"Additional service",6:"Modified service",7:"Other",8:"Other",9:"Stop moved",10:"Information",11:"Accessibility"};
 const DISRUPT=new Set([3,4,5,6,8,11,12]),PLANNED=new Set([9,10]);
 const parentOf={};for(const [p,ks] of Object.entries(KIDS))ks.forEach(k=>parentOf[k]=p);
+// Translink station locality maps (data/locality.json, matched to stations by tools/build_locality.py each week)
+let LOC={};fetch(BASE+"data/locality.json"+DV).then(r=>r.json()).then(d=>{LOC=d.maps||{}}).catch(()=>{});
+function locBtns(id){const seen=new Set(),out=[];[id,parentOf[id],...(KIDS[id]||[])].forEach(k=>(k&&LOC[k]||[]).forEach(([t,u])=>{if(!seen.has(u)){seen.add(u);out.push([t,u])}}));
+  return out.map(([t,u])=>`<a class="btn" href="${esc(u)}" target="_blank" rel="noopener" title="Translink's locality map for ${esc(t)} (opens in a new tab)">${out.length>1?esc(t)+" map":"Locality map"} ↗</a>`).join("")}
 function alertTags(a){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;const ps=a.periods||[];
   const cur=ps.find(p=>(p.start||0)<=nowS&&(!p.end||p.end>=nowS));const span=p=>p?((p.end||nowS+1e8)-(p.start||0)):0;
   let timing;if(cur)timing=(span(cur)>7*86400||(cur.start&&nowS-cur.start>7*86400))?"Ongoing":"Now";else timing=ps.some(p=>(p.start||0)>nowS&&(p.start||0)<eod)?"Later today":"Ongoing";
@@ -1022,7 +1027,7 @@ document.getElementById("infoBtn").onclick=()=>info.style.display="flex";
 document.getElementById("infoClose").onclick=()=>info.style.display="none";
 info.onclick=e=>{if(e.target===info)info.style.display="none"};
 try{if(!localStorage.getItem("seqmap_seen")){info.style.display="flex";localStorage.setItem("seqmap_seen","1")}}catch(e){info.style.display="flex"}
-window.__ready=true;window.__map=map;
+window.__ready=true;window.__map=map;window.__openStop=openStop;
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
 // ---------- "More" menu (School routes, On demand, future extras)

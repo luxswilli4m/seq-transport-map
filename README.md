@@ -178,3 +178,9 @@ Shows every go card retailer, station ticket office and fare machine on the map 
 ## Minutes from your stop (route cards)
 
 When you open a route or train line from a stop or station card, the route card adds a blue column counting minutes from that stop ("Here", then 2 min, 4 min… to the end of the line). It sits next to the existing column of minutes from the first stop, and uses the same scheduled trip. Stops before yours are left blank. Platforms and same-named stations nearby (for example, a busway station's platforms) count as the same place.
+
+## Station locality maps
+
+Station cards show a **Locality map ↗** button next to **Show all routes** when Translink publishes a locality map for that station. It opens Translink's map in a new tab. Stations with more than one map, such as Capalaba (station and park 'n' ride), show one button per map, labelled with the map's name.
+
+`tools/build_locality.py` rebuilds `data/locality.json` in the weekly refresh. It reads Translink's Maps page (translink.com.au/plan-your-journey/maps) and matches each map to stations by name. It ignores words like "station", "busway station", "interchange", "ferry terminal" and "park 'n' ride", and also tries short names in brackets ("RBWH") and the map's file name ("pa-hospital", "scuh"). Stations are preferred over bus stops. Where a name exists in two places (Queen Street, Griffith University), the one in the same region as the map's section on Translink's page wins. New, replaced and removed maps flow through automatically. Maps for places not on this map (regional Queensland, or Exhibition station, which isn't in the timetable) are skipped. If the page can't be read, the previous file is kept.

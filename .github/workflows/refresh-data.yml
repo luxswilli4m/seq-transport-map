@@ -69,6 +69,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_ondemand.py gtfs .
 
+      - name: Station locality maps (Translink's Maps page; keeps last file if the page can't be read)
+        continue-on-error: true
+        run: python tools/build_locality.py .
+
       - name: go card vendors (Translink retailer feed; keeps last file if the feed fails)
         continue-on-error: true
         run: python tools/build_retailers.py
