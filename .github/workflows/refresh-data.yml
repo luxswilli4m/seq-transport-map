@@ -29,7 +29,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get install -y -qq tesseract-ocr
-          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract
+          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract pyarrow requests
 
       - name: Download Translink SEQ GTFS
         run: |

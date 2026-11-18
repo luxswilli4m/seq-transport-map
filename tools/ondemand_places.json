@@ -43,7 +43,17 @@
    "osm_type": "yes"
   },
   "HomeCo. Marsden": {
-   "ll": null
+   "ll": [
+    153.116211,
+    -27.679178
+   ],
+   "src": "overture",
+   "matched": "HomeCo. Marsden",
+   "type": "shopping_mall",
+   "tried": [
+    "osm",
+    "overture"
+   ]
   },
   "Browns Plains Community Health Centre": {
    "ll": [
@@ -62,7 +72,17 @@
    "osm_type": "supermarket"
   },
   "Supa IGA Rochedale": {
-   "ll": null
+   "ll": [
+    153.124878,
+    -27.59667
+   ],
+   "src": "overture",
+   "matched": "SUPA IGA Rochedale",
+   "type": "food_and_beverage_store",
+   "tried": [
+    "osm",
+    "overture"
+   ]
   },
   "Redbank Plains Shopping Centre": {
    "ll": null

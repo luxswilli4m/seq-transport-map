@@ -346,6 +346,17 @@ if problems:
                 "\n\nCheck Translink's on-demand pages (translink.com.au/ondemand) and update tools/ondemand.json if a page has moved.\n")
     print("\n".join(problems))
 
+# last resort for anything still unmarked: Overture Maps' open places database (see tools/od_places.py)
+if areas is not None and PLACES:
+    for ar in areas:
+        for g in ar["groups"]:
+            for d in (g.get("dests") or []):
+                if not d["ll"] and g.get("zones"):
+                    ll, src = PLACES.find(d["n"], g["zones"], 2.0 if ar.get("traced") else 8.0, sources=("osm", "overture"))
+                    if ll:
+                        d["ll"], d["approx"] = ll, src != "manual"
+                        print(f"   found with {src}: {d['n']}")
+
 if TRACED_CHANGED[0]:
     json.dump(TRACED, open(os.path.join(REPO, "tools", "ondemand_traced.json"), "w"), indent=0)
 
