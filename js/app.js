@@ -96,7 +96,7 @@ function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
 // ---------- train lines drawn side by side where they share track (like Translink's network map)
 function stackTrains(){
-  const KX=111.32*Math.cos(-27.5*Math.PI/180),KY=110.57,STEP=0.12,NEAR=0.07,CELL=0.1;   // km
+  const KX=111.32*Math.cos(-27.5*Math.PI/180),KY=110.57,STEP=0.04,NEAR=0.13,CELL=0.13;   // km
   const ROMA=Object.values(ST).find(s=>s[3]==="train"&&/^Roma Street station/.test(s[0]));const C0=ROMA?[ROMA[2],ROMA[1]]:[153.019,-27.465];
   const km=(a,b)=>Math.hypot((a[0]-b[0])*KX,(a[1]-b[1])*KY);
   const resample=pts=>{const out=[pts[0]];let carry=0;for(let k=1;k<pts.length;k++){const a=pts[k-1],b=pts[k];const d=km(a,b);let t=STEP-carry;while(t<=d){out.push([a[0]+(b[0]-a[0])*t/d,a[1]+(b[1]-a[1])*t/d]);t+=STEP}carry=d-(t-STEP)}const last=pts[pts.length-1];if(km(out[out.length-1],last)>0.01)out.push(last);return out};
@@ -112,7 +112,7 @@ function stackTrains(){
   for(const L of L2)(paths[L]||[]).forEach(P=>{
     let sets=P.map(pt=>{const s=linesNear(pt);s.add(L);return [...s].sort((a,b)=>L2.indexOf(a)-L2.indexOf(b)).join(",")});
     // smooth out brief flickers at junctions (majority over a small window)
-    const W=3;sets=sets.map((_,k)=>{const c={};for(let j=Math.max(0,k-W);j<=Math.min(sets.length-1,k+W);j++)c[sets[j]]=(c[sets[j]]||0)+1;return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]});
+    const W=6;sets=sets.map((_,k)=>{const c={};for(let j=Math.max(0,k-W);j<=Math.min(sets.length-1,k+W);j++)c[sets[j]]=(c[sets[j]]||0)+1;return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]});
     let st=0;for(let k=1;k<=P.length;k++){if(k<P.length&&sets[k]===sets[st])continue;
       let seg=P.slice(st,Math.min(k+1,P.length));if(seg.length>1){
         if(km(seg[0],C0)>km(seg[seg.length-1],C0))seg=seg.slice().reverse();   // same corridor -> same direction, so offsets line up
