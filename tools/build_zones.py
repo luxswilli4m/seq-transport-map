@@ -244,6 +244,7 @@ allpaths = [np.array([(y, x) for x, y in p]) for ps in paths.values() for p, _di
 def kmd(a, b): return math.hypot((a[0] - b[0]) * KY, (a[1] - b[1]) * KX)
 pairs = []; bws = {}; busway_ok = True
 road = {tuple(x) for x in cfg.get("on_road_sections", [])}
+manual = {(m["from"], m["to"]): m["path"] for m in cfg.get("manual_sections", [])}
 for key_, bw in cfg["busways"].items():
     seq = bw["stations"]; grp = bw.get("part_of", key_)
     for nm in seq:
@@ -267,6 +268,8 @@ for key_, bw in cfg["busways"].items():
                 sc = da[ia] + db[ib] + 0.05 * L
                 if best is None or sc < best[0]: best = (sc, sub)
         seg = best[1].tolist() if best else [A.tolist(), B.tolist()]
+        man = manual.get((a, b)) or (manual.get((b, a)) or [])[::-1]
+        if man: seg = [[la, lo] for la, lo in man]   # hand-drawn section from tools/busways.json
         isroad = (a, b) in road or (b, a) in road
         pairs.append([key_, a, b, [[round(x, 5), round(y, 5)] for x, y in seg], 1 if isroad else 0])
 for a, b in road:

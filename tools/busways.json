@@ -1,5 +1,5 @@
 {
-  "_help": "Busway station lists used to draw the busways. Edit this file to add, remove or reorder busway stations. See README.md, section 'Adding a busway station'. Station names must match Translink's stop names exactly (search the map to check spelling).",
+  "_help": "Busway station lists used to draw the busways. Edit this file to add, remove or reorder busway stations. See README.md, section 'Adding a busway station'. Station names must match Translink's stop names exactly (search the map to check spelling). 'manual_sections' are hand-drawn pieces of busway used instead of tracing a bus path: give the two neighbouring station names and a list of points as [latitude, longitude] (as Google Maps shows them when you right-click the map).",
   "busways": {
     "N": {
       "name": "Northern Busway",
@@ -68,5 +68,30 @@
       "Federation Street station",
       "RBWH station"
     ]
+  ],
+  "manual_sections": [
+    {
+      "from": "King George Square bus station",
+      "to": "Queen Street bus station",
+      "note": "Busway tunnel: King George Square, down Albert Street, then under the Queen Street Mall to Queen Street bus station. No bus stops at both stations in a row, so there is no bus path to trace.",
+      "path": [
+        [
+          -27.46838,
+          153.02399
+        ],
+        [
+          -27.46888,
+          153.02448
+        ],
+        [
+          -27.46967,
+          153.02525
+        ],
+        [
+          -27.47051,
+          153.02451
+        ]
+      ]
+    }
   ]
 }

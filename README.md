@@ -122,6 +122,8 @@ You'd add one line so it reads:
 
 That's it. The build finds "Example Road station" in Translink's stop list, takes its position, and traces the busway from Greenslopes to Example Road and on to Holland Park West along the paths buses actually drive.
 
+**Hand-drawn sections.** Where no bus stops at two neighbouring stations in a row (for example the tunnel from King George Square to Queen Street bus station), there's no bus path to trace, so the section is drawn by hand. These live under `"manual_sections"` at the bottom of `tools/busways.json`: the two station names and a list of points as `[latitude, longitude]`, which you can copy from Google Maps by right-clicking the map. Run the workflow afterwards to redraw.
+
 **Extending a busway at the end** works the same way: add the new station as the last item (and add a comma to the line above it). **Removing a station:** delete its line, taking care with commas. **Sections on ordinary roads** (drawn thinner) are listed under `"on_road_sections"` at the bottom of the file as pairs of neighbouring stations.
 
 ### On-demand areas
