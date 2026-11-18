@@ -1,7 +1,8 @@
 (async function () {
 "use strict";
 const BASE = new URL(".", location.href).href;
-const net = await (await fetch(BASE + "data/network.json")).json();
+const DV=(()=>{const sc=[...document.scripts].find(x=>/js\/app\.js/.test(x.src));const m=sc&&sc.src.match(/[?&]v=(\d+)/);return m?"?v="+m[1]:""})();
+const net = await (await fetch(BASE + "data/network.json"+DV)).json();
 const DATA = net.data, ZONES = net.zones, BUSWAY = net.busway, BWS = net.bwStations, KIDS = net.kids || {};
 const RELAY = "https://seq-transport-live.luc4swilli4ms.workers.dev";
 const R = DATA.routes, ST = DATA.stops;
@@ -263,9 +264,9 @@ function dist(a,b){const k=Math.PI/180,x=(b[2]-a[2])*Math.cos((a[1]+b[1])/2*k),y
 // ---------- timetables
 const TT={cal:null,tiles:{}};
 const tileOf=s=>Math.floor(s[1]*20)+"_"+Math.floor(s[2]*20);
-async function ensureCal(){if(!TT.cal)TT.cal=await (await fetch(BASE+"data/tt/calendar.json")).json();return TT.cal}
+async function ensureCal(){if(!TT.cal)TT.cal=await (await fetch(BASE+"data/tt/calendar.json"+DV)).json();return TT.cal}
 async function loadTT(s){await ensureCal();const t=tileOf(s);
-  if(!(t in TT.tiles)){try{TT.tiles[t]=await (await fetch(BASE+"data/tt/"+t+".json")).json()}catch(e){TT.tiles[t]={}}}return TT.tiles[t]}
+  if(!(t in TT.tiles)){try{TT.tiles[t]=await (await fetch(BASE+"data/tt/"+t+".json"+DV)).json()}catch(e){TT.tiles[t]={}}}return TT.tiles[t]}
 const fmtParts=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23",weekday:"short"});
 function bneNow(){const p=Object.fromEntries(fmtParts.formatToParts(new Date()).map(x=>[x.type,x.value]));return {ymd:p.year+p.month+p.day,dow:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].indexOf(p.weekday),min:(+p.hour)*60+(+p.minute)}}
 function shiftDay(ymd,dow,k){const d=new Date(Date.UTC(+ymd.slice(0,4),+ymd.slice(4,6)-1,+ymd.slice(6,8)+k));return {ymd:d.toISOString().slice(0,10).replace(/-/g,""),dow:((dow+k)%7+7)%7}}
@@ -373,7 +374,7 @@ async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const
   pB.querySelectorAll("ol.stops li[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true));
   document.getElementById("fullTT").onclick=()=>openRouteTable(r.n);document.getElementById("mainRt").onclick=()=>showRoute(i,false);
   const box=document.getElementById("varTimes");
-  try{await ensureCal();const key=r.n;if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json")).json();
+  try{await ensureCal();const key=r.n;if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json"+DV)).json();
     const data=RTC[key];const now=bneNow();let times=[];
     for(const k of Object.keys(data)){const j=data[k].o.indexOf(v.x[0]);if(j<0)continue;
       data[k].t.forEach(t=>{if(t[3+j]>=0&&t[1].some(si=>svcOn(si,now)))times.push(t[2]+t[3+j])})}
@@ -397,7 +398,7 @@ function applyVehStatus(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol)
 // travel time from the first stop, from the next full-length trip in the route timetable
 let tvKey=null;
 async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol||!tvKey)return;const key=tvKey;const r=R[+ol.dataset.ri],d=r.d[+ol.dataset.di];if(!d)return;
-  try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json")).json()}catch(e){return}
+  try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json"+DV)).json()}catch(e){return}
   // when following a vehicle, find its own scheduled run: start time, or one scheduled time from trip updates
   let sm=null,anc=null;if(vehFocus){const fv=LIVE.byTrip&&LIVE.byTrip.get(vehFocus.trip);if(fv&&fv.start)sm=fv.start;
     if(!sm){let tf=null;try{tf=await getTrips()}catch(e){}const tu=tf&&tf.entity.find(e=>e.tu&&e.tu.trip&&e.tu.trip.trip===vehFocus.trip);
@@ -569,7 +570,7 @@ function showFavRoutes(){focusRoutes=null;rtFocus=false;syncVehVis();backState=n
 const RTC={};const COLS=5;
 const fmtDayOpt=new Intl.DateTimeFormat("en-AU",{timeZone:"UTC",weekday:"long",day:"numeric",month:"short"});
 async function openRouteTable(key,st,back){const file=key.replace(/[^A-Za-z0-9_-]/g,"_");
-  try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+file+".json")).json()}catch(e){openPanel(keyName(key),"Timetable",`<div class="sub">Timetable unavailable.</div>`);return}
+  try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+file+".json"+DV)).json()}catch(e){openPanel(keyName(key),"Timetable",`<div class="sub">Timetable unavailable.</div>`);return}
   const data=RTC[key];const dirs=Object.keys(data).sort();const now=bneNow();
   st=Object.assign({dir:dirs[0],day:0,start:null},st||{});if(!data[st.dir])st.dir=dirs[0];
   const day=shiftDay(now.ymd,now.dow,st.day);const D=data[st.dir];
@@ -629,7 +630,7 @@ updateFavBtns();
 // ---------- school routes (list only)
 let SCHOOL=null;
 async function showSchool(q){focusRoutes=null;rtFocus=false;syncVehVis();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
-  if(!SCHOOL){try{SCHOOL=await (await fetch(BASE+"data/school.json")).json()}catch(e){openPanel("School routes","",`<div class="sub">School route list unavailable.</div>`);return}}
+  if(!SCHOOL){try{SCHOOL=await (await fetch(BASE+"data/school.json"+DV)).json()}catch(e){openPanel("School routes","",`<div class="sub">School route list unavailable.</div>`);return}}
   q=(q||"").trim().toLowerCase();
   const list=SCHOOL.routes.filter(([n,l])=>!q||n.toLowerCase().startsWith(q)||l.toLowerCase().includes(q));
   const grp={};list.forEach(r=>{const m=r[0].match(/^([A-Za-z]*)(\d)/);const g=m?(m[1]+m[2]+(r[0].replace(/^[A-Za-z]*/,"").length>=4?"xxx":"xx")):"Other";(grp[g]=grp[g]||[]).push(r)});
@@ -681,7 +682,7 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=`<div class="odhow">${esc(
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
   if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od")closePanel();return}
-  if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json")).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
+  if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json"+DV)).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
   odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   odOverview();odFit(odGroups().flatMap(x=>x.g.zones))}
 document.getElementById("odBtn").onclick=toggleOD;
