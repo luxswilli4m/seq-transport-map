@@ -94,7 +94,34 @@ const ptF = kind => Object.entries(ST).filter(([,s])=>s[3]===kind).map(([id,s])=
 
 function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
-src("bwlines",FC(bwLineF));src("trainl",FC(net2.train));src("ferryl",FC(net2.ferry));src("traml",FC(net2.tram));
+// ---------- train lines drawn side by side where they share track (like Translink's network map)
+function stackTrains(){
+  const KX=111.32*Math.cos(-27.5*Math.PI/180),KY=110.57,STEP=0.12,NEAR=0.07,CELL=0.1;   // km
+  const ROMA=Object.values(ST).find(s=>s[3]==="train"&&/^Roma Street station/.test(s[0]));const C0=ROMA?[ROMA[2],ROMA[1]]:[153.019,-27.465];
+  const km=(a,b)=>Math.hypot((a[0]-b[0])*KX,(a[1]-b[1])*KY);
+  const resample=pts=>{const out=[pts[0]];let carry=0;for(let k=1;k<pts.length;k++){const a=pts[k-1],b=pts[k];const d=km(a,b);let t=STEP-carry;while(t<=d){out.push([a[0]+(b[0]-a[0])*t/d,a[1]+(b[1]-a[1])*t/d]);t+=STEP}carry=d-(t-STEP)}const last=pts[pts.length-1];if(km(out[out.length-1],last)>0.01)out.push(last);return out};
+  // own-route paths per line, one per distinct shape
+  const L2=TLINES.map(x=>x[0]);const paths={};const seenP=new Set();
+  R.forEach((r,i)=>{if(r.t!=="train")return;const L=(lineOf[i]||[])[0];if(!L||!ownLine(L,i))return;r.d.forEach((d,di)=>{if(seenP.has(d.p))return;seenP.add(d.p);(paths[L]=paths[L]||[]).push(resample(path(i,di)))})});
+  // spatial grid of every line's track points
+  const grid=new Map();const gk=(x,y)=>Math.floor(x*KX/CELL)+","+Math.floor(y*KY/CELL);
+  for(const L of L2)(paths[L]||[]).forEach(P=>P.forEach(pt=>{const k=gk(pt[0],pt[1]);let g=grid.get(k);if(!g)grid.set(k,g=[]);g.push([pt,L])}));
+  const linesNear=pt=>{const cx=Math.floor(pt[0]*KX/CELL),cy=Math.floor(pt[1]*KY/CELL);const set=new Set();
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){const g=grid.get((cx+dx)+","+(cy+dy));if(g)for(const [q,L] of g)if(!set.has(L)&&km(pt,q)<NEAR)set.add(L)}return set};
+  const feats=[];
+  for(const L of L2)(paths[L]||[]).forEach(P=>{
+    let sets=P.map(pt=>{const s=linesNear(pt);s.add(L);return [...s].sort((a,b)=>L2.indexOf(a)-L2.indexOf(b)).join(",")});
+    // smooth out brief flickers at junctions (majority over a small window)
+    const W=3;sets=sets.map((_,k)=>{const c={};for(let j=Math.max(0,k-W);j<=Math.min(sets.length-1,k+W);j++)c[sets[j]]=(c[sets[j]]||0)+1;return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]});
+    let st=0;for(let k=1;k<=P.length;k++){if(k<P.length&&sets[k]===sets[st])continue;
+      let seg=P.slice(st,Math.min(k+1,P.length));if(seg.length>1){
+        if(km(seg[0],C0)>km(seg[seg.length-1],C0))seg=seg.slice().reverse();   // same corridor -> same direction, so offsets line up
+        const on=sets[st].split(",");const n=on.length;const kk=on.indexOf(L)-(n-1)/2;
+        feats.push({type:"Feature",properties:{c:TCOL[L],k:kk},geometry:{type:"LineString",coordinates:seg}})}
+      st=k}});
+  return feats}
+const trainStack=stackTrains();
+src("bwlines",FC(bwLineF));src("trainl",FC(trainStack));src("ferryl",FC(net2.ferry));src("traml",FC(net2.tram));
 ["busway","busstn","train","ferry","tram","bus"].forEach(k=>src("pt_"+k,FC(ptF(k))));
 src("veh",FC([]));src("hlvar",FC([]));src("hl",FC([]));src("arrows",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
 
@@ -112,8 +139,8 @@ add({id:"loop-arrows",type:"symbol",source:"loop",minzoom:10.5,layout:{"symbol-p
 add({id:"ferry-line",type:"line",source:"ferryl",paint:{"line-color":"#36A9B4","line-width":2.6,"line-dasharray":[3,2]}});
 add({id:"tram-case",type:"line",source:"traml",paint:{"line-color":THEME[theme].casing,"line-width":6}});
 add({id:"tram-line",type:"line",source:"traml",paint:{"line-color":["get","c"],"line-width":3.4}});
-add({id:"train-case",type:"line",source:"trainl",paint:{"line-color":THEME[theme].casing,"line-width":["interpolate",["linear"],["zoom"],9,4.5,14,8]}});
-add({id:"train-line",type:"line",source:"trainl",paint:{"line-color":["get","c"],"line-width":["interpolate",["linear"],["zoom"],9,2.6,14,5]}});
+add({id:"train-case",type:"line",source:"trainl",layout:{"line-join":"round","line-cap":"round"},paint:{"line-color":THEME[theme].casing,"line-width":["interpolate",["linear"],["zoom"],9,3.6,14,6.5],"line-offset":["interpolate",["linear"],["zoom"],9,["*",["get","k"],2.4],14,["*",["get","k"],4.6]]}});
+add({id:"train-line",type:"line",source:"trainl",layout:{"line-join":"round","line-cap":"round"},paint:{"line-color":["get","c"],"line-width":["interpolate",["linear"],["zoom"],9,2.4,14,4.6],"line-offset":["interpolate",["linear"],["zoom"],9,["*",["get","k"],2.4],14,["*",["get","k"],4.6]]}});
 add({id:"bw-case",type:"line",source:"bwlines",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":THEME[theme].casing,"line-width":["interpolate",["linear"],["zoom"],9,6,14,11]}});
 add({id:"bw-line",type:"line",source:"bwlines",filter:["==",["get","road"],0],layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["interpolate",["linear"],["zoom"],9,3.6,14,7]}});
 add({id:"bw-road",type:"line",source:"bwlines",filter:["==",["get","road"],1],layout:{"line-cap":"round"},paint:{"line-color":["get","c"],"line-width":["interpolate",["linear"],["zoom"],9,3.6,14,7],"line-dasharray":[.1,1.8]}});

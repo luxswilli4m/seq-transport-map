@@ -35,7 +35,7 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Busways.** Purple is the Northern Busway, teal the South East Busway (including the Woolloongabba spur) and orange the Eastern Busway. A thinner dashed section means buses run on ordinary roads between those stations. Ringed dots are busway stations.
 
-**Trains, ferries and tram.** Train lines are drawn in Translink's line colours (T1 to T6). Ferries are blue-green and the G:link tram is yellow. Bus stops appear when you zoom in.
+**Trains, ferries and tram.** Train lines are drawn in Translink's line colours (T1 to T6), side by side wherever lines share track, like Translink's network map. Which lines share each stretch is worked out automatically from the track each line's own trains run on. Ferries are blue-green and the G:link tram is yellow. Bus stops appear when you zoom in.
 
 **Route cards.** Each stop shows the scheduled time and minutes from the first stop for one run: the next full-length trip, or the exact service you're following.
 
