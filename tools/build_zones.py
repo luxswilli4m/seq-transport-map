@@ -159,32 +159,33 @@ def dec(s):
             else: lo += v
         pts.append((lo / 1e5, la / 1e5))
     return pts
-paths = {r["n"]: [dec(d["p"]) for d in r["d"]] for r in R if r["t"] == "bus"}
+# every path a route runs: main pattern per direction (v = -1) plus variant patterns (some trips only)
+paths = {r["n"]: [(dec(d["p"]), di, -1) for di, d in enumerate(r["d"])] + [(dec(v["p"]), di, vi) for di, d in enumerate(r["d"]) for vi, v in enumerate(d.get("v", []))] for r in R if r["t"] == "bus"}
 ZU = unary_union([p for _, p in zones]); ZB = ZU.buffer(0.002)
-remote = g[[not ZU.buffer(0.012).contains(Point(a, b)) for a, b in zip(g.stop_lon, g.stop_lat)]]
+remote = g[[not ZU.buffer(0.004).contains(Point(a, b)) for a, b in zip(g.stop_lon, g.stop_lat)]]   # stops more than ~400 m outside every zone
 rr = defaultdict(list)
 for sid, lo_, la_ in zip(remote.stop_id, remote.stop_lon, remote.stop_lat):
     for rt in stop_routes.get(sid, ()): rr[rt].append(Point(lo_, la_))
 drawn = None
-def add_dot(part):
+def add_dot(part, tag):
     global drawn
     for seg in getattr(part, "geoms", [part]):
-        if seg.is_empty or seg.length < 0.004: continue
-        OUT["dots"].append([[round(y, 5), round(x, 5)] for x, y in seg.coords])
+        if seg.is_empty or seg.length < 0.004 or seg.geom_type != "LineString": continue
+        OUT["dots"].append({"c": [[round(y, 5), round(x, 5)] for x, y in seg.coords], **tag})
         drawn = seg.buffer(0.0015) if drawn is None else drawn.union(seg.buffer(0.0015))
 loops = []
 for rt, pl in rr.items():
     near = unary_union([q.buffer(0.012) for q in pl])
-    ps = paths.get(rt, [])
-    if len(ps) == 1 and Point(ps[0][0]).distance(Point(ps[0][-1])) < 0.003 and LineString(ps[0]).length > 0.02:
-        loops.append(ps[0]); continue  # one-way loop: drawn whole with arrows
-    for pth in ps:
+    ps = paths.get(rt, []); mains = [q for q in ps if q[2] < 0]
+    if len(mains) == 1 and Point(mains[0][0][0]).distance(Point(mains[0][0][-1])) < 0.003 and LineString(mains[0][0]).length > 0.02:
+        loops.append(mains[0][0]); continue  # one-way loop: drawn whole with arrows
+    for pth, di, vi in ps:
         if len(pth) < 2: continue
         diff = LineString(pth).difference(ZB)
         for part in getattr(diff, "geoms", [diff]):
             if part.is_empty or part.length < 0.008 or not part.intersects(near): continue
             if drawn is not None: part = part.difference(drawn)
-            add_dot(part)
+            add_dot(part, {"r": rt, "d": di, "v": vi})
 by = defaultdict(list)
 for s_, p in zones: by[s_].append(p)
 def gaps(coords):
@@ -206,12 +207,19 @@ for s_, ps in by.items():
         others = [q for q in ps if q is not patch]
         rts = {rt for sid, lo_, la_ in zip(g.stop_id, g.stop_lon, g.stop_lat) if patch.buffer(0.003).contains(Point(lo_, la_)) for rt in stop_routes.get(sid, ()) if rt.isdigit() and int(rt) // 100 == s_}
         for rt in sorted(rts):
-            for pth in paths.get(rt, []):
+            for pth, di, vi in paths.get(rt, []):
                 for part in gaps(pth):
                     if part.length < 0.004: continue
                     a, b = Point(part.coords[0]), Point(part.coords[-1]); near = lambda pt, Pp: Pp.distance(pt) < 0.008
                     if not ((near(a, patch) and any(near(b, q) for q in others)) or (near(b, patch) and any(near(a, q) for q in others))): continue
-                    add_dot(part if drawn is None else part.difference(drawn))
+                    add_dot(part if drawn is None else part.difference(drawn), {"r": rt, "d": di, "v": vi})
+# report outlying stops still without a dotted link (printed in the refresh log)
+unl = defaultdict(set)
+for sid, lo_, la_ in zip(remote.stop_id, remote.stop_lon, remote.stop_lat):
+    pt = Point(lo_, la_)
+    if drawn is None or drawn.distance(pt) > 0.006:
+        unl[(round(lo_, 2), round(la_, 2))] |= set(stop_routes.get(sid, ()))
+if unl: print("outlying stops without a dotted link:", "; ".join(f"{la},{lo} ({', '.join(sorted(r))})" for (lo, la), r in sorted(unl.items())))
 if loops:  # largest one-way loop (e.g. 652 Beachmere), legs offset so it reads as a circuit
     lp = max(loops, key=lambda p: LineString(p).length)
     pp = np.array([P(a, b) for a, b in lp]); pp = np.c_[gaussian_filter1d(pp[:, 0], 3, mode="nearest"), gaussian_filter1d(pp[:, 1], 3, mode="nearest")]
@@ -223,7 +231,7 @@ cfg = json.load(open(os.path.join(REPO, "tools/busways.json")))
 byname = {}
 for sid, v in ST.items():
     if v[3] in ("busway", "busstn", "bus"): byname.setdefault(v[0].lower(), sid)
-allpaths = [np.array([(y, x) for x, y in p]) for ps in paths.values() for p in ps]
+allpaths = [np.array([(y, x) for x, y in p]) for ps in paths.values() for p, _di, vi in ps if vi < 0]
 def kmd(a, b): return math.hypot((a[0] - b[0]) * KY, (a[1] - b[1]) * KX)
 pairs = []; bws = {}; busway_ok = True
 road = {tuple(x) for x in cfg.get("on_road_sections", [])}

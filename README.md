@@ -29,6 +29,10 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Bus zones.** Brisbane bus routes are numbered by area: 1xx routes mostly run in the south, 2xx in the east, 3xx in the north, and so on. Each coloured shape shows where a three-digit series mostly stops. It's a rule of thumb rather than an official boundary. Striped (chevron) areas are places where stops from more than one series overlap, or where a few stops sit outside their series' main area. Dotted lines link outlying stops back to their zone.
 
+**Dotted lines** link outlying stops back to their zone along the roads buses actually take, including route variants that only some trips run (for example route 515's extension to Willowbank). Tap a dotted line to see which route it is, whether it's a variant, how many trips run that way, today's times, and the full timetable.
+
+**Route variants.** Many routes have trips that leave the main route to serve extra stops. A route card lists these under "Some trips also run via", with roughly what share of trips use them, and draws them as a dashed line. The full timetable includes every trip and every stop, with a dash where a trip doesn't stop (the same layout as Translink's timetables).
+
 **Busways.** Purple is the Northern Busway, teal the South East Busway (including the Woolloongabba spur) and orange the Eastern Busway. A thinner dashed section means buses run on ordinary roads between those stations. Ringed dots are busway stations.
 
 **Trains, ferries and tram.** Train lines are drawn in Translink's line colours (T1 to T6). Ferries are blue-green and the G:link tram is yellow. Bus stops appear when you zoom in.

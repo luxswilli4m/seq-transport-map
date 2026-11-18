@@ -47,10 +47,14 @@ t = t.merge(r[["route_id", "route_short_name", "route_long_name", "route_type", 
 tripcount = t.groupby(["route_short_name", "direction_id", "shape_id"]).size().reset_index(name="n")
 best = tripcount.sort_values("n", ascending=False).drop_duplicates(["route_short_name", "direction_id"])
 need = set(best.shape_id)
-sh = sh[sh.shape_id.isin(need)].sort_values(["shape_id", "shape_pt_sequence"])
+# variant patterns: other shapes of the same route/direction (e.g. some trips extended to an extra suburb)
+varc = tripcount.merge(best[["route_short_name", "direction_id", "shape_id"]].rename(columns={"shape_id": "main"}), on=["route_short_name", "direction_id"])
+varc = varc[varc.shape_id != varc.main]
+need_all = need | set(varc.shape_id)
+sh = sh[sh.shape_id.isin(need_all)].sort_values(["shape_id", "shape_pt_sequence"])
 SH = {k: g[["shape_pt_lon", "shape_pt_lat"]].values.tolist() for k, g in sh.groupby("shape_id")}
 t["nst"] = t.trip_id.map(st.groupby("trip_id").size())
-rep = t[t.shape_id.isin(need)].sort_values("nst", ascending=False).drop_duplicates(["route_short_name", "direction_id", "shape_id"])
+rep = t[t.shape_id.isin(need_all)].sort_values("nst", ascending=False).drop_duplicates(["route_short_name", "direction_id", "shape_id"])
 stseq = {k: g.sort_values("stop_sequence").sid.tolist() for k, g in st[st.trip_id.isin(set(rep.trip_id))].groupby("trip_id")}
 TYPE = {"3": "bus", "2": "train", "4": "ferry", "0": "tram"}
 routes = []; ridx = {}
@@ -61,7 +65,19 @@ for name, grp in best.groupby("route_short_name"):
         tr = rep[(rep.route_short_name == name) & (rep.shape_id == b.shape_id) & (rep.direction_id == b.direction_id)]
         if not len(tr): continue
         tr = tr.iloc[0]
-        dirs.append({"h": tr.trip_headsign if isinstance(tr.trip_headsign, str) else "", "p": enc(simplify(SH[b.shape_id])), "s": stseq.get(tr.trip_id, [])})
+        main_s = stseq.get(tr.trip_id, []); dd = {"h": tr.trip_headsign if isinstance(tr.trip_headsign, str) else "", "p": enc(simplify(SH[b.shape_id])), "s": main_s}
+        if TYPE.get(i0.route_type, "bus") != "train":
+            vs = {}; ms = set(main_s)
+            for _, vr in varc[(varc.route_short_name == name) & (varc.direction_id == b.direction_id)].iterrows():
+                vt = rep[(rep.route_short_name == name) & (rep.shape_id == vr.shape_id) & (rep.direction_id == b.direction_id)]
+                if not len(vt) or vr.shape_id not in SH: continue
+                vt = vt.iloc[0]; vseq = stseq.get(vt.trip_id, []); extra = [x for x in vseq if x not in ms]
+                if not extra: continue
+                k = tuple(extra)
+                if k in vs: vs[k]["n"] += int(vr.n); continue
+                vs[k] = {"h": vt.trip_headsign if isinstance(vt.trip_headsign, str) else "", "p": enc(simplify(SH[vr.shape_id])), "x": extra, "n": int(vr.n)}
+            if vs: dd["v"] = sorted(vs.values(), key=lambda v: -v["n"]); dd["nt"] = int(b.n)
+        dirs.append(dd)
     ridx[name] = len(routes)
     routes.append({"n": name, "l": i0.route_long_name, "t": TYPE.get(i0.route_type, "bus"), "c": "#" + (i0.route_color if isinstance(i0.route_color, str) else "888888"),
                    "tc": "#" + (i0.route_text_color if isinstance(i0.route_text_color, str) else "FFFFFF"), "d": dirs})

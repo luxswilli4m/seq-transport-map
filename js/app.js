@@ -78,7 +78,7 @@ chevF.forEach(f=>{const rings=f.geometry.coordinates[0];const area=r=>{let a=0;f
   const big=outers, small=holes;
   f.geometry.coordinates=big.map(o=>[o,...small.filter(h=>pip(h[0],o))])});
 const zoneLbl = (ZONES.labels||[]).map(l=>({type:"Feature",properties:{t:l.s+"xx"},geometry:{type:"Point",coordinates:ll(l.p)}}));
-const dotF = ZONES.dots.map(d=>({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:d.map(ll)}}));
+const dotF = ZONES.dots.map(d=>Array.isArray(d)?{type:"Feature",properties:{},geometry:{type:"LineString",coordinates:d.map(ll)}}:{type:"Feature",properties:{r:d.r,d:d.d,v:d.v,n:`Route ${d.r}${d.v>=0?" (some trips only)":""} · tap for details`},geometry:{type:"LineString",coordinates:d.c.map(ll)}});
 const loopF = ZONES.loop?[{type:"Feature",properties:{},geometry:{type:"LineString",coordinates:ZONES.loop.map(ll)}}]:[];
 const bwLineF = BUSWAY.pairs.map(([key,a,b,seg,road])=>({type:"Feature",properties:{c:(BUSWAY.colours&&BUSWAY.colours[key])||BWCOL[key],road:road?1:0},geometry:{type:"LineString",coordinates:seg.map(ll)}}));
 const net2 = {train:[],ferry:[],tram:[]};const seen=new Set();
@@ -91,7 +91,7 @@ function src(id,data){map.addSource(id,{type:"geojson",data})}
 src("zones",FC(zoneF));src("chev",FC(chevF));src("zlabels",FC(zoneLbl));src("dots",FC(dotF));src("loop",FC(loopF));
 src("bwlines",FC(bwLineF));src("trainl",FC(net2.train));src("ferryl",FC(net2.ferry));src("traml",FC(net2.tram));
 ["busway","busstn","train","ferry","tram","bus"].forEach(k=>src("pt_"+k,FC(ptF(k))));
-src("veh",FC([]));src("hl",FC([]));src("arrows",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
+src("veh",FC([]));src("hlvar",FC([]));src("hl",FC([]));src("arrows",FC([]));src("hlstops",FC([]));src("ends",FC([]));src("sel",FC([]));
 
 // ---------- overlay layers
 const L = [];
@@ -114,6 +114,8 @@ add({id:"bw-line",type:"line",source:"bwlines",filter:["==",["get","road"],0],la
 add({id:"bw-road",type:"line",source:"bwlines",filter:["==",["get","road"],1],layout:{"line-cap":"round"},paint:{"line-color":["get","c"],"line-width":["interpolate",["linear"],["zoom"],9,3.6,14,7],"line-dasharray":[.1,1.8]}});
 add({id:"zlabels",type:"symbol",source:"zlabels",maxzoom:12.5,layout:{"text-field":["get","t"],"text-font":["Noto Sans Medium"],"text-size":["interpolate",["linear"],["zoom"],8,18,11,30],"text-allow-overlap":true},paint:{"text-color":THEME[theme].zoneText,"text-halo-color":THEME[theme].zoneHalo,"text-halo-width":2.2}});
 // highlight (route / all routes)
+add({id:"hlvar-case",type:"line",source:"hlvar",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":7,"line-opacity":.9}});
+add({id:"hlvar-line",type:"line",source:"hlvar",layout:{"line-cap":"butt","line-join":"round"},paint:{"line-color":["get","c"],"line-width":4,"line-dasharray":[1.6,1.1]}});
 add({id:"hl-case",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":["case",["==",["get","mode"],"web"],6,10],"line-opacity":.95}});
 add({id:"hl-line",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["case",["==",["get","mode"],"web"],3.4,6]}});
 add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"loopArrow","icon-size":["interpolate",["linear"],["zoom"],9,1,15,1.2],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
@@ -204,10 +206,10 @@ function upstreamVeh(b){const tr=b.closest(".tr[data-k]");if(!tr||!ctx||!ctx.row
       const hm=head&&d.h&&(norm(d.h).includes(head)||head.includes(norm(d.h)))?0:1;const sc=hm*1000+(z-a);if(!best||sc<best.sc)best={sc,v}})}
   return best?best.v:null}
 async function rowVehFor(b){let v=rowVeh(b);if(v)return v;const tr=b.closest(".tr");if(tr&&tr.querySelector("[data-trip]")||!LIVE.vehAt||Date.now()-LIVE.vehAt>15000){await pollVehicles(true);v=rowVeh(b)}return v||upstreamVeh(b)}
-function wire(){pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b)));
+function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=>openStop(a.dataset.s2,true));pB.querySelectorAll("[data-var]").forEach(a=>a.onclick=e=>{e.preventDefault();const [i,di,k]=a.dataset.var.split(",").map(Number);showVariant(R[i].n,di,k)});pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b)));
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
-function clearHL(){webLegs=[];map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
+function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
 function closePanel(){vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 document.getElementById("pClose").onclick=closePanel;
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
@@ -310,6 +312,32 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
   return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tc"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+// tapped dotted line / variant: which route, which trips, today's times
+async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const r=R[i];const d=r.d[di];
+  if(!d||vi<0||!d.v||!d.v[vi]){showRoute(i,false);return}
+  const v=d.v[vi];focusRoutes=new Set([i]);drawVehicles();backState=null;pBack.style.display="none";ctx=null;setSel(null);clearHL();
+  const vp=dec(v.p);map.getSource("hl").setData(FC([{type:"Feature",properties:{c:r.c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:path(i,di)}}]));
+  map.getSource("hlvar").setData(FC([{type:"Feature",properties:{c:r.c},geometry:{type:"LineString",coordinates:vp}}]));
+  map.getSource("hlstops").setData(FC(v.x.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
+  let bb=null;vp.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]});
+  if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:14});
+  const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;const tl=r.t==="tram"?"G:link":r.t==="ferry"?"Ferry":"Bus";
+  const h=`<div class="odhow">The dashed line shows a <b>variant</b> of route ${esc(r.n)}: some trips${(v.h||d.h)?" towards "+esc(v.h||d.h):""} leave the main route to serve ${v.x.length} extra stop${v.x.length>1?"s":""}${pct!=null?`, about ${pct}% of trips in this direction`:""}. Other trips skip these stops, so check the times below.</div>
+    <div class="webrow"><button class="btn" id="fullTT">Full timetable</button><button class="btn" id="mainRt">Main route</button></div>
+    <div class="grp">Today at ${esc(ST[v.x[0]]?ST[v.x[0]][0]:"the first extra stop")}</div><div id="varTimes" class="odhow">Loading…</div>
+    <div class="grp">Extra stops on this variant</div><ol class="stops" style="--rc:${r.c}">${v.x.map(id=>ST[id]?`<li data-s="${id}">${esc(ST[id][0])}${ST[id][4]?`<span class="s2">${esc(ST[id][4])}</span>`:""}</li>`:"").join("")}</ol>`;
+  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route · variant (some trips only)`,h,{star:{list:"routes",key:r.n}});wire();
+  pB.querySelectorAll("ol.stops li[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true));
+  document.getElementById("fullTT").onclick=()=>openRouteTable(r.n);document.getElementById("mainRt").onclick=()=>showRoute(i,false);
+  const box=document.getElementById("varTimes");
+  try{await ensureCal();const key=r.n;if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+key.replace(/[^A-Za-z0-9_-]/g,"_")+".json")).json();
+    const data=RTC[key];const now=bneNow();let times=[];
+    for(const k of Object.keys(data)){const j=data[k].o.indexOf(v.x[0]);if(j<0)continue;
+      data[k].t.forEach(t=>{if(t[3+j]>=0&&t[1].some(si=>svcOn(si,now)))times.push(t[2]+t[3+j])})}
+    times=[...new Set(times)].sort((a,b)=>a-b);const up=times.filter(m=>m>=now.min);
+    if(!box.isConnected)return;
+    box.innerHTML=times.length?`${times.length} trip${times.length>1?"s":""} stop here today${up.length?`; next: ${up.slice(0,8).map(clock).join(", ")}${up.length>8?" …":""}`:"; none left today"}.`:"No trips stop here today. Open the full timetable and pick another day.";
+  }catch(e){box.textContent="Timetable unavailable."}}
 // live vehicle progress along the stop list: Departed / Arriving (within 500 m) / Not arrived
 const stopKey=id=>ST[id]?id:(parentOf[id]||id);
 const kmTo=(a,b)=>{const kx=111.32*Math.cos(a[1]*Math.PI/180);return Math.hypot((a[0]-b[0])*kx,(a[1]-b[1])*110.57)};
@@ -344,17 +372,22 @@ async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!
   if(!best)return;const a0=best.t[3+best.idx[0]];const lis=ol.querySelectorAll("li");
   lis.forEach((li,n)=>{const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;li.querySelector(".tv").textContent=n===0?"Start":v>=0?(v-a0)+" min":"";const tc=li.querySelector(".tc");if(tc)tc.textContent=v>=0?clock(best.t[2]+v):"—"});
   const note=document.getElementById("tvNote");if(note)note.textContent=best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`}
+function variantHTML(i,di){const d=R[i].d[di];if(!d||!d.v||!d.v.length)return "";
+  return `<div class="grp">Some trips also run via</div>`+d.v.map((v,k)=>{const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;
+    return `<div class="varbox"><div class="varh"><a href="#" data-var="${i},${di},${k}">${esc(v.x.length)} extra stop${v.x.length>1?"s":""}${v.h&&v.h!==d.h?" · to "+esc(v.h):""}</a>${pct!=null?`<span class="varpct">about ${pct}% of trips</span>`:""}</div>
+      <div class="varst">${v.x.slice(0,6).map(id=>ST[id]?`<a data-s2="${id}">${esc(ST[id][0])}</a>`:"").join(" · ")}${v.x.length>6?` · and ${v.x.length-6} more`:""}</div></div>`}).join("")}
+function drawVariants(i,di){const d=R[i].d[di];map.getSource("hlvar").setData(FC(d&&d.v?d.v.map(v=>({type:"Feature",properties:{c:R[i].c},geometry:{type:"LineString",coordinates:dec(v.p)}})):[]))}
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
-  return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)}
-function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepTop=pB.querySelector(".badges.svc");pB.innerHTML=(keepTop?keepTop.outerHTML:"")+routeBody(i,di);wire();wireDirs(i);routeArrows(i,di);applyTravel();applyVehStatus()})}
+  return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)+variantHTML(i,di)}
+function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepTop=pB.querySelector(".badges.svc");pB.innerHTML=(keepTop?keepTop.outerHTML:"")+routeBody(i,di);wire();wireDirs(i);routeArrows(i,di);drawVariants(i,di);applyTravel();applyVehStatus()})}
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
-  webLegs=[];map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
+  webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
 function showRoute(i,fromStop,veh){focusRoutes=new Set([i]);drawVehicles();const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   let di0=0;if(veh){const k=vehDir(i,veh);if(k>=0)di0=k}else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
-  document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};tvKey=r.n;applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
+  document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};tvKey=r.n;drawVariants(i,di0);applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
 function showLine(nm,fromStop,veh){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=veh&&(ids.includes(veh.ri)||all.includes(veh.ri))?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);const vdi=veh?Math.max(0,vehDir(main,veh)):0;let h=routeBody(main,vdi);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
@@ -634,12 +667,13 @@ function applyFavStatus(){const al=favAlertState();
 setInterval(pollCancellations,60000);setTimeout(pollCancellations,3000);
 
 // ---------- map clicks
-const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line"];
+const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","stops","hlstops","ends","ends-dot","hl-line","dots"];
 map.on("click",e=>{const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];
   const f=map.queryRenderedFeatures(box,{layers:CLICK.filter(id=>map.getLayer(id)&&map.getLayoutProperty(id,"visibility")!=="none")});if(!f.length)return;
   f.sort((a,b)=>CLICK.indexOf(a.layer.id)-CLICK.indexOf(b.layer.id));const top=f[0];
   if(top.layer.id==="veh-dot"){const ri=+top.properties.ri;if(R[ri]){webCam={center:map.getCenter(),zoom:map.getZoom()};const keep=webCam;const v=LIVE.byTrip&&LIVE.byTrip.get(top.properties.trip);if(R[ri].t==="train")showLine((lineOf[ri]||["T1"])[0],false,v);else showRoute(ri,false,v);webCam=keep}return}
   if(["hl-line","ends","ends-dot"].includes(top.layer.id)){const ri=+top.properties.ri;if(ctx&&ctx.web)showRoute(ri,true);return}
+  if(top.layer.id==="dots"){const p=top.properties;if(p.r){webCam={center:map.getCenter(),zoom:map.getZoom()};const keep=webCam;showVariant(p.r,+p.d,+p.v);webCam=keep}return}
   openStop(top.properties.id,false)});
 const pop=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:10});
 CLICK.forEach(id=>{map.on("mouseenter",id,e=>{map.getCanvas().style.cursor="pointer";const p=e.features[0].properties;const t=id==="veh-dot"?p.tip:p.n;if(t)pop.setLngLat(e.lngLat).setText(t).addTo(map)});map.on("mouseleave",id,()=>{map.getCanvas().style.cursor="";pop.remove()})});
