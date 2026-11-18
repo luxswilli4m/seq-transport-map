@@ -79,3 +79,5 @@ for k in range(-1, DAYS):
     fn = os.path.join(odir, day.strftime("%Y%m%d") + ".json")
     json.dump(out, open(fn, "w"), separators=(",", ":"))
     print(day, "trips", len(tids), "patterns", len(P), "KB", os.path.getsize(fn) // 1024)
+# list of days on hand, for the date menu on the Best connections card
+json.dump({"days": sorted(f[:8] for f in os.listdir(odir) if re.fullmatch(r"\d{8}\.json", f))}, open(os.path.join(odir, "index.json"), "w"))

@@ -808,31 +808,44 @@ function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,IN
     const st0=par[0][s];if(st0&&st0.m>=30)legs.push({type:"walk",from:null,to:s,m:st0.m});
     legs.reverse();const rides=legs.filter(l=>l.type==="ride");const dep=rides.length?rides[0].dep:t0;const lw=legs[0]&&legs[0].type==="walk"?walkMin(legs[0].m):0;
     return {legs,arr:r.arr,dep,leave:dep-lw,changes:rides.length-1}})}
+// days with timetables on hand (data/plan/index.json from the weekly refresh), today onwards
+async function cnDays(){const now=bneNow();let days;try{days=(await (await fetch(BASE+"data/plan/index.json"+DV)).json()).days}catch(e){days=[0,1,2,3,4,5,6].map(k=>shiftDay(now.ymd,now.dow,k).ymd)}
+  return days.filter(y=>y>=now.ymd).map(y=>{const dt=new Date(Date.UTC(+y.slice(0,4),+y.slice(4,6)-1,+y.slice(6,8)));
+    const lab=dt.toLocaleDateString("en-AU",{weekday:"short",day:"numeric",month:"short",timeZone:"UTC"});return [y,y===now.ymd?"Today":y===shiftDay(now.ymd,now.dow,1).ymd?"Tomorrow":lab.replace(",","")]})}
 async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.from||!PLAN.to){box.innerHTML=`<div class="sub">Choose where you're starting and where you're going.</div>`;return}
   box.innerHTML=`<div class="sub">Finding connections…</div>`;await ensureCal();
-  const now=bneNow();const mode=document.getElementById("cnWhen").value;const dayOff=mode==="tom"?1:0;
+  const now=bneNow();const mode=document.getElementById("cnWhen").value;
   let t0=now.min;if(mode!=="now"){const v=document.getElementById("cnTime").value||"08:00";const [h,m]=v.split(":").map(Number);t0=h*60+m}
-  const day=shiftDay(now.ymd,now.dow,dayOff);const maxM=+document.getElementById("cnRad").value;
+  const pickDay=mode==="now"?now.ymd:(document.getElementById("cnDay").value||now.ymd);const dayOff=pickDay===now.ymd?0:1;
+  const arriveBy=mode==="arrive",byT=t0;if(arriveBy)t0=Math.max(0,byT-240);   // arrive by: look at departures in the 4 hours before
+  const day={ymd:pickDay};const maxM=+document.getElementById("cnRad").value;
   let d;try{d=await planData(day.ymd)}catch(e){box.innerHTML=`<div class="sub">Connection data for that day isn't available yet.</div>`;return}
   const fk=[PLAN.from],tk=[PLAN.to];
   // services leaving from the chosen stop or station itself come first; nearby stops are only used if nothing leaves from there
-  const run=startM=>{const o=[];let t=t0;for(let i=0;i<4&&o.length<3;i++){const r=raptor(d,fk,tk,t,maxM,5,startM);if(!r.length)break;
-      r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const x of r){if(!o.some(y=>y.leave===x.leave&&y.arr===x.arr&&y.changes===x.changes))o.push(x)}t=Math.min(...r.map(x=>x.dep))+1}return o};
+  const run=startM=>{const o=[];let t=t0;
+      // leave at: the next few departures. arrive by: step through the departures before the deadline, keeping those that make it
+      for(let i=0;i<(arriveBy?40:4)&&(arriveBy||o.length<3);i++){const r=raptor(d,fk,tk,t,maxM,5,startM);if(!r.length)break;
+      r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const x of r){if(arriveBy&&x.arr>byT)continue;if(!o.some(y=>y.leave===x.leave&&y.arr===x.arr&&y.changes===x.changes))o.push(x)}
+      const nd=Math.min(...r.map(x=>x.dep))+1;if(arriveBy&&(nd>byT||Math.min(...r.map(x=>x.arr))>byT))break;t=nd}
+      if(arriveBy){o.sort((a,b)=>b.leave-a.leave||a.changes-b.changes);return o.slice(0,15)}return o};
   let opts=run(0),wide=false,extra=null;
   if(!opts.length){opts=run(maxM);wide=opts.length>0}
   // Changes slider: 0 = direct only (falls back to the fewest changes if nothing is direct), 1-3, or any
   const maxCh=+document.getElementById("cnCh").value>=4?99:+document.getElementById("cnCh").value;let chNote="";
   if(maxCh>0&&maxCh<99){const f=opts.filter(x=>x.changes<=maxCh);if(f.length)opts=f;else if(opts.length)chNote=`Nothing gets there with ${maxCh} change${maxCh>1?"s":""} or fewer; showing the options with the fewest changes.`}
   if(maxCh===0&&opts.length&&!opts.some(x=>x.changes===0))chNote="No single service goes all the way, so these include changes.";
-  if(maxCh===0&&opts.some(x=>x.changes===0)){const sm=wide?maxM:0;let dir=opts.filter(x=>x.changes===0);let t=Math.max(...dir.map(x=>x.dep))+1;
+  if(arriveBy&&maxCh===0&&opts.some(x=>x.changes===0))opts=opts.filter(x=>x.changes===0);
+  else if(maxCh===0&&opts.some(x=>x.changes===0)){const sm=wide?maxM:0;let dir=opts.filter(x=>x.changes===0);let t=Math.max(...dir.map(x=>x.dep))+1;
     for(let i=0;i<8&&dir.length<3;i++){const r=raptor(d,fk,tk,t,maxM,1,sm);if(!r.length)break;const x=r.sort((a,b)=>a.arr-b.arr)[0];if(!dir.some(y=>y.dep===x.dep&&y.arr===x.arr))dir.push(x);t=x.dep+1}
     opts=dir}
   else{const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
-  opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const pick=opts.slice(0,4);const show=pick.sort((a,b)=>a.changes-b.changes||a.arr-b.arr).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
-  if(!show.length){box.innerHTML=`<div class="sub">No connection found${maxM<1000?" — try a larger walking distance":""}. Services may have finished for the day; try a later day or check Translink's journey planner.</div>`;return}
+  if(arriveBy)extra=null;
+  opts.sort(arriveBy?((a,b)=>b.leave-a.leave||a.changes-b.changes):((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave));const pick=opts.slice(0,4);const show=pick.sort(arriveBy?((a,b)=>a.changes-b.changes||b.leave-a.leave):((a,b)=>a.changes-b.changes||a.arr-b.arr)).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
+  if(!show.length){box.innerHTML=`<div class="sub">No connection found${arriveBy?` that arrives by ${clock(byT)}`:""}${maxM<1000?" — try a larger walking distance":""}. ${arriveBy?"Try a later time, or":"Services may have finished for the day; try a later day or"} check Translink's journey planner.</div>`;return}
   PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=(wide?`<div class="odnote" style="margin-top:0">No services from ${esc(shortName(ST[PLAN.from][0]))} itself get there, so these start from stops within ${maxM} m.</div>`:"")+(chNote?`<div class="odnote" style="margin-top:0">${chNote}</div>`:"");
   const main=show.filter(x=>!x.walkFirst);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&x.arr===minArr),minCh=show[0].changes;
-  box.innerHTML=wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
+  const byNote=arriveBy?`<div class="odnote" style="margin-top:0">Latest ways to arrive by ${clock(byT)}${dayOff?" on "+esc(document.getElementById("cnDay").selectedOptions[0].textContent):""}.</div>`:"";
+  box.innerHTML=byNote+wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
     const tags=o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((oi===0&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
     return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}</div>`+
       o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(shortName(ST[PLAN.from][0])):"from "+nm(l.from);const b=l.to==null?"to "+esc(shortName(ST[PLAN.to][0])):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
@@ -866,14 +879,15 @@ function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.dis
   openPanel("Best connections","Stop or station to stop or station · unofficial",`
     <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.from?esc(ST[PLAN.from][0]):""}"><div class="results" id="cnFromR"></div></div></div>
     <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.to?esc(ST[PLAN.to][0]):""}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
-    <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="today">Leave today at…</option><option value="tom">Leave tomorrow at…</option></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
+    <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="leave">Leave at…</option><option value="arrive">Arrive by…</option></select><select id="cnDay" class="ttf cnsel cnday" style="display:none"></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
     <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="1000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
     <div class="cnf"><label>Changes</label><input id="cnCh" type="range" min="0" max="4" step="1" value="${PLAN.ch??0}"><span id="cnChV" class="cnrv">${["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch??0]}</span></div>
     <div class="cnhelp">Starts from your chosen stop or station; nearby stops within this distance are used to change, to finish, and to start only if nothing leaves from your stop.</div>
     <div class="webrow"><button class="btn" id="cnGo">Find connections</button></div><div id="cnRes"></div>`,{view:"cn"});
   placePicker("cnFrom","cnFromR",id=>{PLAN.from=id;planSearch()});placePicker("cnTo","cnToR",id=>{PLAN.to=id;planSearch()});
   document.getElementById("cnSwap").onclick=()=>{[PLAN.from,PLAN.to]=[PLAN.to,PLAN.from];document.getElementById("cnFrom").value=PLAN.from?ST[PLAN.from][0]:"";document.getElementById("cnTo").value=PLAN.to?ST[PLAN.to][0]:"";planSearch()};
-  const w=document.getElementById("cnWhen");w.onchange=()=>{document.getElementById("cnTime").style.display=w.value==="now"?"none":"";planSearch()};document.getElementById("cnTime").onchange=planSearch;
+  const w=document.getElementById("cnWhen");w.onchange=()=>{const later=w.value!=="now";document.getElementById("cnTime").style.display=later?"":"none";document.getElementById("cnDay").style.display=later?"":"none";planSearch()};document.getElementById("cnTime").onchange=planSearch;
+  cnDays().then(days=>{const sel=document.getElementById("cnDay");if(!sel)return;sel.innerHTML=days.map(([ymd,lab])=>`<option value="${ymd}">${lab}</option>`).join("");sel.onchange=planSearch});
   const chs=document.getElementById("cnCh");chs.oninput=()=>{PLAN.ch=+chs.value;document.getElementById("cnChV").textContent=["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch]};chs.onchange=planSearch;
   const rd=document.getElementById("cnRad");rd.oninput=()=>{PLAN.rad=+rd.value;document.getElementById("cnRadV").textContent=rd.value+" m"};rd.onchange=planSearch;
   document.getElementById("cnGo").onclick=planSearch;if(PLAN.from&&PLAN.to)planSearch();else document.getElementById("cnRes").innerHTML=""}

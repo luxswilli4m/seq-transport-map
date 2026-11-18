@@ -326,3 +326,5 @@ ol.stops li.origin{background:#2563eb14}
 .odwarn p{margin:2px 0}
 body:not(.light) .odwarn{background:#f59e0b22;color:#fcd34d}
 .webrow a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.cnday{max-width:150px}
+#cnWhen{flex:0 1 auto;min-width:0}.cnday{flex:1 1 90px;min-width:0;max-width:none}.cntime{flex:0 0 118px}
