@@ -17,6 +17,9 @@ import xml.etree.ElementTree as ET
 
 GTFS, REPO = sys.argv[1], sys.argv[2]
 CFG = json.load(open(os.path.join(REPO, "tools", "ondemand.json")))
+_AUTO = os.path.join(REPO, "tools", "ondemand_auto.json")
+if os.path.exists(_AUTO):   # services added automatically by tools/discover_ondemand.py
+    CFG["areas"] = CFG["areas"] + json.load(open(_AUTO)).get("areas", [])
 OUT = os.path.join(REPO, "data", "ondemand.json")
 BASE = "https://translink.com.au"
 problems = []
@@ -199,6 +202,8 @@ try:
                                "dests": [dest_pin(d, stops, pois, centroid(z)) for d in g["dests"]]})
             out = {k: a[k] for k in ("id", "name", "page", "how")}
             out.update({"groups": groups, "traced": True, "dlabel": "Key locations"})
+            if a.get("auto"):
+                out["auto"] = True
             if a.get("starts"):
                 out["starts"] = a["starts"]
             areas.append(out)
@@ -235,11 +240,13 @@ try:
                                "dests": [{"n": d, "ll": match(d, stops, pois, near)} for d in dests]})
         else:
             for n, c in sorted(polys, key=lambda x: a.get("zone_names", {}).get(x[0], x[0])):
-                nice = a.get("zone_names", {}).get(n, n)
+                nice = a.get("zone_names", {}).get(n) or (re.sub(r"(?<=[a-z])(?=[A-Z])", " ", re.sub(r"_[A-Z]{1,3}$", "", n)).replace("_", " ").strip() or n)
                 groups.append({"name": nice, "zones": [c], "dests": None})
             a_dests = [{"n": n, "ll": c} for n, c in pts]
         out = {k: a[k] for k in ("id", "name", "page", "how")}
         out["groups"] = groups
+        if a.get("auto"):
+            out["auto"] = True
         if not a.get("destinations_page"):
             out["dests"] = a_dests
         areas.append(out)
@@ -253,23 +260,7 @@ except Exception as e:
     problems.append(f"On-demand areas could not be updated: {e}. The map keeps showing the previous version.")
     areas = None
 
-# ---------- new on-demand services: any page linked from Translink's on-demand hub that isn't on the map or on the "not_drawn" list
-try:
-    hub = fetch(BASE + "/travel-with-us/on-demand").decode("utf-8", "replace")
-    known = {urllib.parse.urlparse(a["page"]).path.rstrip("/") for a in CFG["areas"]} | set(CFG.get("not_drawn", {}))
-    known |= {a.get("map_page", "").rstrip("/") for a in CFG["areas"]}
-    seen = set()
-    for u in re.findall(r'href="([^"]+)"', hub):
-        path = urllib.parse.urlparse(urllib.parse.urljoin(BASE, html.unescape(u))).path.rstrip("/")
-        if not (re.match(r"^/travel-with-us/on-demand/[a-z0-9-]+$", path) or re.match(r"^/[a-z0-9-]*on-demand$", path)):
-            continue
-        if path in ("/travel-with-us/on-demand", "/travel-with-us/on-demand/terms-and-conditions") or path in known or path in seen:
-            continue
-        seen.add(path)
-        problems.append(f"Translink lists an on-demand service that isn't on this map yet: {BASE + path}. "
-                        f"Ask for it to be added, or list it under \"not_drawn\" in tools/ondemand.json if it's outside SEQ.")
-except Exception as e:
-    print("on-demand hub page not checked:", e)
+# (new services on Translink's hub page are found and added by tools/discover_ondemand.py)
 
 if problems:
     with open(os.path.join(REPO, "zone_check.txt"), "a") as f:

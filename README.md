@@ -152,7 +152,12 @@ The list of areas, the links to Translink's pages, and the short "how it works" 
 
 Key locations, hours and start dates for traced areas are in `tools/ondemand.json`. Yarrabilba's key locations are pinned at the stop IDs Translink lists for them. Edit hours or key locations by hand if Translink's page changes.
 
-**New services.** The refresh also reads Translink's on-demand hub page (translink.com.au/travel-with-us/on-demand). If it links to a service that isn't on the map and isn't in the `not_drawn` list in `tools/ondemand.json` (currently Toowoomba and Hervey Bay, which are outside SEQ, and Tamborine Mountain, which has no area map), you get a GitHub issue. If Translink moves a page, the refresh keeps the previous areas on the map and opens an issue; fix the page address in that file, then run the workflow.
+**New services are added automatically.** Each week `tools/discover_ondemand.py` reads Translink's on-demand hub page (translink.com.au/travel-with-us/on-demand). For any service it links to that isn't on the map and isn't in the `not_drawn` list in `tools/ondemand.json` (currently Toowoomba and Hervey Bay, which are outside SEQ, and Tamborine Mountain, which has no area map), it:
+
+1. looks for map files (KML) on the service's page, or on a map page linked from it, and draws them exactly, like Gold Coast and Logan;
+2. otherwise looks for a map picture on the page and traces it. It finds roughly where the area is from the suburbs named on the page, then searches for the position and scale where the picture's roads line up with the real roads. The trace is only kept if the fit is clear.
+
+Hours ("When you can travel") and any key locations listed with stop IDs are read from the page. The service then appears on the map with a note on its card saying it was added automatically and hasn't been checked. You also get a GitHub issue listing what was added. Automatic entries live in `tools/ondemand_auto.json`; move one into `tools/ondemand.json` to tidy its wording by hand. After that, its map files or picture are re-checked every week like the others. If neither approach works, the issue says the service needs adding by hand. It is noted under `failed` in `tools/ondemand_auto.json` so it isn't reported again every week; delete it from there to retry.
 
 ### Other things you can change by hand
 

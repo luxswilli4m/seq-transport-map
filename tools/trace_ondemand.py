@@ -27,6 +27,9 @@ import numpy as np
 REPO = sys.argv[1]
 FORCE = sys.argv[sys.argv.index("--force") + 1] if "--force" in sys.argv else None
 CFG = json.load(open(os.path.join(REPO, "tools", "ondemand.json")))
+_AUTO = os.path.join(REPO, "tools", "ondemand_auto.json")
+if os.path.exists(_AUTO):
+    CFG["areas"] = CFG["areas"] + json.load(open(_AUTO)).get("areas", [])
 TPATH = os.path.join(REPO, "tools", "ondemand_traced.json")
 TRACED = json.load(open(TPATH))
 META = TRACED.setdefault("_pictures", {})
@@ -114,7 +117,7 @@ def load_roads(bbox):
     return np.array(pts)
 
 
-def trace(img_bytes, old_zone, outline="navy", debug=None):
+def trace(img_bytes, old_zone, outline="navy", debug=None, wide=False):
     """Return (outline [[lon,lat],...], fit) for the largest navy-outlined area in the picture."""
     import cv2
     from scipy.optimize import minimize
@@ -173,10 +176,16 @@ def trace(img_bytes, old_zone, outline="navy", debug=None):
     mn = im.min(axis=2).astype(np.uint8)
     tophat = cv2.morphologyEx(mn, cv2.MORPH_TOPHAT, np.ones((9, 9), np.uint8))
     white = ((mn > 246) | (tophat > 6)).astype(np.uint8)   # roads: white, or lighter than what's around them
+    strict = (mn > 246).astype(np.uint8)                      # clearly white roads only
+    thick = cv2.dilate(cv2.morphologyEx(strict, cv2.MORPH_OPEN, np.ones((21, 21), np.uint8)), np.ones((9, 9), np.uint8))
+    strict[thick > 0] = 0                                     # ...not white panels such as the key box
     dt = cv2.distanceTransform(1 - white, cv2.DIST_L2, 5)
-    ox = [p[0] for p in old_zone]; oy = [p[1] for p in old_zone]
+    groups = old_zone if wide else [old_zone]          # wide: a list of point groups (suburbs) where it might be
+    allp = [p for gp in groups for p in gp]
+    ox = [p[0] for p in allp]; oy = [p[1] for p in allp]
     lon0, lat0 = (min(ox) + max(ox)) / 2, (min(oy) + max(oy)) / 2
-    P = load_roads([min(ox) - 0.06, min(oy) - 0.06, max(ox) + 0.06, max(oy) + 0.06])
+    mg = 0.1 if wide else 0.06
+    P = load_roads([min(ox) - mg, min(oy) - mg, max(ox) + mg, max(oy) + mg])
     if len(P) < 200:
         raise RuntimeError("not enough base-map roads to line the picture up")
     X, Y = P[:, 0] - lon0, P[:, 1] - lat0
@@ -185,12 +194,14 @@ def trace(img_bytes, old_zone, outline="navy", debug=None):
         ax, ay, bx, by = p
         return ax * X + bx, ay * Y + by
 
-    def cost(p):
-        x, y = proj(p)
+    def cost(p, X=X, Y=Y, cap=25):
+        x, y = proj(p, X, Y)
         ok = (x >= 0) & (x < W - 1) & (y >= 0) & (y < H - 1)
-        if ok.sum() < 300:
+        if ok.sum() < min(300, 0.05 * len(X)):
             return 1e9
-        return float(np.mean(np.minimum(dt[y[ok].astype(int), x[ok].astype(int)], 25)))
+        if wide and (np.ptp(x[ok]) < 0.6 * W or np.ptp(y[ok]) < 0.6 * H):   # real roads must spread across the picture
+            return 1e9
+        return float(np.mean(np.minimum(dt[y[ok].astype(int), x[ok].astype(int)], cap)))
 
     # first guess: the new outline's box sits where the old area's box was
     px0, px1, py0, py1 = poly[:, 0].min(), poly[:, 0].max(), poly[:, 1].min(), poly[:, 1].max()
@@ -200,17 +211,82 @@ def trace(img_bytes, old_zone, outline="navy", debug=None):
     bx = (px0 + px1) / 2 - ax * ((min(ox) + max(ox)) / 2 - lon0)
     by = (py0 + py1) / 2 - ay * ((min(oy) + max(oy)) / 2 - lat0)
     best = None
-    for f in (0.85, 0.92, 1, 1.08, 1.17):
-        for dx in (-0.12, -0.06, 0, 0.06, 0.12):
-            for dy in (-0.12, -0.06, 0, 0.06, 0.12):
-                p = [ax * f, ay * f, bx + dx * W, by + dy * H]
-                c = cost(p)
-                if best is None or c < best[0]:
-                    best = (c, p)
-    res = minimize(cost, best[1], method="Nelder-Mead", options={"maxiter": 4000, "xatol": 0.01, "fatol": 1e-4})
+    if not wide:
+        for f in (0.85, 0.92, 1, 1.08, 1.17):
+            for dx in (-0.12, -0.06, 0, 0.06, 0.12):
+                for dy in (-0.12, -0.06, 0, 0.06, 0.12):
+                    p = [ax * f, ay * f, bx + dx * W, by + dy * H]
+                    c = cost(p)
+                    if best is None or c < best[0]:
+                        best = (c, p)
+        res = minimize(cost, best[1], method="Nelder-Mead", options={"maxiter": 4000, "xatol": 0.01, "fatol": 1e-4})
+    else:
+        # first trace of a new area: try each named suburb as the middle, and a range of map scales
+        rs = np.random.default_rng(0).choice(len(X), min(len(X), 5000), replace=False)
+        Xs, Ys = X[rs], Y[rs]
+        cx, cy = (px0 + px1) / 2, (py0 + py1) / 2
+        cents = [(np.mean([p[0] for p in gp]), np.mean([p[1] for p in gp])) for gp in groups] + [(np.mean(ox), np.mean(oy))]
+        cos0 = math.cos(math.radians(lat0)); cands = []
+        # score a guess both ways: real roads landing on drawn white roads (precision), and drawn white roads
+        # with a real road under them (recall). One-way scoring is fooled by squeezing many real roads into the picture.
+        F4 = 4
+        sd = cv2.resize(strict, (W // F4, H // F4), interpolation=cv2.INTER_AREA) > 0
+        sdt = cv2.distanceTransform((~sd).astype(np.uint8), cv2.DIST_L2, 3)
+        nroad = max(1, int(sd.sum()))
+        rs2 = np.random.default_rng(1).choice(len(X), min(len(X), 40000), replace=False)
+        Xf, Yf = X[rs2], Y[rs2]
+        # normalised correlation of the two road drawings (blurred, quarter size): squeezing many real roads
+        # into the picture doesn't help, because only the pattern counts, not how much ink there is
+        BP = {}
+        for sg in (8.0, 3.0, 1.5):
+            b_ = cv2.GaussianBlur(sd.astype(np.float32), (0, 0), sg).ravel()
+            BP[sg] = (b_ - b_.mean()) / (b_.std() + 1e-9)
+        def fscore(p, Xa=Xf, Ya=Yf, sg=1.5):
+            x, y = proj(p, Xa, Ya); x = (x / F4).astype(int); y = (y / F4).astype(int)
+            ok = (x >= 0) & (x < W // F4) & (y >= 0) & (y < H // F4)
+            if ok.sum() < 100:
+                return 0.0
+            ras = np.zeros(sd.shape, np.float32); ras[y[ok], x[ok]] = 1
+            ras = cv2.GaussianBlur(ras, (0, 0), sg).ravel()
+            sdv = ras.std()
+            return float((ras * BP[sg]).sum() / (sdv * len(ras) + 1e-9)) if sdv > 0 else 0.0
+        for (clon, clat) in cents:
+            for sc in np.geomspace(8000, 70000, 14):
+                a_, b_ = sc, -sc / cos0
+                for dx in np.linspace(-0.3, 0.3, 9):
+                    for dy in np.linspace(-0.3, 0.3, 9):
+                        p = [a_, b_, cx - a_ * (clon - lon0) + dx * W, cy - b_ * (clat - lat0) + dy * H]
+                        cands.append((-fscore(p, sg=8.0), p))
+        cands.sort(key=lambda t: t[0])
+        res = None
+        full = lambda q: [q[0], -q[0] / cos0, q[1], q[2]]      # north-up, true proportions
+        best_q = None
+        for _, p in cands[:12]:
+            q0 = [p[0], p[2], p[3]]
+            q = q0
+            for sg, st_ in ((8.0, 60), (3.0, 20), (1.5, 8)):     # coarse to fine
+                q = minimize(lambda q: -fscore(full(q), sg=sg), q, method="Nelder-Mead",
+                             options={"maxiter": 500, "xatol": 0.5, "fatol": 1e-5, "initial_simplex": [q, [q[0] * (1 + st_ / 1500), q[1], q[2]], [q[0], q[1] + st_, q[2]], [q[0], q[1], q[2] + st_]]}).x
+            f = fscore(full(q))
+            if os.environ.get("TRACE_DEBUG"):
+                print("   cand", [round(v) for v in q], "fscore", round(f, 3))
+            if best_q is None or f > best_q[0]:
+                best_q = (f, q)
+        # polish close to the best two-way match only (scale within 4 %, shift within 25 px), keeping it north-up
+        q0 = best_q[1]
+        lo = [q0[0] * 0.96, q0[1] - 25, q0[2] - 25]; hi = [q0[0] * 1.04, q0[1] + 25, q0[2] + 25]
+        q = minimize(lambda q: cost(full(q)), q0, method="Powell", bounds=list(zip(lo, hi)), options={"xtol": 0.01, "ftol": 1e-5}).x
+        res = minimize(lambda q: cost(full(q)), q, method="Nelder-Mead", options={"maxiter": 1}); res.x = np.array(full(q)); res.fun = cost(full(q))
     ax, ay, bx, by = res.x
-    x, y = proj(res.x); ok = (x >= 0) & (x < W - 1) & (y >= 0) & (y < H - 1)
-    fit = float(np.median(dt[y[ok].astype(int), x[ok].astype(int)]))   # half the real roads sit within this many pixels of a drawn road
+    if os.environ.get("TRACE_DEBUG"):
+        print("  affine", [round(v, 1) for v in res.x], "centre", round(lon0, 4), round(lat0, 4), "cost", round(res.fun, 2))
+    def hits(p):
+        x, y = proj(p); ok = (x >= 0) & (x < W - 1) & (y >= 0) & (y < H - 1)
+        return float(np.mean(dt[y[ok].astype(int), x[ok].astype(int)] < 3)) if ok.sum() > 300 else 0.0
+    # how many real roads land on a drawn road, here vs. with the picture nudged 40 px: a true fit stands out
+    hit = hits(res.x)
+    base = float(np.mean([hits([ax, ay, bx + dx, by + dy]) for dx, dy in ((40, 0), (-40, 0), (0, 40), (0, -40))]))
+    fit = {"hit": round(hit, 3), "base": round(base, 3), "ok": hit >= 0.45 and hit >= 1.6 * base}
     if debug:
         import cv2 as _c
         v = np.ascontiguousarray(im[..., ::-1].astype(np.uint8))
@@ -230,54 +306,60 @@ def overlap(a, b):
     return A.intersection(B).area / max(A.union(B).area, 1e-12), A.area / max(B.area, 1e-12)
 
 
-changed = False
-for area in CFG["areas"]:
-    if not area.get("traced"):
-        continue
-    for g in area["groups"]:
-        pic, zid = g.get("picture"), g["zone"]
-        if not pic:
+def main():
+    global changed
+    changed = False
+    for area in CFG["areas"]:
+        if not area.get("traced"):
             continue
-        try:
-            url = find_picture(pic)
-            data = fetch(url)
-            sha = hashlib.sha1(data).hexdigest()
-            old = META.get(zid, {})
-            if old.get("sha") == sha and FORCE != zid:
-                print(f"{zid}: picture unchanged")
+        for g in area["groups"]:
+            pic, zid = g.get("picture"), g["zone"]
+            if not pic:
                 continue
-            if not old.get("sha") and zid in TRACED and FORCE != zid:
-                META[zid] = {"url": url, "sha": sha}; changed = True     # first run: remember the picture
-                print(f"{zid}: picture recorded")
-                continue
-            if pic.get("auto") is False:
-                notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture. This one can't be re-traced "
-                             f"automatically (labels and icons sit across the outline), so the map keeps the previous outline. "
-                             f"Ask for it to be re-traced. Picture: {url}")
-                META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
-                continue
-            ring, fit = trace(data, TRACED[zid], pic.get("outline", "navy"), os.environ.get("TRACE_DEBUG") and f"/tmp/trace_{zid}.png")
-            iou, ratio = overlap(ring, TRACED[zid])
-            print(f"{zid}: re-traced, fit {fit:.2f} px, overlap {iou:.2f}, size x{ratio:.2f}")
-            if fit > 3.0 or iou < 0.6 or not 0.5 < ratio < 2:
-                notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, but the automatic re-trace "
-                             f"didn't line up confidently (fit {fit:.1f}, overlap {iou:.0%}). The map keeps the previous outline. "
-                             f"Picture: {url}")
-                META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
-                continue
-            TRACED[zid] = ring
-            META[zid] = {"url": url, "sha": sha}; changed = True
-            if iou < 0.97:
-                notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, so the outline was re-traced "
-                             f"automatically ({abs(ratio - 1):.0%} {'bigger' if ratio >= 1 else 'smaller'}; {iou:.0%} overlap with the old one). "
-                             f"Worth a quick look on the map. Picture: {url}")
-        except Exception as e:
-            notes.append(f"{area['name']} ({g['name']}): couldn't check the map picture ({e}). The map keeps the current outline.")
+            try:
+                url = find_picture(pic)
+                data = fetch(url)
+                sha = hashlib.sha1(data).hexdigest()
+                old = META.get(zid, {})
+                if old.get("sha") == sha and FORCE != zid:
+                    print(f"{zid}: picture unchanged")
+                    continue
+                if not old.get("sha") and zid in TRACED and FORCE != zid:
+                    META[zid] = {"url": url, "sha": sha}; changed = True     # first run: remember the picture
+                    print(f"{zid}: picture recorded")
+                    continue
+                if pic.get("auto") is False:
+                    notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture. This one can't be re-traced "
+                                 f"automatically (labels and icons sit across the outline), so the map keeps the previous outline. "
+                                 f"Ask for it to be re-traced. Picture: {url}")
+                    META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
+                    continue
+                ring, fit = trace(data, TRACED[zid], pic.get("outline", "navy"), os.environ.get("TRACE_DEBUG") and f"/tmp/trace_{zid}.png")
+                iou, ratio = overlap(ring, TRACED[zid])
+                print(f"{zid}: re-traced, roads matched {fit['hit']:.0%} (vs {fit['base']:.0%} when nudged), overlap {iou:.2f}, size x{ratio:.2f}")
+                if not fit["ok"] or iou < 0.6 or not 0.5 < ratio < 2:
+                    notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, but the automatic re-trace "
+                                 f"didn't line up confidently (roads matched {fit['hit']:.0%}, overlap {iou:.0%}). The map keeps the previous outline. "
+                                 f"Picture: {url}")
+                    META[zid] = {**old, "pending_url": url, "pending_sha": sha}; changed = True
+                    continue
+                TRACED[zid] = ring
+                META[zid] = {"url": url, "sha": sha}; changed = True
+                if iou < 0.97:
+                    notes.append(f"{area['name']} ({g['name']}): Translink changed the map picture, so the outline was re-traced "
+                                 f"automatically ({abs(ratio - 1):.0%} {'bigger' if ratio >= 1 else 'smaller'}; {iou:.0%} overlap with the old one). "
+                                 f"Worth a quick look on the map. Picture: {url}")
+            except Exception as e:
+                notes.append(f"{area['name']} ({g['name']}): couldn't check the map picture ({e}). The map keeps the current outline.")
 
-if changed:
-    with open(TPATH, "w") as f:
-        json.dump(TRACED, f, indent=0)
-if notes:
-    with open(os.path.join(REPO, "zone_check.txt"), "a") as f:
-        f.write("\n### On-demand map pictures\n\n" + "\n".join("- " + n for n in notes) + "\n")
-    print("\n".join(notes))
+    if changed:
+        with open(TPATH, "w") as f:
+            json.dump(TRACED, f, indent=0)
+    if notes:
+        with open(os.path.join(REPO, "zone_check.txt"), "a") as f:
+            f.write("\n### On-demand map pictures\n\n" + "\n".join("- " + n for n in notes) + "\n")
+        print("\n".join(notes))
+
+
+if __name__ == "__main__":
+    main()

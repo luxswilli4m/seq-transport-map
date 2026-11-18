@@ -55,6 +55,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_platforms.py gtfs .
 
+      - name: Add new on-demand services from Translink's on-demand page
+        continue-on-error: true
+        run: python tools/discover_ondemand.py gtfs .
+
       - name: Re-trace on-demand areas whose Translink map picture changed
         continue-on-error: true
         run: python tools/trace_ondemand.py .
@@ -84,7 +88,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             python tools/stamp.py   # new version tag so browsers fetch the fresh data
-            git add data index.html tools/ondemand_traced.json
+            git add data index.html tools/ondemand_traced.json tools/ondemand_auto.json
             git commit -m "Weekly Translink data refresh"
             git push
           fi

@@ -727,6 +727,7 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=`<div class="odhow">${esc(
     else h+=`<div class="grp">Key locations (both roam zones)</div>`+odDestHTML(a.dests||[],ai);if(fit)odFit(g.zones)}
   else h+=`<div class="grp">Key locations</div>`+odDestHTML(a.dests||[],ai);
   if(a.traced)h+=`<div class="odnote">Area traced from Translink's map picture, so the edges are approximate.</div>`;
+  if(a.auto)h+=`<div class="odnote">This service was added to the map automatically from Translink's website and hasn't been checked yet. See Translink for full details.</div>`;
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
   if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od")closePanel();return}
