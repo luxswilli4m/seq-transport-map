@@ -763,7 +763,10 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
 (()=>{const w=document.getElementById("bauWrap"),b=document.getElementById("bauBtn");if(!w)return;
   const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
   b.onclick=e=>{e.stopPropagation();document.getElementById("moreWrap").classList.remove("open");set(!w.classList.contains("open"))};
-  w.querySelectorAll("[data-bau]").forEach(x=>x.onclick=()=>{set(false);const id=x.dataset.bau;if(!ST[id])return;webCam=null;openStop(id,true)});
+  const wire=()=>w.querySelectorAll("[data-bau]").forEach(x=>x.onclick=()=>{set(false);const id=x.dataset.bau;if(!ST[id])return;webCam=null;openStop(id,true)});wire();
+  // the list itself comes from tools/bau.json via data/platforms.json, so adding a station there updates this menu
+  fetch(BASE+"data/platforms.json"+DV).then(r=>r.json()).then(P=>{if(!P.bau||!P.bau.length)return;
+    w.querySelector(".moremenu").innerHTML=P.bau.map(m=>`<button data-bau="${esc(m.id)}" role="menuitem"><b>${esc(m.name)}</b><span>${esc(m.sub)}</span></button>`).join("");wire()}).catch(()=>{});
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
 // ---------- Best connections: stop/station to stop/station planner (data/plan/<day>.json, built weekly)
 const PLAN={cache:{},from:null,to:null};

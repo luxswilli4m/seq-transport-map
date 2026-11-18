@@ -14,9 +14,7 @@ from shapely.geometry import Polygon, Point, shape
 from shapely.ops import unary_union, transform
 
 G, REPO = sys.argv[1], sys.argv[2]
-BAU = ["place_qsbs", "place_ccbs", "place_romsta", "place_helsta"]
-# stations drawn alongside a BAU station (not in the BAU menu themselves): Roma Street busway's bus platforms 1 and 2
-EXTRA = ["place_rompl"]
+CFG_BAU = json.load(open(os.path.join(REPO, "tools", "bau.json")))["stations"]   # the one list to edit
 RADIUS = 0.35
 MATCH = float(os.environ.get("PLAT_MATCH", 25))  # metres  # km around the station to look for platform areas
 
@@ -32,6 +30,30 @@ def lonlat(x, y, px, py, ext):
     return lon, lat
 
 stops = {r["stop_id"]: r for r in csv.DictReader(open(os.path.join(G, "stops.txt"), encoding="utf-8-sig"))}
+
+# ---------- BAU stations from tools/bau.json (names), plus companion stations: another station with the same
+# core name within 400 m (e.g. Roma Street busway beside Roma Street train station). Companions get their
+# platforms drawn as squares, so they never borrow the main station's platform shapes.
+def base_name(n):
+    return re.sub(r"\s+(busway |bus |train |ferry )?(station|terminal|interchange)\b.*$", "", n.lower()).strip()
+
+parents = {k: s for k, s in stops.items() if s.get("location_type") == "1"}
+def near_km(a, b):
+    return math.hypot((float(a["stop_lon"]) - float(b["stop_lon"])) * 98.7, (float(a["stop_lat"]) - float(b["stop_lat"])) * 110.6)
+BAU, EXTRA, MENU, missing = [], [], [], []
+for nm in CFG_BAU:
+    hit = [k for k, s in parents.items() if s["stop_name"].lower() == nm.lower()] or \
+          [k for k, s in stops.items() if s["stop_name"].lower() == nm.lower()]
+    if not hit:
+        missing.append(nm); continue
+    sid = hit[0]; BAU.append(sid)
+    comp = [k for k, s in parents.items() if k != sid and base_name(s["stop_name"]) == base_name(stops[sid]["stop_name"]) and near_km(s, stops[sid]) <= 0.4]
+    EXTRA += [k for k in comp if k not in EXTRA]
+    MENU.append({"id": sid, "name": stops[sid]["stop_name"], "with": comp})
+if missing:
+    with open(os.path.join(REPO, "zone_check.txt"), "a") as f:
+        f.write("\n### BAU stations\n\n" + "\n".join(f"- \"{m}\" in tools/bau.json doesn't match a station name in Translink's data. Check the spelling against the station card on the map." for m in missing) + "\n")
+    print("BAU names not found:", missing)
 def plabel(name, code):
     m = re.search(r",\s*platform\s+(\w+)\s*$", name, re.I)
     if m: return m.group(1)
@@ -39,6 +61,7 @@ def plabel(name, code):
     if m: return m.group(1)
     m = re.search(r",\s*(\w{1,3})\s*$", name)
     if m: return m.group(1)
+    if code and re.fullmatch(r"\w{1,3}", code.strip()): return code.strip()   # e.g. "Chermside Shopping Centre interchange B" (bay B)
     return None
 
 # ---------- platform outlines from Overture Maps (OpenStreetMap platforms the base map leaves out, such as
@@ -151,4 +174,23 @@ for sid in BAU + EXTRA:
     out.append({"id": sid, "name": st["stop_name"], "areas": keep, "pts": sorted(pts, key=lambda p: (int(re.match(r"\d*", p["n"]).group() or 999), p["n"]))})
     if area is not None: print("  nearest area to each number (m):", [round(min(g.distance(Point(p["ll"])) for g in getattr(area,"geoms",[area]))*111000) for p in pts])
     print(st["stop_name"], "areas", len(keep), "numbers", [p["n"] for p in pts])
-json.dump({"stations": out}, open(os.path.join(REPO, "data", "platforms.json"), "w"), separators=(",", ":"))
+# menu labels: what kinds of service stop there ("Train and G:link station")
+MODE = {"train": "Train", "busway": "Busway", "busstn": "Bus", "tram": "G:link", "ferry": "Ferry"}
+try:
+    NET = json.load(open(os.path.join(REPO, "data", "network.json")))["data"]["stops"]
+except Exception:
+    NET = {}
+for m in MENU:
+    kinds = []
+    ids = [m["id"]] + m["with"]
+    for k, s in NET.items():
+        if k in ids or (s[3] in MODE and base_name(s[0]) == base_name(m["name"]) and math.hypot((s[2] - float(stops[m["id"]]["stop_lon"])) * 98.7, (s[1] - float(stops[m["id"]]["stop_lat"])) * 110.6) <= 0.4):
+            lab = MODE.get(s[3])
+            if lab and lab not in kinds:
+                kinds.append(lab)
+    order = ["Train", "Busway", "Bus", "G:link", "Ferry"]
+    kinds = sorted(kinds, key=order.index)
+    kinds = [k if i == 0 or k == "G:link" else k.lower() for i, k in enumerate(kinds)]
+    m["sub"] = (" and ".join(kinds) + " station") if kinds else "Station"
+    m.pop("with")
+json.dump({"stations": out, "bau": MENU}, open(os.path.join(REPO, "data", "platforms.json"), "w"), separators=(",", ":"))
