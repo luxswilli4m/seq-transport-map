@@ -28,9 +28,11 @@ const FC = f => ({type:"FeatureCollection",features:f});
 
 // ---------- train lines (Translink T1–T6, assigned by route colour)
 const TLINES=[["T1","Ipswich / Rosewood – Caboolture / Nambour","27855A"],["T2","Springfield Central – Kippa-Ring","6CC6E9"],["T3","Doomben – Roma Street","9B60A6"],["T4","Cleveland – Shorncliffe","4778B2"],["T5","Varsity Lakes – Brisbane Airport","FFC425"],["T6","Beenleigh – Ferny Grove","D53E45"]];
-const TNAME=Object.fromEntries(TLINES.map(([t,n])=>[t,n])), TCOL=Object.fromEntries(TLINES.map(([t,,c])=>[t,"#"+c]));
+const TNAME=Object.fromEntries(TLINES.map(([t,n])=>[t,n])), TCOL={T1:"#2E9C69",T2:"#6DC7E9",T3:"#A769AB",T4:"#4E85C5",T5:"#FFC628",T6:"#EF474F"};
 const lineOf={}, lineRoutes={};
-R.forEach((r,i)=>{if(r.t!=="train")return;const hit=TLINES.find(x=>("#"+x[2]).toLowerCase()===r.c.toLowerCase());const t=hit?hit[0]:"T1";lineOf[i]=[t];(lineRoutes[t]=lineRoutes[t]||[]).push(i)});
+// colours as shown on Translink's network map legend (the feed's route colours are only used to tell the lines apart)
+const TDISP={T1:"#2E9C69",T2:"#6DC7E9",T3:"#A769AB",T4:"#4E85C5",T5:"#FFC628",T6:"#EF474F"};
+R.forEach((r,i)=>{if(r.t!=="train")return;const hit=TLINES.find(x=>("#"+x[2]).toLowerCase()===r.c.toLowerCase());const t=hit?hit[0]:"T1";lineOf[i]=[t];(lineRoutes[t]=lineRoutes[t]||[]).push(i);r.c=TDISP[t]});
 const TKW={T1:/Ipswich|Rosewood|Caboolture|Nambour|Gympie|Brisbane City|Roma Street/,T2:/Springfield|Redcliffe|Kippa|Brisbane City|Roma Street/,T3:/Doomben|Brisbane City|Roma Street/,T4:/Cleveland|Shorncliffe|Brisbane City|Roma Street/,T5:/Varsity|Airport|Gold Coast|Brisbane City|Roma Street/,T6:/Beenleigh|Ferny Grove|Brisbane City|Roma Street/};
 function ownLine(nm,i){const parts=R[i].l.split(/\s+-\s+/);return parts.length===2&&parts.every(x=>TKW[nm].test(x))&&!(parts[0]===parts[1]&&/Brisbane City/.test(parts[0]))}
 // lines that really serve each station (from each line's own routes); through-running trains are labelled by these
@@ -160,7 +162,7 @@ const GROUPS=[
  ["busway","Busways","#1FAE98",["bw-case","bw-line","bw-road","busway-pt","busway-lbl"]],
  ["busstn","Bus stations","#ffffff",["busstn-pt","busstn-lbl"]],
  ["stops","Bus stops","#E463A4",["stops"]],
- ["train","Trains","#4778B2",["train-case","train-line","train-pt","train-lbl"]],
+ ["train","Trains","#4E85C5",["train-case","train-line","train-pt","train-lbl"]],
  ["ferry","Ferries","#36A9B4",["ferry-line","ferry-pt"]],
  ["tram","Tram","#FFD400",["tram-case","tram-line","tram-pt"]],
  ["live","Live vehicles","#16a34a",["veh-dot","veh-lbl"]]];
