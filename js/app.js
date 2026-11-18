@@ -231,7 +231,7 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-function openPanel(t,s,html,opt){opt=opt||{};{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+function openPanel(t,s,html,opt){opt=opt||{};if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
@@ -253,7 +253,7 @@ function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
-function closePanel(){vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
+function closePanel(){if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 document.getElementById("pClose").onclick=closePanel;
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
   if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
@@ -778,12 +778,12 @@ async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.
   for(let i=0;i<4&&opts.length<3;i++){const r=raptor(d,fk,tk,t,maxM);if(!r.length)break;
     r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const o of r){if(!opts.some(x=>x.leave===o.leave&&x.arr===o.arr&&x.changes===o.changes))opts.push(o)}
     t=Math.min(...r.map(o=>o.dep))+1}
-  opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const show=opts.slice(0,3);
+  opts.sort((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave);const pick=opts.slice(0,4);const show=pick.sort((a,b)=>a.changes-b.changes||a.arr-b.arr).slice(0,3);
   if(!show.length){box.innerHTML=`<div class="sub">No connection found${maxM<1000?" — try a larger walking distance":""}. Services may have finished for the day; try a later day or check Translink's journey planner.</div>`;return}
   PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));
-  const minCh=Math.min(...show.map(x=>x.changes)),fewI=show.findIndex(x=>x.changes===minCh);
+  const minArr=Math.min(...show.map(x=>x.arr)),fastI=show.findIndex(x=>x.arr===minArr),minCh=show[0].changes;
   box.innerHTML=show.map((o,oi)=>{const dur=o.arr-o.leave;
-    const tags=(oi===0?`<span class="cnt">Fastest</span>`:"")+(oi===fewI&&minCh<show[0].changes?`<span class="cnt">Fewest changes</span>`:"");
+    const tags=(oi===0&&show.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&(fastI>0||show.some(x=>x.arr>minArr))?`<span class="cnt">Fastest</span>`:"");
     return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}</div>`+
       o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(shortName(ST[PLAN.from][0])):"from "+nm(l.from);const b=l.to==null?"to "+esc(shortName(ST[PLAN.to][0])):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
         const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
@@ -792,7 +792,10 @@ async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.
   box.querySelectorAll(".cno").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-leg]"))return;drawOption(+el.dataset.o)});
   box.querySelectorAll("[data-leg]").forEach(el=>el.onclick=()=>{const [oi,li]=el.dataset.leg.split(",").map(Number);drawOption(oi,li)});
   drawOption(0);if(dayOff===0)planLive(show)}
-function drawOption(oi,li){const {d,show}=PLAN.last;const o=show[oi];document.querySelectorAll(".cno").forEach(x=>x.classList.toggle("on",+x.dataset.o===oi));
+var cnSnap=null;
+function cnLayers(on){if(on){if(cnSnap)return;cnSnap={};GROUPS.forEach(([g])=>{cnSnap[g]=chipState[g];if(g==="live")return;setGroup(g,false)});chipBox.classList.add("dim")}
+  else if(cnSnap){GROUPS.forEach(([g])=>{if(g==="live")return;setGroup(g,cnSnap[g]!=="off")});cnSnap=null;chipBox.classList.remove("dim")}}
+function drawOption(oi,li){cnLayers(true);const {d,show}=PLAN.last;const o=show[oi];document.querySelectorAll(".cno").forEach(x=>x.classList.toggle("on",+x.dataset.o===oi));
   const lines=[],walks=[];let bb=null;const ext=c=>{bb=bb?[Math.min(bb[0],c[0]),Math.min(bb[1],c[1]),Math.max(bb[2],c[0]),Math.max(bb[3],c[1])]:[c[0],c[1],c[0],c[1]]};
   const xyOf=k=>[ST[k][2],ST[k][1]];
   o.legs.forEach((l,i)=>{if(li!=null&&i!==li)return;if(l.type==="ride"){const p=d.p[l.pi];const c=p.s.slice(l.bpos,l.apos+1).map(s=>d.xy[s]);c.forEach(ext);lines.push({type:"Feature",properties:{c:R[p.r].c,mode:"route"},geometry:{type:"LineString",coordinates:c}})}
