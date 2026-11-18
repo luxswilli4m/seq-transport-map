@@ -245,10 +245,33 @@ def picture_pins(g, dests):
                 to_ll = f
         if not to_ll:
             return
+        # Translink's icon says roughly where each key location is. Use the most precise record near it:
+        # a Translink stop given by ID always stands; otherwise the base-map / OpenStreetMap / Overture
+        # record nearest the icon (within 600 m); otherwise the icon's own position.
+        exact_ids = {x["n"] for x in g["dests"] if isinstance(x, dict) and x.get("stops")}
         for d in dests:
-            if d["n"] in px and not d["ll"]:
-                d["ll"], d["approx"] = to_ll(*px[d["n"]]), True
-                d.pop("src", None)
+            if d["n"] not in px or d["n"] in exact_ids:
+                continue
+            icon = to_ll(*px[d["n"]])
+            cands = []
+            if d["ll"] and not d.get("approx"):
+                cands.append({"name": d["n"], "ll": d["ll"], "src": "stops/base map"})
+            if PLACES:
+                cands += PLACES.candidates(d["n"], [TRACED[zid]], 2.0)
+            # same place = most of the words in common, both ways ("Redbank Plains Shopping Village" yes,
+            # "Redbank Plains Soccer Field" no); then the most trusted source, then the nearest to the icon
+            tk = lambda t: set(re.split(r"[^a-z0-9]+", t.lower().replace(".", ""))) - {""}
+            sim = lambda c: len(tk(c["name"]) & tk(d["n"])) / max(1, len(tk(c["name"]) | tk(d["n"])))
+            rank = {"stops/base map": 0, "osm": 1, "overture": 2}
+            near = [c for c in cands if math.dist(c["ll"], icon) * 100000 <= 600 and sim(c) >= 0.6]
+            if near:
+                best = min(near, key=lambda c: (-round(sim(c), 2), rank.get(c["src"], 3), math.dist(c["ll"], icon)))
+                d["ll"], d["approx"] = best["ll"], best["src"] != "stops/base map"
+                how = f"{best['src']} record '{best['name']}', {round(math.dist(best['ll'], icon) * 100000)} m from Translink's icon"
+            else:
+                d["ll"], d["approx"] = icon, True
+                how = "Translink's map icon" + (f" (nearest database record was {round(min(math.dist(c['ll'], icon) for c in cands) * 100000)} m away)" if cands else "")
+            print(f"   {d['n']}: {how}")
     except Exception as e:
         print(f"{g['name']}: key locations not read from the map picture ({e})")
 

@@ -116,8 +116,8 @@ class Places:
             c = c or self._setup(name, zones, maxkm)
             try:
                 best = self._osm(name, c) if src == "osm" else self._overture_find(name, c)
-            except RuntimeError as e:
-                self.log.append(f"{name}: {e}; will try again next week")
+            except Exception as e:
+                self.log.append(f"{name}: {src} lookup failed ({e}); will try again next week")
                 continue
             tried.add(src)
             if best:
@@ -127,6 +127,25 @@ class Places:
             self.db["found"][name] = {"ll": None, "tried": sorted(tried)}
             self.changed = True
         return None, None
+
+    def candidates(self, name, zones, maxkm=2.0, sources=("osm", "overture")):
+        """Every place passing the checks, from each source (looked up once, then kept in the cache).
+        Returns [{"name", "ll", "src"}]. Used where Translink's map picture says roughly where it is,
+        so the build can take the database record nearest to Translink's own icon."""
+        cache = self.db.setdefault("candidates", {}).setdefault(name, {})
+        out, c = [], None
+        for src in sources:
+            if src not in cache:
+                c = c or self._setup(name, zones, maxkm)
+                try:
+                    found = self._osm(name, c, every=True) if src == "osm" else self._overture_all(c)
+                except Exception as e:     # a source being down never stops the build; it's retried next week
+                    self.log.append(f"{name}: {src} lookup failed ({e}); will try again next week")
+                    continue
+                cache[src] = [{"name": r["name"], "ll": r["ll"]} for r in found]
+                self.changed = True
+            out += [dict(r, src=src) for r in cache[src]]
+        return out
 
     # ---------- OpenStreetMap
     def _search(self, q, box):
@@ -142,14 +161,14 @@ class Places:
         except ValueError:
             return []
 
-    def _osm(self, name, c):
+    def _osm(self, name, c, every=False):
         variants = [name.replace(".", ""), " ".join(w for w in c["words"] if w not in c["sub_toks"])]
         for k in range(len(c["distinct"]), 0, -1):
             for comb in itertools.combinations(c["distinct"], k):
                 if c["subs"]:
                     variants.append(c["subs"][0] + " " + " ".join(comb))
                 variants.append(" ".join(comb))
-        seen = set()
+        seen, allok = set(), []
         for v in variants:
             v = v.strip()
             if not v or v in seen:
@@ -161,10 +180,13 @@ class Places:
                       "ll": [round(float(r["lon"]), 6), round(float(r["lat"]), 6)]}
                 if self._ok(c, rr):
                     ok.append(rr)
+            if every:
+                allok += [r for r in ok if r["ll"] not in [a["ll"] for a in allok]]
+                continue
             best = self._choose(name, c, ok)
             if best:
                 return best
-        return None
+        return allok if every else None
 
     # ---------- Overture Maps
     def _overture_rows(self):
@@ -212,12 +234,14 @@ class Places:
         self._overture = rows
         return rows
 
-    def _overture_find(self, name, c):
+    def _overture_all(self, c):
         x0, y0, x1, y1 = c["box"]
         key = set(c["distinct"] or c["words"])
-        ok = [r for r in self._overture_rows()
-              if x0 <= r["ll"][0] <= x1 and y0 <= r["ll"][1] <= y1 and key & set(_toks(r["name"])) and self._ok(c, r)]
-        return self._choose(name, c, ok)
+        return [r for r in self._overture_rows()
+                if x0 <= r["ll"][0] <= x1 and y0 <= r["ll"][1] <= y1 and key & set(_toks(r["name"])) and self._ok(c, r)]
+
+    def _overture_find(self, name, c):
+        return self._choose(name, c, self._overture_all(c))
 
 
 class _HTTPRangeFile(io.RawIOBase):
