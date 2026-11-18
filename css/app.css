@@ -263,3 +263,7 @@ ol.stops li .tc:empty{display:none}
 .moremenu button.odon{background:#1e3a8a;color:#fff}
 .moremenu button.odon span{color:#dbe6ff}
 #moreBtn.on{background:#1e3a8a;border-color:#1e3a8a;color:#fff}
+.lpe{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-bottom:1px solid var(--hover);font-size:14px}
+.lpa{font-size:12.5px;color:var(--muted)}
+.lpc{font-size:13px;color:var(--muted)}
+.lpc a{color:var(--accent)}

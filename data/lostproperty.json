@@ -1,0 +1,37 @@
+{
+  "_help": "Lost property contacts shown under More > Lost property. Edit by hand: add a 'link' (web page or form) and/or 'phone' to any entry. Entries without either show 'Contact details coming soon'. The weekly refresh does not touch this file.",
+  "intro": "Contact the operator of the service you left the item on. If you're not sure who that is, call Translink on 13 12 30.",
+  "sections": [
+    {"title": "Trains", "entries": [
+      {"name": "Queensland Rail", "area": "All South East Queensland trains (T1 to T6)", "link": "", "phone": ""}
+    ]},
+    {"title": "Brisbane buses, CityCat and ferries", "entries": [
+      {"name": "Brisbane City Council buses and bus stops", "area": "Brisbane City Council buses, including Brisbane Metro (M1, M2)", "link": "https://brisbane.qld.gov.au/node/20956", "phone": "07 3403 8888"},
+      {"name": "RiverCity Ferries", "area": "CityCat, CityHopper and cross-river ferries (lodged through Brisbane City Council's online form)", "link": "https://brisbane.qld.gov.au/node/20956", "phone": ""}
+    ]},
+    {"title": "Gold Coast tram", "entries": [
+      {"name": "G:link Gold Coast Light Rail", "area": "G:link tram", "link": "", "phone": ""}
+    ]},
+    {"title": "Other bus operators", "entries": [
+      {"name": "Bay Island Transit", "area": "", "link": "", "phone": ""},
+      {"name": "Brisbane Bus Lines", "area": "", "link": "", "phone": ""},
+      {"name": "Bus Queensland Lockyer Valley", "area": "", "link": "", "phone": ""},
+      {"name": "Caboolture Bus Lines", "area": "", "link": "", "phone": ""},
+      {"name": "CDC Queensland", "area": "", "link": "", "phone": ""},
+      {"name": "Clarks Logan City Bus Service", "area": "", "link": "https://www.clarkslogancity.com.au/contact", "phone": "07 3200 9606"},
+      {"name": "Hornibrook Buslines", "area": "", "link": "", "phone": ""},
+      {"name": "Kangaroo Bus Lines", "area": "", "link": "", "phone": ""},
+      {"name": "Kinetic Gold Coast", "area": "", "link": "", "phone": ""},
+      {"name": "Kinetic Sunshine Coast", "area": "", "link": "", "phone": ""},
+      {"name": "Logan Coaches", "area": "", "link": "", "phone": ""},
+      {"name": "Mt Gravatt Coach and Travel", "area": "", "link": "", "phone": ""},
+      {"name": "Park Ridge Transit", "area": "", "link": "", "phone": ""},
+      {"name": "Southern Cross Transit", "area": "", "link": "", "phone": ""},
+      {"name": "Thompson Bus Services", "area": "", "link": "", "phone": ""},
+      {"name": "Transdev Queensland", "area": "", "link": "", "phone": ""},
+      {"name": "TransitCare", "area": "", "link": "", "phone": ""},
+      {"name": "Transit Systems Queensland", "area": "", "link": "", "phone": ""},
+      {"name": "Westside Bus Company", "area": "", "link": "", "phone": ""}
+    ]}
+  ]
+}

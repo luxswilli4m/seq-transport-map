@@ -676,6 +676,19 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
   const f=map.queryRenderedFeatures(box,{layers:["od-pin","od-fill"]});if(!f.length)return;const p=f.find(x=>x.layer.id==="od-pin")||f[0];
   odCard(+p.properties.ai,+p.properties.gi,false);if(p.layer.id==="od-pin")selPt(p.geometry.coordinates)});
 
+// ---------- lost property (data/lostproperty.json, edited by hand)
+let LOST=null;
+async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  if(!LOST){try{LOST=await (await fetch(BASE+"data/lostproperty.json?v="+Date.now())).json()}catch(e){openPanel("Lost property","",`<div class="sub">Lost property details unavailable. Call Translink on 13 12 30.</div>`);return}}
+  q=(q||"").trim().toLowerCase();
+  const ent=e=>{const tel=e.phone?`<a href="tel:${esc(e.phone.replace(/\s/g,""))}">${esc(e.phone)}</a>`:"";const lk=e.link?`<a href="${esc(e.link)}" target="_blank" rel="noopener">Lost property page ↗</a>`:"";
+    return `<div class="lpe"><b>${esc(e.name)}</b>${e.area?`<span class="lpa">${esc(e.area)}</span>`:""}<span class="lpc">${[lk,tel].filter(Boolean).join(" · ")||"Contact details coming soon"}</span></div>`};
+  const body=LOST.sections.map(sec=>{const es=sec.entries.filter(e=>!q||(e.name+" "+e.area+" "+sec.title).toLowerCase().includes(q));return es.length?`<div class="grp">${esc(sec.title)}</div>`+es.map(ent).join(""):""}).join("")||`<div class="sub">No operators match.</div>`;
+  if(view!=="lost"||!pB.querySelector("#lpQ")){
+    openPanel("Lost property","Who to contact about items left on public transport",`<div class="schnote"><p>${esc(LOST.intro)}</p></div><input id="lpQ" class="ttf schq" placeholder="Search an operator, mode or area" autocomplete="off"><div id="lpList"></div>`,{view:"lost"});
+    document.getElementById("lpQ").oninput=e=>showLost(e.target.value)}
+  document.getElementById("lpList").innerHTML=body}
+document.getElementById("lostBtn").onclick=()=>showLost("");
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
 function startMin(tu){const t=tu.trip.start;if(!t)return null;const [h,m]=t.split(":").map(Number);return h*60+m}
@@ -767,4 +780,5 @@ window.__ready=true;window.__map=map;
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
   const od=document.getElementById("odBtn");new MutationObserver(()=>b.classList.toggle("on",od.classList.contains("odon"))).observe(od,{attributes:true,attributeFilter:["class"]});
-  b.title="More: school routes, on-demand services"})();
+  b.title="More: on demand, school routes, lost property"})();
+

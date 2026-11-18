@@ -53,7 +53,7 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 - **Red:** a trip on that route, or through that stop, has been cancelled and hasn't reached its start time yet. Red clears once the cancelled trip's start time has passed.
 - **Half red, half orange:** both of the above.
 
-**More ▾ menu.** Extras live under **More ▾** in the top bar: On demand and School routes, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
+**More ▾ menu.** Extras live under **More ▾** in the top bar: On demand, School routes and Lost property, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
 
 **School routes.** School routes (under More ▾) lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
 
@@ -133,6 +133,8 @@ The list of areas, the links to Translink's pages, and the short "how it works" 
 **Traced areas (Ipswich, Bribie Island).** Translink only publishes these as pictures, so their outlines were traced once, by lining each picture up with the real road network and picking out the boundary line, and are stored in **`tools/ondemand_traced.json`**. They don't update themselves. If Translink changes one of these areas, it needs re-tracing (ask for it to be redone). Their key locations, hours and start date are in `tools/ondemand.json`; edit those by hand if Translink's page changes. If Translink moves a page, the refresh keeps the previous areas on the map and opens a GitHub issue. Fix the page address in that file, then run the workflow.
 
 ### Other things you can change by hand
+
+- **Lost property contacts:** `data/lostproperty.json`. Each operator has a `link` and `phone`; fill them in and they appear on the Lost property card (blank ones show "Contact details coming soon"). The weekly refresh never changes this file.
 
 - **Busway colours and names:** the `"colour"` and `"name"` fields in `tools/busways.json`.
 - **Disclaimer and help text:** `index.html`, inside `<div id="info">`.
