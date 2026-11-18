@@ -248,10 +248,11 @@ function upstreamVeh(b){const tr=b.closest(".tr[data-k]");if(!tr||!ctx||!ctx.row
   const here=new Set((ctx.liveIds||[ctx.id,...(KIDS[ctx.id]||[])]).map(stopKey));const head=norm(cleanHead(TT.cal.hs[row.hi]||""));let best=null;
   for(const v of LIVE.veh){if(row.kind==="train"?lineAt(v.ri,ctx.id)!==row.line:v.ri!==row.ri)continue;const ns=v.stop&&stopKey(v.stop);if(!ns)continue;
     R[v.ri].d.forEach(d=>{const a=d.s.indexOf(ns);if(a<0)return;const z=d.s.findIndex((x,j)=>j>=a&&here.has(x));if(z<0)return;
-      const hm=head&&d.h&&(norm(d.h).includes(head)||head.includes(norm(d.h)))?0:1;const sc=hm*1000+(z-a);if(!best||sc<best.sc)best={sc,v}})}
+      const hm=head&&d.h&&(norm(d.h).includes(head)||head.includes(norm(d.h)))?0:1;if(hm&&head&&R[v.ri].d.some(x=>x.h&&(norm(x.h).includes(head)||head.includes(norm(x.h)))))return;const sc=hm*1000+(z-a);if(!best||sc<best.sc)best={sc,v}})}
   return best?best.v:null}
+const rowHead=b=>{const tr=b.closest(".tr[data-k]");const row=tr&&ctx&&ctx.rows&&ctx.rows[+tr.dataset.k];return row?cleanHead(TT.cal.hs[row.hi]||""):null};
 async function rowVehFor(b){let v=rowVeh(b);if(v)return v;const tr=b.closest(".tr");if(tr&&tr.querySelector("[data-trip]")||!LIVE.vehAt||Date.now()-LIVE.vehAt>15000){await pollVehicles(true);v=rowVeh(b)}return v||upstreamVeh(b)}
-function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=>openStop(a.dataset.s2,true));pB.querySelectorAll("[data-var]").forEach(a=>a.onclick=e=>{e.preventDefault();const [i,di,k]=a.dataset.var.split(",").map(Number);showVariant(R[i].n,di,k)});pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b)));
+function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=>openStop(a.dataset.s2,true));pB.querySelectorAll("[data-var]").forEach(a=>a.onclick=e=>{e.preventDefault();const [i,di,k]=a.dataset.var.split(",").map(Number);showVariant(R[i].n,di,k)});pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b),rowHead(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b),rowHead(b)));
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
@@ -317,7 +318,7 @@ async function renderTT(id){const box=document.getElementById("ttBox");if(!box)r
   if(!rows.length){box.innerHTML=`<div class="sub">No scheduled departures from this stop in the current timetable.</div>`;return}
   const f=(document.getElementById("ttFilter")||{}).value||"";const q=f.trim().toLowerCase();
   box.innerHTML=`<div class="th"><div>Route</div><div title="Green = live, amber = running late, grey = scheduled">Next</div><div>Later departures (scheduled)</div></div>`+rows.map((r,k)=>{const lab=(r.kind==="train"?r.line+" "+TNAME[r.line]:R[r.ri].n)+" "+TT.cal.hs[r.hi];return (!q||lab.toLowerCase().includes(q))?rowHTML(r,nowMin,k):""}).join("");
-  box.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b)));
+  box.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b),rowHead(b)));box.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b),rowHead(b)));
   if(typeof applyLive==="function")applyLive(id)}
 
 function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;focusRoutes=null;rtFocus=false;syncVehVis();if(!keepCam)webCam=null;
@@ -410,7 +411,16 @@ async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const
 // live vehicle progress along the stop list: Departed / Arriving (within 500 m) / Not arrived
 const stopKey=id=>ST[id]?id:(parentOf[id]||id);
 const kmTo=(a,b)=>{const kx=111.32*Math.cos(a[1]*Math.PI/180);return Math.hypot((a[0]-b[0])*kx,(a[1]-b[1])*110.57)};
-function vehDir(i,v){const r=R[i];const ns=v.stop&&stopKey(v.stop);let k=r.d.findIndex(d=>ns&&d.s.indexOf(ns)>=0&&d.s.indexOf(ns)<d.s.length-1);if(k<0)k=r.d.findIndex(d=>ns&&d.s.includes(ns));return k}
+function headMatch(h,hint){if(!h||!hint)return false;const a=norm(h),b=norm(hint);return !!a&&!!b&&(a.includes(b)||b.includes(a))}
+function dirByHead(i,hint,sid){const r=R[i];if(!hint)return -1;const ok=r.d.map((d,k)=>k).filter(k=>headMatch(r.d[k].h,hint));if(!ok.length)return -1;
+  if(sid){const k=ok.find(k=>{const x=r.d[k].s.indexOf(sid);return x>=0&&x<r.d[k].s.length-1});if(k!=null)return k}return ok[0]}
+function vehDir(i,v,hint){const r=R[i];const ns=v.stop&&stopKey(v.stop);
+  const cand=r.d.map((d,k)=>k).filter(k=>ns&&r.d[k].s.indexOf(ns)>=0&&r.d[k].s.indexOf(ns)<r.d[k].s.length-1);
+  if(cand.length>1&&hint){const h=cand.filter(k=>headMatch(r.d[k].h,hint));if(h.length===1)return h[0]}
+  if(cand.length>1&&v.lon!=null){// the vehicle sits between the previous stop and its next stop: pick the direction where that's true
+    const P=[0,v.lat,v.lon];let best=-1,bs=1e18;cand.forEach(k=>{const d=r.d[k],a=d.s.indexOf(ns);const prev=ST[d.s[a-1]],next=ST[d.s[a+1]];if(!prev&&!next)return;
+      const sc=(prev?dist(P,prev):5e5)-(next?dist(P,next):5e5);if(sc<bs){bs=sc;best=k}});if(best>=0)return best}
+  if(cand.length)return cand[0];return r.d.findIndex(d=>ns&&d.s.includes(ns))}
 function applyVehStatus(){const ol=pB.querySelector("ol.stops[data-ri]");if(!ol)return;const lis=ol.querySelectorAll("li");
   const clear=()=>lis.forEach(li=>{li.classList.remove("done");const x=li.querySelector(".vst");if(x)x.remove()});
   if(!vehFocus||+ol.dataset.di!==vehFocus.di){clear();return}
@@ -460,13 +470,18 @@ function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{c
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
   webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
-function showRoute(i,fromStop,veh){focusRoutes=new Set([i]);drawVehicles();const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
+function showRoute(i,fromStop,veh,hint){focusRoutes=new Set([i]);drawVehicles();const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
-  let di0=0;if(veh){const k=vehDir(i,veh);if(k>=0)di0=k}else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
+  let di0=0;const hk=hint&&r.d.length>1?dirByHead(i,hint,backState&&backState.id):-1;if(veh){const k=vehDir(i,veh,hint);if(k>=0)di0=k;if(hk>=0&&k!==hk){di0=hk;veh=null}}else if(hk>=0)di0=hk;else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
   document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};tvKey=r.n;drawVariants(i,di0);applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
-function showLine(nm,fromStop,veh){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=veh&&R[veh.ri]&&R[veh.ri].t==="train"?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
-  const other=ids.filter(i=>i!==main);const vdi=veh?Math.max(0,vehDir(main,veh)):0;let h=routeBody(main,vdi);
+// on a train line, the route and direction that runs towards the tapped row's destination from the station the card was opened from
+function lineDirFor(nm,hint,sid){if(!hint||!sid||!ST[sid])return null;const all=lineRoutes[nm]||[];const base=x=>ST[x]?ST[x][0].toLowerCase().replace(/,.*$/,"").replace(/ (busway |bus )?station$/,"").trim():"";const b0=base(sid);
+  const ids=new Set([sid,...(KIDS[sid]||[])]);let best=null;
+  all.forEach(i=>R[i].d.forEach((d,k)=>{if(!headMatch(d.h,hint))return;const a=d.s.findIndex(x=>ids.has(x)||(base(x)===b0&&dist(ST[x],ST[sid])<400));if(a<0||a>=d.s.length-1)return;
+    const sc=(ownLine(nm,i)?0:100)-d.s.length/1000;if(!best||sc<best.sc)best={sc,i,k}}));return best}
+function showLine(nm,fromStop,veh,hint){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const ld=hint&&backState?lineDirFor(nm,hint,backState.id):null;if(ld&&veh&&veh.ri!==ld.i)veh=null;const main=ld?ld.i:veh&&R[veh.ri]&&R[veh.ri].t==="train"?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
+  const other=ids.filter(i=>i!==main);let vdi=ld?ld.k:veh?Math.max(0,vehDir(main,veh,hint)):0;{const hk=hint&&R[main].d.length>1?dirByHead(main,hint,backState&&backState.id):-1;if(hk>=0&&(!veh||vdi!==hk)){vdi=hk;veh=null}}let h=routeBody(main,vdi);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
   openPanel(`${nm} ${TNAME[nm]}`,`Train line`+(veh&&veh.fleet?` · <b>Service number ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+h,{star:{list:"routes",key:nm},veh:veh?{ri:main,di:vdi,trip:veh.trip}:null});
   document.getElementById("fullTT").onclick=()=>openRouteTable(nm);tvKey=nm;applyTravel();applyVehStatus();insertAlerts([],ids);wireDirs(main);routeArrows(main,vdi);if(backState)pBack.style.display="block"}
