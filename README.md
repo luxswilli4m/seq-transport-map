@@ -29,7 +29,7 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Bus zones.** Brisbane bus routes are numbered by area: 1xx routes mostly run in the south, 2xx in the east, 3xx in the north, and so on. Each coloured shape shows where a three-digit series mostly stops. It's a rule of thumb rather than an official boundary. Striped (chevron) areas are places where stops from more than one series overlap, or where a few stops sit outside their series' main area. Dotted lines link outlying stops back to their zone.
 
-**Dotted lines** link outlying stops back to their zone along the roads buses actually take, including route variants that only some trips run (for example route 515's extension to Willowbank). Tap a dotted line to see which route it is, whether it's a variant, how many trips run that way, today's times, and the full timetable.
+**Outliers** are stops a route series serves more than about 400 m outside its zone; they get a striped patch. **Dotted lines** link outlying stops back to their zone along the roads buses actually take, including route variants that only some trips run (for example route 515's extension to Willowbank). Tap a dotted line to see which route it is, whether it's a variant, how many trips run that way, today's times, and the full timetable.
 
 **Route variants.** Many routes have trips that leave the main route to serve extra stops. A route card lists these under "Some trips also run via", with roughly what share of trips use them, and draws them as a dashed line. The full timetable includes every trip and every stop, with a dash where a trip doesn't stop (the same layout as Translink's timetables).
 
@@ -83,6 +83,10 @@ When you get one of these issues, check the map against Translink's network. The
 - **If a station name couldn't be found**, fix the spelling in `tools/busways.json` (see below), then run the workflow normally.
 
 Close the issue once it's sorted.
+
+**Outliers without a dotted line.** The refresh also checks that every outlier patch got a dotted line. If one didn't (no bus path back to the zone could be found), it opens a GitHub issue listing where and which routes. Nothing is held back; it's just a heads-up to look at.
+
+**Train line labels.** Translink colours some through-running trains by their far end (for example Gold Coast trains continuing to Doomben are coloured as the Doomben line). The map labels each train by the line that actually serves the station you're looking at, worked out automatically from each line's own routes, so these show correctly after every refresh.
 
 ### Adding a busway station (step by step)
 

@@ -33,6 +33,9 @@ const lineOf={}, lineRoutes={};
 R.forEach((r,i)=>{if(r.t!=="train")return;const hit=TLINES.find(x=>("#"+x[2]).toLowerCase()===r.c.toLowerCase());const t=hit?hit[0]:"T1";lineOf[i]=[t];(lineRoutes[t]=lineRoutes[t]||[]).push(i)});
 const TKW={T1:/Ipswich|Rosewood|Caboolture|Nambour|Gympie|Brisbane City|Roma Street/,T2:/Springfield|Redcliffe|Kippa|Brisbane City|Roma Street/,T3:/Doomben|Brisbane City|Roma Street/,T4:/Cleveland|Shorncliffe|Brisbane City|Roma Street/,T5:/Varsity|Airport|Gold Coast|Brisbane City|Roma Street/,T6:/Beenleigh|Ferny Grove|Brisbane City|Roma Street/};
 function ownLine(nm,i){const parts=R[i].l.split(/\s+-\s+/);return parts.length===2&&parts.every(x=>TKW[nm].test(x))&&!(parts[0]===parts[1]&&/Brisbane City/.test(parts[0]))}
+// lines that really serve each station (from each line's own routes); through-running trains are labelled by these
+const ownSt={};R.forEach((r,i)=>{if(r.t!=="train")return;const L=(lineOf[i]||[])[0];if(!L||!ownLine(L,i))return;r.d.forEach(d=>d.s.forEach(sid=>(ownSt[sid]=ownSt[sid]||new Set()).add(L)))});
+function lineAt(i,sid){const base=(lineOf[i]||["T?"])[0];const o=ownSt[sid];if(!o||o.has(base))return base;return LINE_ORDER.find(L=>o.has(L))||base}
 function lineMain(nm){let best=null,bl=-1;const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));for(const i of (own.length?own:all)){const sc=Math.max(...R[i].d.map(d=>d.s.length));if(sc>bl){bl=sc;best=i}}return best}
 const LINE_ORDER=TLINES.map(x=>x[0]);
 // ---------- route ordering: Metro first, then by number (NightLink beside its number), rail-replacement R last
@@ -201,7 +204,7 @@ const rowVeh=b=>{const tr=b.closest(".tr");const c=tr&&tr.querySelector("[data-t
 // nearest live service still heading towards this stop on the row's route (or train line) and headsign
 function upstreamVeh(b){const tr=b.closest(".tr[data-k]");if(!tr||!ctx||!ctx.rows||!LIVE.veh)return null;const row=ctx.rows[+tr.dataset.k];if(!row)return null;
   const here=new Set([ctx.id,...(KIDS[ctx.id]||[])].map(stopKey));const head=norm(cleanHead(TT.cal.hs[row.hi]||""));let best=null;
-  for(const v of LIVE.veh){if(row.kind==="train"?!(lineOf[v.ri]||[]).includes(row.line):v.ri!==row.ri)continue;const ns=v.stop&&stopKey(v.stop);if(!ns)continue;
+  for(const v of LIVE.veh){if(row.kind==="train"?lineAt(v.ri,ctx.id)!==row.line:v.ri!==row.ri)continue;const ns=v.stop&&stopKey(v.stop);if(!ns)continue;
     R[v.ri].d.forEach(d=>{const a=d.s.indexOf(ns);if(a<0)return;const z=d.s.findIndex((x,j)=>j>=a&&here.has(x));if(z<0)return;
       const hm=head&&d.h&&(norm(d.h).includes(head)||head.includes(norm(d.h)))?0:1;const sc=hm*1000+(z-a);if(!best||sc<best.sc)best={sc,v}})}
   return best?best.v:null}
@@ -233,8 +236,8 @@ function shortClock(m){m=((m%1440)+1440)%1440;const h=Math.floor(m/60),mm=m%60;r
 const cleanHead=h=>shortName(String(h||"").replace(/\s*,\s*stop\s+\w+$/i,""));
 function buildRows(id,entries){const now=bneNow(),today={ymd:now.ymd,dow:now.dow},yest=shiftDay(now.ymd,now.dow,-1),tom=shiftDay(now.ymd,now.dow,1);const rows=new Map();
   for(const e of entries){const ri=e[0],hi=e[1],si=e[2];const r=R[ri];if(!r)continue;const times=[];let acc=0;for(let k=3;k<e.length;k++){acc+=e[k];times.push(acc)}
-    const key=(r.t==="train"?(lineOf[ri]||["T?"])[0]:"r"+ri)+"|"+hi;
-    let row=rows.get(key);if(!row){row={ri,hi,kind:r.t,line:r.t==="train"?(lineOf[ri]||["T?"])[0]:null,up:[],tomorrow:[]};rows.set(key,row)}
+    const key=(r.t==="train"?lineAt(ri,id):"r"+ri)+"|"+hi;
+    let row=rows.get(key);if(!row){row={ri,hi,kind:r.t,line:r.t==="train"?lineAt(ri,id):null,up:[],tomorrow:[]};rows.set(key,row)}
     if(svcOn(si,today))times.forEach(t=>{if(t>=now.min)row.up.push(t)});
     if(svcOn(si,yest))times.forEach(t=>{if(t>=1440&&t-1440>=now.min)row.up.push(t-1440)});
     if(svcOn(si,tom))times.forEach(t=>row.tomorrow.push(t))}
@@ -388,7 +391,7 @@ function showRoute(i,fromStop,veh){focusRoutes=new Set([i]);drawVehicles();const
   let di0=0;if(veh){const k=vehDir(i,veh);if(k>=0)di0=k}else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
   document.getElementById("fullTT").onclick=()=>{const c={center:map.getCenter(),zoom:map.getZoom()};openRouteTable(r.n)};tvKey=r.n;drawVariants(i,di0);applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
-function showLine(nm,fromStop,veh){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=veh&&(ids.includes(veh.ri)||all.includes(veh.ri))?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
+function showLine(nm,fromStop,veh){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const main=veh&&R[veh.ri]&&R[veh.ri].t==="train"?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
   const other=ids.filter(i=>i!==main);const vdi=veh?Math.max(0,vehDir(main,veh)):0;let h=routeBody(main,vdi);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
   openPanel(`${nm} ${TNAME[nm]}`,`Train line`+(veh&&veh.fleet?` · <b>Service number ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+h,{star:{list:"routes",key:nm},veh:veh?{ri:main,di:vdi,trip:veh.trip}:null});
@@ -417,7 +420,7 @@ const bneMin=sec=>Math.floor(((sec+36000)%86400)/60);
 function computeLive(id,rows,d){const ids=new Set([id,...(KIDS[id]||[])]);const preds=[];const nowS=Date.now()/1000;
   for(const e of d.entity){const tu=e.tu;if(!tu||!tu.stu)continue;const ri=riOfRoute(tu.trip&&tu.trip.route);if(ri<0)continue;const tripCx=tu.trip.sr===3;
     for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;const delay=ev.delay||0;preds.push({ri,trip:tu.trip.trip,pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
-  return rows.map(row=>{if(!row.up.length)return null;const same=p=>row.kind==="train"?(lineOf[p.ri]||[])[0]===row.line:p.ri===row.ri;
+  return rows.map(row=>{if(!row.up.length)return null;const same=p=>row.kind==="train"?lineAt(p.ri,id)===row.line:p.ri===row.ri;
     const t0=row.up[0]%1440;const p=preds.find(x=>same(x)&&x.sched===t0);if(!p)return null;
     if(p.cx)return {cls:"nx cx",html:"Cancelled",title:"Cancelled"};
     const mins=Math.round((p.pred-nowS)/60);const late=p.delay>=120,early=p.delay<=-60;

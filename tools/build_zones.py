@@ -225,6 +225,10 @@ for sid, lo_, la_ in zip(remote.stop_id, remote.stop_lon, remote.stop_lat):
     if drawn is None or drawn.distance(pt) > 0.006:
         unl[(round(lo_, 2), round(la_, 2))] |= set(stop_routes.get(sid, ()))
 if unl: print("outlying stops without a dotted link:", "; ".join(f"{la},{lo} ({', '.join(sorted(r))})" for (lo, la), r in sorted(unl.items())))
+if unl:  # not a reason to hold anything back, but worth a look: becomes a GitHub issue
+    with open(os.path.join(REPO, "zone_check.txt"), "a") as f:
+        f.write("\n### Outlying stops without a dotted link\n\nThese stops sit outside their route's zone but no bus path back to the zone was found, so no dotted line was drawn. The map still updated as normal.\n\n" +
+                "\n".join(f"- near {la}, {lo}: route(s) {', '.join(sorted(r))}" for (lo, la), r in sorted(unl.items())) + "\n")
 if loops:  # largest one-way loop (e.g. 652 Beachmere), legs offset so it reads as a circuit
     lp = max(loops, key=lambda p: LineString(p).length)
     pp = np.array([P(a, b) for a, b in lp]); pp = np.c_[gaussian_filter1d(pp[:, 0], 3, mode="nearest"), gaussian_filter1d(pp[:, 1], 3, mode="nearest")]
