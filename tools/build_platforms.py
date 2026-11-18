@@ -13,6 +13,8 @@ from shapely.ops import unary_union, transform
 
 G, REPO = sys.argv[1], sys.argv[2]
 BAU = ["place_qsbs", "place_ccbs", "place_romsta", "place_helsta"]
+# stations drawn alongside a BAU station (not in the BAU menu themselves): Roma Street busway's bus platforms 1 and 2
+EXTRA = ["place_rompl"]
 RADIUS = 0.35
 MATCH = float(os.environ.get("PLAT_MATCH", 25))  # metres  # km around the station to look for platform areas
 
@@ -38,7 +40,7 @@ def plabel(name, code):
     return None
 
 out = []
-for sid in BAU:
+for sid in BAU + EXTRA:
     st = stops.get(sid)
     if not st: print("missing", sid); continue
     lo0, la0 = float(st["stop_lon"]), float(st["stop_lat"])
@@ -64,7 +66,8 @@ for sid in BAU:
     for k, s in stops.items():
         if s.get("parent_station") != sid: continue
         lb = None if re.search(r"\bstop\s+\d{3}\b", s["stop_name"], re.I) else plabel(s["stop_name"], s.get("platform_code"))
-        if lb: pts.append({"n": lb, "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
+        if lb and not any(p["n"] == lb for p in pts):   # one number per platform (a station entry can repeat platform 1)
+            pts.append({"n": lb, "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
     # Helensvale's platforms 1, 2, 4 and 5 are listed without a parent; add same-named platforms within 300 m
     base = st["stop_name"].lower().replace(" busway station", "").replace(" bus station", "").replace(" station", "")
     for k, s in stops.items():
@@ -74,7 +77,7 @@ for sid in BAU:
         if lb and not any(p["n"] == lb for p in pts): pts.append({"n": lb, "ll": [round(float(s["stop_lon"]), 6), round(float(s["stop_lat"]), 6)]})
     # keep only platform areas that actually hold one of this station's platforms (within 25 m)
     keep = []
-    if area is not None:
+    if area is not None and sid not in EXTRA:   # bus platforms get their own squares, never the rail platform shapes beside them
         for g in getattr(area, "geoms", [area]):
             if g.area <= 0: continue
             if any(g.distance(Point(p["ll"])) * 111000 < MATCH for p in pts):
