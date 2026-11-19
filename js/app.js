@@ -218,7 +218,9 @@ const allEl=document.createElement("div");allEl.className="chip allchip";allEl.i
 function renderAll(){const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");allEl.textContent=anyOff?"Show all":"Hide all";allEl.title=anyOff?"Turn every layer on":"Turn every layer off"}
 allEl.onclick=()=>{setTimeout(saveChips,0);const anyOff=GROUPS.some(([g])=>MASS(g)&&chipState[g]==="off");soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{if(!MASS(g))return;chipState[g]=anyOff?"on":"off";setGroup(g,anyOff);renderChip(g)});renderAll();hint()};
 GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
-  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});chipState.live="off";setGroup("live",false);renderChip("live");renderAll();
+  chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});chipState.live="off";setGroup("live",false);renderChip("live");
+// first visit: Bus zones start off (a saved layer choice from an earlier visit, below, takes over after that)
+chipState.zones="off";setGroup("zones",false);renderChip("zones");renderAll();
 // remember layer filters between visits (this device only)
 function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;if(typeof pjOn!=="undefined"&&pjOn)return;if(typeof gcOn!=="undefined"&&gcOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
 try{const sv=JSON.parse(localStorage.getItem("seqmap_layers")||"null");
@@ -265,6 +267,7 @@ panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.con
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
   if(b.kind==="cn"){openPanel("Best connections",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
   if(b.kind==="pj")return pjOverview();
+  if(b.kind==="ccu")return showCatchups();
   if(b.kind==="gc")return gcOverview();if(b.kind==="od")return odOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
@@ -299,7 +302,7 @@ function rowHTML(r,nowMin,k){const rt=R[r.ri];const bdg=r.kind==="train"?lineBad
   const p0=r.up.length?r.pl[r.up[0]]:(r.tomorrow.length?r.plT[r.tomorrow[0]]:null);const pshort=x=>x?x.replace(/^Platform /,"P").replace(/^Stop /,""):"";
   if(r.up.length){const d=r.up[0]-nowMin;next=`<div class="nx sched" data-live="${k}">${d<=0?"Now":d<60?d+" min":clock(r.up[0])}</div>`;list=r.up.slice(1).map(t=>`<span>${shortClock(t)}${r.pl[t]&&r.pl[t]!==p0?`<i class="plx" title="${esc(r.pl[t])}">${esc(pshort(r.pl[t]))}</i>`:""}</span>`).join("")||`<em>Last service</em>`}
   else{next=`<div class="nx none" data-live="${k}">—</div>`;list=`<em>None today · tomorrow ${clock(r.tomorrow[0])}</em>`}
-  return `<div class="tr" data-k="${k}"><div class="tc1">${bdg}<span class="hd">→ ${esc(cleanHead(TT.cal.hs[r.hi]))}${p0?`<span class="plat" data-plat="${k}">${esc(p0)}</span>`:""}</span></div>${next}<div class="tc3">${list}</div></div>`}
+  return `<div class="tr" data-k="${k}"><div class="tc1">${bdg}<span class="hd"><span class="hdt" title="${esc(cleanHead(TT.cal.hs[r.hi]))}">→ ${esc(cleanHead(TT.cal.hs[r.hi]))}</span>${p0?`<span class="plat" data-plat="${k}">${esc(p0)}</span>`:""}</span></div>${next}<div class="tc3">${list}</div></div>`}
 let ttTimer=null;
 // ---------- interchanges: other stops that belong to a station (same name, within 300 m), grouped by mode
 const MODE_OF=k=>k==="train"?"train":k==="tram"?"tram":k==="ferry"?"ferry":"bus";
@@ -385,7 +388,7 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
-  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tf"></span><span class="tc"></span>${esc(s[0])}${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tf"></span><span class="tc"></span><span class="snm">${esc(s[0])}</span>${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
 // tapped dotted line / variant: which route, which trips, today's times
 async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const r=R[i];const d=r.d[di];
   if(!d||vi<0||!d.v||!d.v[vi]){showRoute(i,false);return}
@@ -450,7 +453,7 @@ async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!
   if(tvKey!==key||!ol.isConnected)return;const data=RTC[key],now=bneNow(),s0=d.s[0];let best=null;
   for(const k of Object.keys(data)){const o=data[k].o,ix=new Map(o.map((x,j)=>[x,j]));if(!ix.has(s0))continue;
     const idx=d.s.map(x=>ix.has(x)?ix.get(x):-1);if(idx[idx.length-1]>=0&&idx[idx.length-1]<idx[0])continue;
-    const tr=data[k].t.map(t=>{const a=t[3+idx[0]];if(a==null||a<0)return null;const cov=idx.filter(j=>j>=0&&t[3+j]>=0).length;return {t,dep:t[2]+a,cov,today:t[1].some(si=>svcOn(si,now))}}).filter(Boolean);
+    const tr=data[k].t.map((t,row)=>{const a=t[3+idx[0]];if(a==null||a<0)return null;const cov=idx.filter(j=>j>=0&&t[3+j]>=0).length;return {t,row,k,dep:t[2]+a,cov,today:t[1].some(si=>svcOn(si,now))}}).filter(Boolean);
     if(!tr.length)continue;const mx=Math.max(...tr.map(x=>x.cov));const full=tr.filter(x=>x.cov>=mx*0.9);
     const ai=anc?data[k].o.indexOf(anc.sid):-1;
     const own=smin!=null?tr.filter(x=>x.t[2]%1440===smin).sort((a,b)=>b.today-a.today||b.cov-a.cov)[0]:ai>=0?tr.filter(x=>x.t[3+ai]>=0&&(x.t[2]+x.t[3+ai])%1440===anc.m).sort((a,b)=>b.today-a.today||b.cov-a.cov)[0]:null;if(own){if(!best||!best.own)best={...own,idx,own:true};continue}
@@ -458,6 +461,10 @@ async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!
     if(!best||(!best.own&&pick.cov>best.cov))best={...pick,idx}}
   if(!best)return;const a0=best.t[3+best.idx[0]];const lis=ol.querySelectorAll("li");
   lis.forEach((li,n)=>{const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;li.querySelector(".tv").textContent=n===0?"Start":v>=0?(v-a0)+" min":"";const tc=li.querySelector(".tc");if(tc)tc.textContent=v>=0?clock(best.t[2]+v):"—"});
+  // the platform or stop letter this run uses at each stop (usual one per stop, unless this trip uses another)
+  const pd=data[best.k]||{},px=(pd.px||{})[best.row]||{};
+  lis.forEach((li,n)=>{const j=best.idx[n];let el=li.querySelector(".tpl");const pi=j>=0&&best.t[3+j]>=0?(px[j]!=null?px[j]:(pd.p||[])[j]):-1;const lab=pi!=null&&pi>=0?(TT.cal.pl||[])[pi]:"";
+    if(!lab){if(el)el.remove();return}if(!el){el=document.createElement("span");el.className="tpl";const nm=li.querySelector(".snm");(nm||li).appendChild(el)}el.textContent=lab});
   // minutes from the stop or station this route was opened from
   const oj=originRow([...lis].map(li=>li.dataset.s));const ojv=oj>=0&&best.idx[oj]>=0?best.t[3+best.idx[oj]]:-1;ol.classList.toggle("hasfrom",ojv>=0);
   lis.forEach((li,n)=>{const tf=li.querySelector(".tf");if(!tf)return;li.classList.toggle("origin",ojv>=0&&n===oj);if(ojv<0||n<oj){tf.textContent="";return}const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;tf.textContent=n===oj?"Here":v>=0?(v-ojv)+" min":""});
@@ -599,9 +606,11 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden){pollVehic
 let favTimer=null;
 async function showFavStops(){focusRoutes=null;rtFocus=false;syncVehVis();backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);
   if(!FAV.stops.length){openPanel("Saved stops","Saved on this device",`<div class="sub">No saved stops yet. Open any stop or station and tap ☆ next to its name to save it here.</div>`,{view:"favs"});return}
-  openPanel("Saved stops",`${FAV.stops.length} saved on this device`,FAV.stops.map(id=>ST[id]?`<div class="fav" data-fav="${id}"><div class="favh"><a data-open="${id}">${esc(ST[id][0])}</a><span>${KIND[ST[id][3]]}${ST[id][4]?" · "+esc(ST[id][4]):""}</span><span class="favst"></span><button class="favx" data-unfav="${id}" title="Remove">✕</button></div><div class="tt favtt" id="fv_${id}"><div class="sub">Loading…</div></div></div>`:"").join(""),{view:"favs"});
+  openPanel("Saved stops",`${FAV.stops.length} saved on this device`,FAV.stops.map(id=>ST[id]?`<div class="fav closed" data-fav="${id}"><div class="favh"><button class="favtog" data-tog="${id}" aria-expanded="false" title="Show departures">+</button><a data-open="${id}">${esc(ST[id][0])}</a><span>${KIND[ST[id][3]]}${ST[id][4]?" · "+esc(ST[id][4]):""}</span><span class="favst"></span><button class="favx" data-unfav="${id}" title="Remove">✕</button></div><div class="tt favtt" id="fv_${id}"><div class="sub">Loading…</div></div></div>`:"").join(""),{view:"favs"});
   pB.querySelectorAll("[data-open]").forEach(a=>a.onclick=()=>{const cam={center:map.getCenter(),zoom:map.getZoom()};openStop(a.dataset.open,true);setBack({kind:"favs",cam})});
   pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=()=>{FAV.stops=FAV.stops.filter(x=>x!==b.dataset.unfav);saveFav();showFavStops()});
+  // each saved stop starts collapsed: + (on the left, well away from ✕) shows its departures, − hides them
+  pB.querySelectorAll("[data-tog]").forEach(b=>b.onclick=()=>{const f=b.closest(".fav");const open=f.classList.toggle("closed")===false;b.textContent=open?"−":"+";b.title=open?"Hide departures":"Show departures";b.setAttribute("aria-expanded",open)});
   await refreshFavStops();applyFavStatus();clearInterval(favTimer);favTimer=setInterval(()=>{if(view==="favs"&&panel.style.display!=="none")refreshFavStops();else clearInterval(favTimer)},30000)}
 async function refreshFavStops(){let d=null;try{d=await getTrips()}catch(e){}
   for(const id of FAV.stops){const box=document.getElementById("fv_"+id);if(!box||!ST[id])continue;let tile;try{tile=await loadTT(ST[id])}catch(e){continue}
@@ -1151,6 +1160,24 @@ async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="
     document.getElementById("lpQ").oninput=e=>showLost(e.target.value)}
   document.getElementById("lpList").innerHTML=body}
 document.getElementById("lostBtn").onclick=()=>showLost("");
+// ---------- Queensland Rail Commuter Catch-Ups (data/catchups.json, from Queensland Rail's page, refreshed weekly)
+let CCU=null;
+async function showCatchups(){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  if(!CCU){try{CCU=await (await fetch(BASE+"data/catchups.json"+DV)).json()}catch(e){openPanel("Commuter Catch-Ups","Queensland Rail",`<div class="sub">Session details are unavailable right now. See <a href="https://www.queenslandrail.com.au/inthecommunity/communityengagement/commuter-catch-ups" target="_blank" rel="noopener">Queensland Rail's Commuter Catch-Ups page ↗</a>.</div>`);return}}
+  const today=bneNow().ymd;const iso=d=>d.replace(/-/g,"");const up=(CCU.sessions||[]).filter(x=>iso(x.date)>=today);
+  const fmt=d=>new Date(d+"T00:00:00+10:00").toLocaleDateString("en-AU",{weekday:"short",day:"numeric",month:"short",timeZone:"Australia/Brisbane"});
+  const mon=d=>new Date(d+"T00:00:00+10:00").toLocaleDateString("en-AU",{month:"long",year:"numeric",timeZone:"Australia/Brisbane"});
+  let h=`<p class="pjp">Commuter Catch-Ups are drop-in sessions where Queensland Rail staff visit a station so you can have your say on how they can improve the travel experience. Check the list for when they're visiting your station.</p>`;
+  if(up.length){let m="";h+=`<div class="grp">Upcoming sessions</div><div class="ccu">`+up.map(x=>{const head=mon(x.date)!==m?`<div class="pjg">${esc(m=mon(x.date))}</div>`:"";
+      const st=x.id&&ST[x.id]?`<a href="#" data-ccu="${esc(x.id)}">${esc(ST[x.id][0])}</a>`:esc(x.station);
+      return head+`<div class="ccur"><span class="ccud">${esc(fmt(x.date))}${iso(x.date)===today?` <span class="cnt">Today</span>`:""}</span><span class="ccus">${st}</span><span class="ccut">${esc(x.time.replace(/\s*-\s*/," – "))}</span></div>`}).join("")+`</div>`}
+  else h+=`<div class="sub">No upcoming sessions are listed right now. Queensland Rail adds new ones to its page; the email notifications below let you know when.</div>`;
+  h+=`<div class="grp">Contact</div><ul class="pjlinks"><li>Email <a href="mailto:${esc(CCU.email||"CommuterCatchUps@qr.com.au")}">${esc(CCU.email||"CommuterCatchUps@qr.com.au")}</a></li><li>Queensland Rail (business hours): <a href="tel:131617">13 16 17</a></li></ul>`;
+  h+=`<div class="grp">Queensland Rail links</div><ul class="pjlinks"><li><a href="${esc(CCU.url||"https://www.queenslandrail.com.au/inthecommunity/communityengagement/commuter-catch-ups")}" target="_blank" rel="noopener">Commuter Catch-Ups page ↗</a></li><li><a href="https://www.queenslandrail.com.au/inthecommunity/communityengagement/email-notification-registration" target="_blank" rel="noopener">Email notifications about new sessions ↗</a></li><li><a href="https://www.queenslandrail.com.au/inthecommunity/communityengagement/crg" target="_blank" rel="noopener">Customer reference groups ↗</a></li></ul>`;
+  h+=`<div class="odnote">Unofficial copy of the sessions on Queensland Rail's page, checked ${esc(CCU.checked||"")}. Check the page before you go, in case a session changes.</div>`;
+  openPanel("Commuter Catch-Ups",`Queensland Rail · ${up.length} upcoming session${up.length===1?"":"s"}`,h,{view:"ccu"});
+  pB.querySelectorAll("[data-ccu]").forEach(a=>a.onclick=e=>{e.preventDefault();openStop(a.dataset.ccu,true);setBack({kind:"ccu"})})}
+document.getElementById("ccuBtn").onclick=()=>showCatchups();
 document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
@@ -1243,5 +1270,5 @@ window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAler
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
   const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
-  b.title="More: connections, on demand, go card vendors, Cross River Rail, The Wave, school routes, lost property, feedback"})();
+  b.title="More: connections, on demand, go card vendors, Cross River Rail, The Wave, school routes, lost property, commuter catch-ups, feedback"})();
 

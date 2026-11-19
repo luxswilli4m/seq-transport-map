@@ -92,7 +92,9 @@ ol.stops li .s2{display:block;font-size:12px;color:var(--muted)}
 .tt .tr{padding:7px 0;border-bottom:1px solid var(--hover);min-height:46px}
 .tt .tc1{display:flex;align-items:center;gap:8px;min-width:0}
 .tt .tc1 .rb{flex:none}
-.tt .hd{font-size:13px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tt .hd{font-size:13px;line-height:1.25;display:block;min-width:0;overflow:hidden}
+/* destination on one line (ending in … if long), so the second line always shows the stop or platform */
+.tt .hd .hdt{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tt .nx{font-size:14px;font-weight:700;text-align:center;border-left:1px solid var(--hover);border-right:1px solid var(--hover);padding:4px 2px;white-space:nowrap}
 .tt .nx.sched{color:var(--muted)}
 .tt .nx.live{color:#16a34a}
@@ -388,3 +390,14 @@ body:not(.light) .wkline{stroke:#93c5fd}body:not(.light) .wkarea{fill:#93c5fd22}
 .pjn li,.pjlinks li,.pjf li{margin:4px 0;line-height:1.35}
 .pjd{color:var(--muted);font-size:12px}
 .pjpdf{font-size:12px;white-space:nowrap}
+/* platform or stop letter a route's run uses at each stop */
+ol.stops li .tpl{display:inline-block;margin-left:7px;padding:0 7px;border-radius:9px;font-size:11.5px;font-weight:600;line-height:1.6;background:#e0e7ff;color:#1e3a8a;white-space:nowrap;vertical-align:1px}
+body:not(.light) ol.stops li .tpl{background:#3b82f633;color:#bfdbfe}
+/* saved stops: collapsed until opened with the + on the left */
+.fav.closed .favtt{display:none}
+.favh .favtog{flex:none;align-self:center;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--accent);font-size:18px;font-weight:700;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+.favh .favtog:hover{background:var(--hover)}
+.favh .favx{align-self:center}
+/* Commuter Catch-Ups sessions */
+.ccur{display:grid;grid-template-columns:110px 1fr auto;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--hover);font-size:13.5px}
+.ccud{font-weight:600}.ccut{color:var(--muted);white-space:nowrap;font-size:12.5px}

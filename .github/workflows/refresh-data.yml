@@ -93,6 +93,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_projects.py .
 
+      - name: Queensland Rail Commuter Catch-Ups (keeps last list if the page can't be read)
+        continue-on-error: true
+        run: python tools/build_catchups.py .
+
       - name: Notify if parts of the map were held back
         if: hashFiles('zone_check.txt') != ''
         env:

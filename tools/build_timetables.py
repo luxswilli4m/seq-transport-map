@@ -124,9 +124,10 @@ st_all = st_all[st_all.trip_id.isin(set(trips.trip_id))]
 st_all["seq"] = st_all.stop_sequence.astype(int)
 st_all["m"] = st_all.departure_time.map(mins)
 st_all["sid"] = st_all.stop_id.map(parent)
+st_all["pl"] = st_all.stop_id.map(lambda x: pl_index.get(PL.get(x), -1)).astype(int)   # platform / stop letter used
 st_all = st_all.sort_values(["trip_id", "seq"])
 tmeta = trips.set_index("trip_id")[["key", "dir", "hi", "si"]]
-by_trip = {tid: (g.sid.tolist(), g.m.tolist()) for tid, g in st_all.groupby("trip_id", sort=False)}
+by_trip = {tid: (g.sid.tolist(), g.m.tolist(), g.pl.tolist()) for tid, g in st_all.groupby("trip_id", sort=False)}
 del st_all
 
 def order_stops(patterns):
@@ -163,25 +164,40 @@ files = defaultdict(dict); rt_total = 0
 for (key, d), tl in groups.items():
     pat = defaultdict(int); tkeys = {}
     for tid, hi, si in tl:
-        sids, _ = by_trip[tid]; seen = defaultdict(int); ks = []
+        sids = by_trip[tid][0]; seen = defaultdict(int); ks = []
         for x in sids:
             seen[x] += 1; ks.append(x + ("#%d" % seen[x] if seen[x] > 1 else ""))
         tkeys[tid] = ks; pat[tuple(ks)] += 1
     order = order_stops(list(pat.items()))
     col = {k: i for i, k in enumerate(order)}
-    uniq = {}
+    uniq = {}; tpl = {}
     for tid, hi, si in tl:
-        ks = tkeys[tid]; _, ms = by_trip[tid]
-        row = [-1] * len(order)
-        for k, m in zip(ks, ms): row[col[k]] = m
+        ks = tkeys[tid]; _, ms, pls = by_trip[tid]
+        row = [-1] * len(order); prow = [-1] * len(order)
+        for k, m, pl in zip(ks, ms, pls): row[col[k]] = m; prow[col[k]] = pl
         first = min(m for m in row if m >= 0)
         rel = tuple(m - first if m >= 0 else -1 for m in row)
         u = uniq.setdefault((hi, first, rel), [])
-        u.append(si)
-    tripsout = sorted(([hi, sorted(set(sv)), first] + list(rel) for (hi, first, rel), sv in uniq.items()), key=lambda x: x[2])
+        u.append(si); tpl.setdefault((hi, first, rel), prow)
+    keys_sorted = sorted(uniq, key=lambda x: x[1])
+    tripsout = [[hi, sorted(set(uniq[(hi, first, rel)])), first] + list(rel) for (hi, first, rel) in keys_sorted]
+    # platforms: the usual platform or stop letter at each stop ("p", indexes into calendar.json "pl"), and the trips
+    # that use a different one ("px": {trip row: {stop column: platform}})
+    pdef = []
+    for c in range(len(order)):
+        cnt = defaultdict(int)
+        for kk in keys_sorted:
+            if tpl[kk][c] >= 0: cnt[tpl[kk][c]] += 1
+        pdef.append(max(cnt, key=cnt.get) if cnt else -1)
+    px = {}
+    for r_, kk in enumerate(keys_sorted):
+        diff = {str(c): v for c, v in enumerate(tpl[kk]) if v >= 0 and v != pdef[c]}
+        if diff: px[str(r_)] = diff
     hcount = defaultdict(int)
     for tid, hi, si in tl: hcount[hi] += 1
     files[key][d] = {"o": [k.split("#")[0] for k in order], "top": [h for h, _ in sorted(hcount.items(), key=lambda x: -x[1])[:3]], "t": tripsout}
+    if any(v >= 0 for v in pdef): files[key][d]["p"] = pdef
+    if px: files[key][d]["px"] = px
 for key, dd in files.items():
     s = json.dumps(dd, separators=(",", ":")); rt_total += len(s)
     open(os.path.join(rdir, re.sub(r"[^A-Za-z0-9_-]", "_", key) + ".json"), "w").write(s)
