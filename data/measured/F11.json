@@ -1,0 +1,1 @@
+{"1":{"pm":{"seg":{"place_hawtft>place_bretft":[510,660,7,305,543],"place_riveft>place_hawtft":[991,900,7,911,2043]},"stop":{"place_hawtft":[241,9],"place_bretft":[62,7],"place_apolft":[-122,6],"place_riveft":[151,7]},"e2e":[["place_riveft","place_apolft",1506,1740,4],["place_hawtft","place_apolft",514,840,2],["place_riveft","place_hawtft",1606,900,2]],"trips":9,"days":1}}}

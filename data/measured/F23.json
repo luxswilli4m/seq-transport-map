@@ -1,0 +1,1 @@
+{"0":{"pm":{"seg":{"place_holmft>place_riveft":[30,300,7,17,69]},"stop":{"place_holmft":[181,7],"place_riveft":[-54,7]},"e2e":[["place_holmft","place_riveft",30,300,7]],"trips":7,"days":1}},"1":{"pm":{"seg":{"place_riveft>place_holmft":[25,300,7,6,51]},"stop":{"place_riveft":[211,7],"place_holmft":[-85,7]},"e2e":[["place_riveft","place_holmft",25,300,7]],"trips":7,"days":1}}}
