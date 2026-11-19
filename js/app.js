@@ -189,7 +189,7 @@ document.getElementById("themeBtn").onclick=()=>{
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
   const keep=new Set(L); map.getStyle().layers.map(l=>l.id).filter(id=>!keep.has(id)).forEach(id=>map.removeLayer(id));
   map.setSprite(BASE+"assets/sprites/v4/"+THEME[theme].sprite);
-  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();if(typeof pjPaint==="function"){pjPaint("crr");pjPaint("wave")}
+  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();if(typeof hmPaint==="function")hmPaint();if(typeof pjPaint==="function"){pjPaint("crr");pjPaint("wave")}
 };
 
 // ---------- layer toggles
@@ -222,7 +222,7 @@ GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.class
 // first visit: Bus zones start off (a saved layer choice from an earlier visit, below, takes over after that)
 chipState.zones="off";setGroup("zones",false);renderChip("zones");renderAll();
 // remember layer filters between visits (this device only)
-function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;if(typeof pjOn!=="undefined"&&pjOn)return;if(typeof gcOn!=="undefined"&&gcOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
+function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;if(typeof pjOn!=="undefined"&&pjOn)return;if(typeof gcOn!=="undefined"&&gcOn)return;if(typeof hmOn!=="undefined"&&hmOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
 try{const sv=JSON.parse(localStorage.getItem("seqmap_layers")||"null");
   if(sv&&sv.s){GROUPS.forEach(([g])=>{const v=sv.s[g];if(v==="on"||v==="off"||v==="only"){chipState[g]=v;setGroup(g,v!=="off");renderChip(g)}});soloKey=sv.k||null;soloSnap=sv.snap||null;renderAll()}}catch(e){}
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
@@ -235,7 +235,7 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv"]);   // map-layer cards that shrink instead of closing
+const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv","hm","hmv"]);   // map-layer cards that shrink instead of closing
 function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
@@ -268,6 +268,7 @@ pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.s
   if(b.kind==="cn"){openPanel("Best connections",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
   if(b.kind==="pj")return pjOverview();
   if(b.kind==="ccu")return showCatchups();
+  if(b.kind==="rta")return showRTA();if(b.kind==="rtav")return rtaDetail(b.i);if(b.kind==="hm")return hmOverview();
   if(b.kind==="gc")return gcOverview();if(b.kind==="od")return odOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
@@ -388,7 +389,7 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
-  return `<div class="tvnote" id="tvNote"></div><ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tf"></span><span class="tc"></span><span class="snm">${esc(s[0])}</span>${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+  return `<div class="tvnote" id="tvNote"></div>${mHeadHTML()}<ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tf"></span><span class="tc"></span><span class="snm">${esc(s[0])}</span>${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
 // tapped dotted line / variant: which route, which trips, today's times
 async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const r=R[i];const d=r.d[di];
   if(!d||vi<0||!d.v||!d.v[vi]){showRoute(i,false);return}
@@ -469,7 +470,8 @@ async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!
   const oj=originRow([...lis].map(li=>li.dataset.s));const ojv=oj>=0&&best.idx[oj]>=0?best.t[3+best.idx[oj]]:-1;ol.classList.toggle("hasfrom",ojv>=0);
   lis.forEach((li,n)=>{const tf=li.querySelector(".tf");if(!tf)return;li.classList.toggle("origin",ojv>=0&&n===oj);if(ojv<0||n<oj){tf.textContent="";return}const j=best.idx[n];const v=j>=0?best.t[3+j]:-1;tf.textContent=n===oj?"Here":v>=0?(v-ojv)+" min":""});
   const fromNm=ojv>=0?ST[lis[oj].dataset.s][0]:null;
-  const note=document.getElementById("tvNote");if(note)note.textContent=(best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`)+(fromNm?` The blue column counts minutes from ${fromNm}.`:"")}
+  {const hd=document.getElementById("tvHead");if(hd){hd.style.display="";hd.classList.toggle("hasfrom",ojv>=0);mWireHead()}}
+  const note=document.getElementById("tvNote");if(note)note.textContent=(best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`)+(fromNm?` The blue column counts minutes from ${fromNm}.`:"");applyMeasured(ol,key,best,best.k)}
 function variantHTML(i,di){const d=R[i].d[di];if(!d||!d.v||!d.v.length)return "";
   return `<div class="grp">Some trips also run via</div>`+d.v.map((v,k)=>{const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;
     return `<div class="varbox"><div class="varh"><a href="#" data-var="${i},${di},${k}">${esc(v.x.length)} extra stop${v.x.length>1?"s":""}${v.h&&v.h!==d.h?" · to "+esc(v.h):""}</a>${pct!=null?`<span class="varpct">about ${pct}% of trips</span>`:""}</div>
@@ -491,8 +493,8 @@ function lineDirFor(nm,hint,sid){if(!hint||!sid||!ST[sid])return null;const all=
   const ids=new Set([sid,...(KIDS[sid]||[])]);let best=null;
   all.forEach(i=>R[i].d.forEach((d,k)=>{if(!headMatch(d.h,hint))return;const a=d.s.findIndex(x=>ids.has(x)||(base(x)===b0&&dist(ST[x],ST[sid])<400));if(a<0||a>=d.s.length-1)return;
     const sc=(ownLine(nm,i)?0:100)-d.s.length/1000;if(!best||sc<best.sc)best={sc,i,k}}));return best}
-function showLine(nm,fromStop,veh,hint){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const ld=hint&&backState?lineDirFor(nm,hint,backState.id):null;if(ld&&veh&&veh.ri!==ld.i)veh=null;const main=ld?ld.i:veh&&R[veh.ri]&&R[veh.ri].t==="train"?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
-  const other=ids.filter(i=>i!==main);let vdi=ld?ld.k:veh?Math.max(0,vehDir(main,veh,hint)):0;{const hk=hint&&R[main].d.length>1?dirByHead(main,hint,backState&&backState.id):-1;if(hk>=0&&(!veh||vdi!==hk)){vdi=hk;veh=null}}let h=routeBody(main,vdi);
+function showLine(nm,fromStop,veh,hint,force){focusRoutes=new Set(lineRoutes[nm]||[]);drawVehicles();rememberStop(fromStop);ctx=null;setSel(null);const all=lineRoutes[nm]||[];const own=all.filter(i=>ownLine(nm,i));const ids=own.length?own:all;const ld=hint&&backState?lineDirFor(nm,hint,backState.id):null;if(ld&&veh&&veh.ri!==ld.i)veh=null;const main=force?force.i:ld?ld.i:veh&&R[veh.ri]&&R[veh.ri].t==="train"?veh.ri:lineMain(nm);drawPaths(ids,TCOL[nm]);
+  const other=ids.filter(i=>i!==main);let vdi=force?force.k:ld?ld.k:veh?Math.max(0,vehDir(main,veh,hint)):0;{const hk=!force&&hint&&R[main].d.length>1?dirByHead(main,hint,backState&&backState.id):-1;if(hk>=0&&(!veh||vdi!==hk)){vdi=hk;veh=null}}let h=routeBody(main,vdi);
   if(other.length)h=`<div class="grp">Services on this line</div><div class="badges svc" style="margin-bottom:8px">${other.slice(0,14).map(i=>badge(i,R[i].l)).join("")}</div>`+h;
   openPanel(`${nm} ${TNAME[nm]}`,`Train line`+(veh&&veh.fleet?` · <b>Service number ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+h,{star:{list:"routes",key:nm},veh:veh?{ri:main,di:vdi,trip:veh.trip}:null});
   document.getElementById("fullTT").onclick=()=>openRouteTable(nm);tvKey=nm;applyTravel();applyVehStatus();insertAlerts([],ids);wireDirs(main);routeArrows(main,vdi);if(backState)pBack.style.display="block"}
@@ -749,7 +751,7 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=odNotes(a.notes)+`<div cla
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"odv"});setBack({kind:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
   if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od"||view==="odv")closePanel();return}
-  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof pjOn!=="undefined"&&pjOn)await togglePJ(pjOn);
+  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof pjOn!=="undefined"&&pjOn)await togglePJ(pjOn);if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();
   if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json"+DV)).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
   odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   odOverview();odFit(odGroups().flatMap(x=>x.g.zones))}
@@ -822,7 +824,7 @@ function pjAlertsChanged(){try{if(!pjOn||!PJ||view!=="pj")return}catch(e){return
 async function togglePJ(k){const btn=document.getElementById(PJ_BTN[k]);
   if(pjOn===k){pjOn=null;pjVis(k,false);pjLayers(false);btn.classList.remove("odon");if(view==="pj"||view==="pjv")closePanel();return}
   if(pjOn){const o=pjOn;pjOn=null;pjVis(o,false);document.getElementById(PJ_BTN[o]).classList.remove("odon");pjLayers(false)}
-  if(odOn)await toggleOD();if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();
+  if(odOn)await toggleOD();if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();
   if(!PJ){try{PJ=await (await fetch(BASE+"data/projects.json"+DV)).json()}catch(e){openPanel("Project information","",`<div class="sub">Project information is unavailable right now.</div>`);return}}
   if(!PJ[k]){openPanel("Project information","",`<div class="sub">This project's information isn't available yet.</div>`);return}
   pjSetup(k);pjOn=k;pjVis(k,true);pjLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
@@ -1140,7 +1142,7 @@ function gcCard(i,fly){const r=GC.r[i];const cs=gcCaps(r[6]);
   document.getElementById("gcAll").onclick=e=>{e.preventDefault();gcOverview()}}
 async function toggleGC(){const btn=document.getElementById("gcBtn");
   if(gcOn){gcOn=false;gcVis(false);gcLayers(false);btn.classList.remove("gcon");if(view==="gc"||view==="gcv")closePanel();return}
-  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);
+  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();
   if(!GC){try{GC=await (await fetch(BASE+"data/retailers.json"+DV)).json()}catch(e){openPanel("go card vendors","",`<div class="sub">Vendor locations unavailable. See translink.com.au or call 13 12 30.</div>`);return}}
   gcSetup();gcApply();gcOn=true;gcVis(true);gcLayers(true);btn.classList.add("gcon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   gcOverview()}
@@ -1182,6 +1184,148 @@ async function showCatchups(){focusRoutes=null;backState=null;pBack.style.displa
   openPanel("Commuter Catch-Ups",`Queensland Rail · ${up.length} upcoming session${up.length===1?"":"s"}`,h,{view:"ccu"});
   pB.querySelectorAll("[data-ccu]").forEach(a=>a.onclick=e=>{e.preventDefault();openStop(a.dataset.ccu,true);setBack({kind:"ccu"})})}
 document.getElementById("ccuBtn").onclick=()=>showCatchups();
+// ---------- measured travel times (data/measured: recorded in the weekday peaks by .github/workflows/measure.yml,
+// rolling last four weeks; AM 6:30-9:30, PM 3:30-6:30, weekdays, no public holidays)
+let MI=null,MIp=null;const MC={};let mBand=null;
+const mPeakNow=()=>bneNow().min<720?"am":"pm";
+const mSafe=k=>k.replace(/[^A-Za-z0-9_-]/g,"_");
+function mIndex(){if(MI)return Promise.resolve(MI);if(!MIp)MIp=fetch(BASE+"data/measured/index.json?t="+Math.floor(Date.now()/9e5)).then(r=>r.ok?r.json():null).catch(()=>null).then(x=>MI=x&&x.v?x:{meta:{},v:[]});return MIp}
+async function mRoute(key){if(key in MC)return MC[key];const ix=await mIndex();if(!ix.v.some(v=>v[0]===key))return MC[key]=null;
+  try{MC[key]=await (await fetch(BASE+"data/measured/"+mSafe(key)+".json?v="+encodeURIComponent(ix.meta.built||""))).json()}catch(e){MC[key]=null}return MC[key]}
+const mMin=s=>Math.round(s/60);
+const mSigned=s=>{const m=Math.round(s/60);return m===0?(Math.abs(s)<30?"on time":(s>0?"+":"−")+"<1 min"):(m>0?"+":"−")+Math.abs(m)+" min"};
+const mDate=d=>d?new Date(d+"T00:00:00+10:00").toLocaleDateString("en-AU",{day:"numeric",month:"short",timeZone:"Australia/Brisbane"}):"";
+const mBandName=b=>b==="am"?"AM peak (6:30–9:30 am)":"PM peak (3:30–6:30 pm)";
+function mSince(ix){const m=ix&&ix.meta||{};return !m.from?"no peaks recorded yet":m.from===m.to?`weekday ${mDate(m.from)}`:`weekdays ${mDate(m.from)} to ${mDate(m.to)}`}
+// route cards: the fourth column, measured minutes from the first stop
+async function applyMeasured(ol,key,best,dkey){const head=document.getElementById("tvHead");if(!head||!ol.isConnected)return;
+  const band=mBand||mPeakNow();head.querySelectorAll("[data-mb]").forEach(b=>b.classList.toggle("on",b.dataset.mb===band));
+  const lis=[...ol.querySelectorAll("li")];const data=await mRoute(key);if(!ol.isConnected)return;const ix=MI||{meta:{}};
+  const x=data&&data[dkey]&&data[dkey][band];const a0=best.t[3+best.idx[0]];let cum=0,approx=false,have=0;
+  lis.forEach((li,n)=>{let el=li.querySelector(".tm");if(!el){el=document.createElement("span");el.className="tm";li.insertBefore(el,li.firstChild)}
+    el.className="tm";el.title="";if(!x){el.textContent="—";return}
+    if(n===0){el.textContent="Start";return}
+    const A=lis[n-1].dataset.s,B=li.dataset.s,sg=x.seg[A+">"+B];const ja=best.idx[n-1],jb=best.idx[n];const ta=ja>=0?best.t[3+ja]:-1,tb=jb>=0?best.t[3+jb]:-1;
+    if(sg){cum+=sg[0];have++}else if(ta>=0&&tb>=0){cum+=(tb-ta)*60;approx=true}else{el.textContent="—";return}
+    const tt=tb>=0?(tb-a0)*60:null;const diff=tt!=null?cum-tt:0;
+    el.textContent=(approx?"≈":"")+mMin(cum)+" min";if(diff>=120)el.classList.add("slow");else if(diff<=-90)el.classList.add("fast");
+    el.title=`Measured in the ${mBandName(band)}: ${mMin(cum)} min from the first stop`+(tt!=null?` (timetabled ${mMin(tt)} min)`:"")+(sg?`, ${sg[2]} trip${sg[2]>1?"s":""} on this stretch`:"")+(approx?". ≈: a stretch before this stop has no recordings yet, so its timetabled time is used":"")});
+  const note=document.getElementById("tvNote");if(note){let m=note.querySelector(".mnote");if(!m){m=document.createElement("span");m.className="mnote";note.appendChild(m)}
+    m.textContent=x?` Measured: the median time from the first stop in the ${mBandName(band)}, ${mSince(ix)} (${x.trips} trips). Orange is 2 min or more slower than timetabled.`+(have<lis.length-1?" ≈ marks stops after a stretch with no recordings yet.":"")
+      :` Measured: ${ix.meta&&ix.meta.from?"not enough recordings yet for this route in the "+(band==="am"?"AM":"PM")+" peak.":"recordings start with the next weekday peak."}`}}
+function mHeadHTML(){return `<div class="tvh" id="tvHead" style="display:none"><span class="mbs">Measured <button data-mb="am">AM</button><button data-mb="pm">PM</button></span><span class="tm">Measured</span><span class="tv">From start</span><span class="tf">Here</span><span class="tc">Timetable</span></div>`}
+function mWireHead(){const h=document.getElementById("tvHead");if(!h)return;h.querySelectorAll("[data-mb]").forEach(b=>b.onclick=e=>{e.stopPropagation();mBand=b.dataset.mb;applyTravel()})}
+
+// ---------- "Real time average" tab
+let RTAF="all",RTAQ="";
+const mLabel=k=>TNAME[k]?k+" "+TNAME[k]:k;
+const mLong=k=>{if(TNAME[k])return "Train line";const i=nameIdx[k];return i!=null?R[i].l:""};
+async function showRTA(){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  const ix=await mIndex();
+  const fb=(k,t)=>`<button class="gcb${RTAF===k?" on":""}" data-rf="${k}">${t}</button>`;
+  openPanel("Real time average",`Measured travel times · weekday peaks · ${esc(mSince(ix))}`,
+    `<div class="rtabar"><input id="rtaQ" class="ttf schq" placeholder="Search a route, line or destination" autocomplete="off" value="${esc(RTAQ)}"><div class="gcbs">${fb("all","All")}${fb("am","AM")}${fb("pm","PM")}<button class="gcb hmb" id="rtaHeat">Heat map</button></div></div><div class="gcn" id="rtaCount"></div><div id="rtaList"></div>
+    <div class="odnote">How long services actually take, from Translink's live data, recorded every 30 seconds in the weekday peaks: AM 6:30–9:30 am and PM 3:30–6:30 pm, Brisbane time. Public holidays and weekends are left out; school holidays are included. Figures are medians over the last four weeks and update after every peak. Tap a route for its overview and stop-by-stop times. Unofficial; from Translink's real-time feeds.</div>`,{view:"rta",wide:true});
+  const q=document.getElementById("rtaQ");q.oninput=()=>{RTAQ=q.value;rtaList(ix)};
+  pB.querySelectorAll("[data-rf]").forEach(b=>b.onclick=()=>{RTAF=b.dataset.rf;pB.querySelectorAll("[data-rf]").forEach(x=>x.classList.toggle("on",x===b));rtaList(ix)});
+  document.getElementById("rtaHeat").onclick=()=>toggleHM(RTAF);rtaList(ix)}
+function rtaList(ix){const box=document.getElementById("rtaList");if(!box)return;const q=RTAQ.trim().toLowerCase();
+  const rows=ix.v.map((v,i)=>({v,i})).filter(({v})=>(RTAF==="all"||v[2]===RTAF)&&(!q||[v[0],mLabel(v[0]),v[3],mLong(v[0])].join(" ").toLowerCase().includes(q)))
+    .sort((a,b)=>cmpRoute(a.v[0],b.v[0])||a.v[2].localeCompare(b.v[2])||a.v[1].localeCompare(b.v[1]));
+  document.getElementById("rtaCount").textContent=ix.v.length?`${rows.length} route version${rows.length===1?"":"s"} (route, peak and direction)`:"";
+  if(!ix.v.length){box.innerHTML=`<div class="sub">No peaks have been recorded yet. Recording runs every weekday morning and afternoon peak, so the first figures appear after the next one.</div>`;return}
+  box.innerHTML=rows.slice(0,400).map(({v,i})=>{const d=v[6]!=null&&v[7]!=null?v[6]-v[7]:null;const ri=nameIdx[v[0]];const col=TCOL[v[0]]||(ri!=null?R[ri].c:"#888"),tc=TCOL[v[0]]?(/T2|T5/.test(v[0])?"#111":"#fff"):(ri!=null?R[ri].tc:"#fff");
+    return `<a href="#" class="rtar" data-rta="${i}"><span class="rb" style="background:${col};color:${tc}">${esc(v[0])}</span><span class="rtan"><b>${esc(v[0])} · ${v[2].toUpperCase()} · to ${esc(v[3]||"—")}</b><span>${esc(mLong(v[0]))}</span></span><span class="rtad${d!=null&&d>=120?" slow":d!=null&&d<=-90?" fast":""}">${d!=null?mSigned(d):""}<small>${v[4]} trip${v[4]===1?"":"s"}</small></span></a>`}).join("")+(rows.length>400?`<div class="sub">Showing 400 of ${rows.length}; search to narrow the list.</div>`:"")+(rows.length?"":`<div class="sub">Nothing matches.</div>`);
+  box.querySelectorAll("[data-rta]").forEach(a=>a.onclick=e=>{e.preventDefault();rtaDetail(+a.dataset.rta)})}
+// the commonest path through a route's recorded stretches
+function mChain(x,o,start){const from=new Map();for(const [k,s] of Object.entries(x.seg)){const [A,B]=k.split(">");if(!from.has(A))from.set(A,[]);from.get(A).push([B,s])}
+  const pos=new Map();o.forEach((id,j)=>{if(!pos.has(id))pos.set(id,j)});
+  if(!start){const inc=new Set([...from.values()].flat().map(x=>x[0]));start=[...from.keys()].filter(a=>!inc.has(a)).sort((a,b)=>(pos.get(a)??1e9)-(pos.get(b)??1e9))[0]||[...from.keys()][0]}
+  const out=[{id:start}],seen=new Set([start]);let cur=start;
+  while(from.has(cur)){const nx=from.get(cur).filter(([B])=>!seen.has(B)).sort((a,b)=>b[1][2]-a[1][2]||(pos.get(a[0])??1e9)-(pos.get(b[0])??1e9))[0];if(!nx)break;
+    out.push({id:nx[0],seg:nx[1]});seen.add(nx[0]);cur=nx[0];if(out.length>400)break}
+  return out}
+// the headsign of the route direction that passes these stops in this order
+function mDirFor(ris,ids){let best=null;ris.forEach(i=>R[i].d.forEach((d,k)=>{const pos=ids.map(x=>d.s.indexOf(x)).filter(j=>j>=0);let sc=0;for(let n=1;n<pos.length;n++)sc+=pos[n]>pos[n-1]?1:-1;sc+=pos.length/1000;if(!best||sc>best.sc)best={sc,i,k}}));return best}
+async function rtaDetail(i){const ix=await mIndex();const v=ix.v[i];if(!v)return showRTA();const [key,d,band,hs]=v;
+  const data=await mRoute(key);const x=data&&data[d]&&data[d][band];if(!x)return showRTA();
+  let o=[];try{if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+mSafe(key)+".json"+DV)).json();o=(RTC[key][d]||{}).o||[]}catch(e){}
+  const e0=x.e2e[0];const chain=mChain(x,o,e0&&e0[0]);let ct=0,cm=0;const rows=chain.map((c,n)=>{if(c.seg){ct+=c.seg[1];cm+=c.seg[0]}return {...c,ct,cm,late:x.stop[c.id]}});
+  const nm=id=>ST[id]?ST[id][0]:id;
+  const runT=e0?e0[3]:ct,runM=e0?e0[2]:cm,runN=e0?e0[4]:null;const lates=Object.values(x.stop);const lw=lates.reduce((s,l)=>s+l[1],0)||1;
+  const lateAvg=lates.reduce((s,l)=>s+l[0]*l[1],0)/lw;
+  const segs=Object.entries(x.seg).map(([k,s])=>{const [A,B]=k.split(">");return {A,B,s,x:s[0]-s[1]}}).filter(z=>z.s[2]>=1);
+  const worst=segs.filter(z=>z.x>=30).sort((a,b)=>b.x-a.x).slice(0,6),best=segs.filter(z=>z.x<=-30).sort((a,b)=>a.x-b.x).slice(0,3);
+  const tile=(t,val,sub,cls)=>`<div class="mtile${cls?" "+cls:""}"><span>${t}</span><b>${val}</b>${sub?`<small>${sub}</small>`:""}</div>`;
+  const dRun=runM-runT;
+  let h=`<div class="mtiles">${tile("Timetabled",mMin(runT)+" min",e0?"commonest whole run":"recorded stretches")}${tile("Measured",mMin(runM)+" min","median"+(runN?", "+runN+" runs":""),dRun>=120?"slow":dRun<=-90?"fast":"")}${tile("Difference",mSigned(dRun),Math.round(100*runM/Math.max(runT,1))+"% of timetabled",dRun>=120?"slow":dRun<=-90?"fast":"")}${tile("Running late",mSigned(lateAvg).replace(/^\+/,""),"typical, at each stop")}</div>`;
+  h+=`<p class="pjp">${esc(key)} ${band.toUpperCase()} to ${esc(hs||"—")}${e0?`: the commonest whole run is <b>${esc(nm(e0[0]))}</b> to <b>${esc(nm(e0[1]))}</b>, timetabled ${mMin(e0[3])} min and measured at ${mMin(e0[2])} min (median of ${e0[4]} runs).`:"."} Recorded in the ${mBandName(band)} on ${x.days} weekday${x.days===1?"":"s"}, ${esc(mSince(ix))}: ${x.trips} trips over ${Object.keys(x.seg).length} stretches between stops.</p>`;
+  // lateness along the route
+  const L=rows.map(r=>r.late?r.late[0]:null);const mx=Math.max(120,...L.filter(z=>z!=null).map(Math.abs));
+  if(rows.length>2){const W=640,H=70,bw=W/rows.length;h+=`<div class="grp">How late services run along the route</div><svg class="mspark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Median lateness at each stop"><line x1="0" x2="${W}" y1="${H/2}" y2="${H/2}" class="axis"/>`+rows.map((r,n)=>{const l=L[n];if(l==null)return "";const hh=Math.max(1,Math.abs(l)/mx*(H/2-2));return `<rect x="${n*bw+bw*.15}" width="${Math.max(1,bw*.7)}" y="${l>=0?H/2-hh:H/2}" height="${hh}" class="${l>=120?"slow":l<=-60?"fast":"ok"}"><title>${esc(nm(r.id))}: ${mSigned(l)}</title></rect>`}).join("")+`</svg><div class="msparkl"><span>${esc(nm(rows[0].id))}</span><span>bars above the line: behind timetable · below: ahead</span><span>${esc(nm(rows[rows.length-1].id))}</span></div>`}
+  const segLine=z=>`<li><a href="#" data-ms="${esc(z.A)}">${esc(nm(z.A))}</a> → <a href="#" data-ms="${esc(z.B)}">${esc(nm(z.B))}</a>: <b>${mSigned(z.x)}</b> <span class="odnm">(${mMin(z.s[1])} min timetabled, ${(z.s[0]/60).toFixed(1)} min measured, ${z.s[2]} trips)</span></li>`;
+  if(worst.length)h+=`<div class="grp">Slowest stretches against the timetable</div><ul class="pjn">${worst.map(segLine).join("")}</ul>`;
+  if(best.length)h+=`<div class="grp">Quicker than timetabled</div><ul class="pjn">${best.map(segLine).join("")}</ul>`;
+  h+=`<div class="grp">Stop by stop${rows.length<Object.keys(x.stop).length?" (the commonest path)":""}</div><div class="mtw"><table class="mtab"><thead><tr><th>Stop</th><th>Timetabled</th><th>Measured</th><th>Difference</th><th>Late by</th><th>This stretch</th><th>Range</th><th>Trips</th></tr></thead><tbody>`+
+    rows.map((r,n)=>{const s=r.seg,df=r.cm-r.ct;return `<tr><td><a href="#" data-ms="${esc(r.id)}">${esc(nm(r.id))}</a></td><td>${n?mMin(r.ct)+" min":"Start"}</td><td>${n?mMin(r.cm)+" min":"Start"}</td><td class="${df>=120?"slow":df<=-90?"fast":""}">${n?mSigned(df):""}</td><td>${r.late?mSigned(r.late[0]).replace(/^\+/,""):"—"}</td><td>${s?`${(s[1]/60).toFixed(1)} → ${(s[0]/60).toFixed(1)} min`:""}</td><td>${s?`${(s[3]/60).toFixed(1)}–${(s[4]/60).toFixed(1)} min`:""}</td><td>${s?s[2]:r.late?r.late[1]:""}</td></tr>`}).join("")+`</tbody></table></div>`;
+  h+=`<div class="odnote">Timetabled and measured columns count minutes from the first stop. <b>Late by</b> is how far behind the timetable services typically are at that stop (a minus means early). <b>This stretch</b> is timetabled → measured minutes from the previous stop, and <b>Range</b> is the quickest to slowest 10% of trips. Medians of trips recorded in the ${mBandName(band)}, ${esc(mSince(ix))}.</div>`;
+  h+=`<div class="webrow"><button class="btn" id="rtaShow">Open route card</button><button class="btn" id="rtaHeat2">Heat map</button></div><div class="odnote"><a href="#" id="rtaAll">‹ All routes</a></div>`;
+  openPanel(`${key} · ${band.toUpperCase()} · to ${hs||"—"}`,`${esc(mLong(key))} · measured in the ${esc(mBandName(band))}`,h,{view:"rtav",wide:true});setBack({kind:"rta"});
+  document.getElementById("rtaAll").onclick=e=>{e.preventDefault();showRTA()};
+  document.getElementById("rtaHeat2").onclick=()=>toggleHM(band);
+  document.getElementById("rtaShow").onclick=()=>{mBand=band;const ids=rows.map(r=>r.id);if(TNAME[key]){const f=mDirFor(lineRoutes[key]||[],ids);showLine(key,false,null,null,f&&f.sc>0?f:null)}else if(nameIdx[key]!=null){const f=mDirFor([nameIdx[key]],ids);showRoute(nameIdx[key],false,null,f?R[f.i].d[f.k].h:hs)}setBack({kind:"rtav",i})};
+  pB.querySelectorAll("[data-ms]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=ST[a.dataset.ms];if(s){map.flyTo({center:[s[2],s[1]],zoom:Math.max(map.getZoom(),15),duration:700});selPt([s[2],s[1]])}});
+  // the route on the map
+  const cs=rows.filter(r=>ST[r.id]).map(r=>[ST[r.id][2],ST[r.id][1]]);if(cs.length>1){map.getSource("hl").setData(FC([{type:"Feature",properties:{c:TCOL[key]||(nameIdx[key]!=null?R[nameIdx[key]].c:"#888"),mode:"route"},geometry:{type:"LineString",coordinates:cs}}]));pjFit(cs,14)}}
+document.getElementById("rtaBtn").onclick=()=>showRTA();
+
+// ---------- delay heat map: each stretch between two stops, darker red the further it runs behind its timetabled time
+let HM=null,hmOn=false,hmSnap=null,HMF="all";
+const HM_K={all:"x",am:"a",pm:"p"};
+function hmSetup(){if(map.getSource("hm"))return;
+  map.addSource("hm",{type:"geojson",data:FC(HM.s.map((r,i)=>{const an=r[5]||0,pn=r[8]||0,n=an+pn;const x=n?((r[3]||0)*an+(r[6]||0)*pn)/n:null;
+    return {type:"Feature",properties:{i,a:r[3],an,p:r[6],pn,x,n},geometry:{type:"LineString",coordinates:dec(r[2])}}}))});
+  const below=map.getLayer("sel")?"sel":undefined;
+  map.addLayer({id:"hm-line",type:"line",source:"hm",layout:{"line-cap":"round","line-join":"round"},paint:{"line-width":["interpolate",["linear"],["zoom"],9,1.6,13,4,16,7],"line-offset":["interpolate",["linear"],["zoom"],9,0.8,13,2.2,16,4]}},below);
+  L.push("hm-line");hmPaint();
+  map.on("mouseenter","hm-line",()=>{map.getCanvas().style.cursor="pointer"});map.on("mouseleave","hm-line",()=>{map.getCanvas().style.cursor=""})}
+function hmPaint(){if(!map.getLayer("hm-line"))return;const k=HM_K[HMF];const d=theme!=="light";
+  map.setFilter("hm-line",["!=",["get",k],null]);
+  map.setPaintProperty("hm-line","line-color",["interpolate",["linear"],["coalesce",["get",k],0],0,d?"rgba(255,255,255,0.22)":"rgba(120,120,120,0.25)",20,"#fecaca",45,"#fca5a5",75,"#f87171",120,"#dc2626",200,"#991b1b",300,"#5f0f0f"]);
+  map.setPaintProperty("hm-line","line-opacity",1)}
+function hmVis(v){map.getLayer("hm-line")&&map.setLayoutProperty("hm-line","visibility",v?"visible":"none")}
+function hmLayers(on){if(on){hmSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{hmSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
+  else if(hmSnap){Object.entries(hmSnap).forEach(([g,v])=>{const st=v==="only"?"on":v;chipState[g]=st;if(g==="live")syncVehVis();else setGroup(g,st!=="off");renderChip(g)});hmSnap=null}
+  renderAll();hint()}
+const hmVal=r=>HMF==="am"?r[3]:HMF==="pm"?r[6]:((r[5]||0)+(r[8]||0)?((r[3]||0)*(r[5]||0)+(r[6]||0)*(r[8]||0))/((r[5]||0)+(r[8]||0)):null);
+function hmOverview(){const fb=(k,t)=>`<button class="gcb${HMF===k?" on":""}" data-hf="${k}">${t}</button>`;const nm=id=>ST[id]?ST[id][0]:id;
+  const top=HM.s.map((r,i)=>({r,i,v:hmVal(r),n:HMF==="am"?r[5]:HMF==="pm"?r[8]:(r[5]||0)+(r[8]||0)})).filter(z=>z.v!=null&&z.v>=20&&z.n>=3).sort((a,b)=>b.v-a.v).slice(0,12);
+  const h=`<div class="gcf"><div class="gcfl">Peak</div><div class="gcbs">${fb("all","All")}${fb("am","AM")}${fb("pm","PM")}</div></div>
+    <div class="hmleg"><span class="hmbar"></span><div class="hmlab"><span style="left:0">On time</span><span style="left:20%">+1 min</span><span style="left:40%">+2 min</span><span style="right:0">+5 min or more</span></div></div>
+    <div class="grp">Biggest gaps from the timetable</div>${top.length?`<ul class="pjn">`+top.map(z=>`<li><a href="#" data-hs="${z.i}">${esc(nm(z.r[0]))} → ${esc(nm(z.r[1]))}</a> <b>${mSigned(z.v)}</b> <span class="odnm">${z.n} trips · ${esc(z.r[9].slice(0,5).join(", "))}</span></li>`).join("")+`</ul>`:`<div class="sub">${HM.s.length?"No stretches stand out yet.":"No peaks recorded yet. Recording runs every weekday peak, so the map fills in after the next one."}</div>`}
+    <div class="odnote">Each line is the stretch between two stops, coloured by how much longer it takes than timetabled: clear where services keep to time, through to dark red for the biggest gaps. All routes on a stretch are combined, and each direction is drawn on its own side. Weekday peaks (AM 6:30–9:30 am, PM 3:30–6:30 pm), ${esc(mSince(HM))}; public holidays left out. Tap a stretch for details. The – button shrinks this card.</div><div class="odnote"><a href="#" id="hmRta">Real time average for each route ›</a></div>`;
+  openPanel("Delay heat map","Where services run slower than timetabled · weekday peaks",h,{view:"hm"});backState=null;pBack.style.display="none";
+  pB.querySelectorAll("[data-hf]").forEach(b=>b.onclick=()=>{HMF=b.dataset.hf;hmPaint();hmOverview()});
+  pB.querySelectorAll("[data-hs]").forEach(a=>a.onclick=e=>{e.preventDefault();hmCard(+a.dataset.hs,true)});
+  document.getElementById("hmRta").onclick=e=>{e.preventDefault();toggleHM().then(showRTA)}}
+function hmCard(i,fit){const r=HM.s[i];const nm=id=>ST[id]?ST[id][0]:id;
+  const band=(b,x,s,n)=>n?`<div class="hmrow"><b>${b}</b> ${mSigned(x)} <span class="odnm">· ${(s/60).toFixed(1)} min timetabled, ${((s+x)/60).toFixed(1)} min measured · ${n} trip${n===1?"":"s"}</span></div>`:`<div class="hmrow"><b>${b}</b> <span class="odnm">not recorded</span></div>`;
+  const h=band("AM peak",r[3],r[4],r[5])+band("PM peak",r[6],r[7],r[8])+`<div class="grp">Routes on this stretch</div><div class="badges">${r[9].map(k=>{const ri=nameIdx[k];return TNAME[k]?`<span class="rb" data-hk="${esc(k)}" style="background:${TCOL[k]};color:${/T2|T5/.test(k)?"#111":"#fff"}">${esc(k)}</span>`:ri!=null?`<span class="rb" data-hk="${esc(k)}" style="background:${R[ri].c};color:${R[ri].tc}">${esc(k)}</span>`:""}).join("")}</div><div class="pjhint">Tap a route for its real time average.</div><div class="odnote"><a href="#" id="hmAll">‹ Heat map overview</a></div>`;
+  openPanel(`${nm(r[0])} → ${nm(r[1])}`,"Stretch between two stops",h,{view:"hmv"});setBack({kind:"hm"});
+  document.getElementById("hmAll").onclick=e=>{e.preventDefault();hmOverview()};
+  pB.querySelectorAll("[data-hk]").forEach(b=>b.onclick=async()=>{const ix=await mIndex();const k=b.dataset.hk;const want=HMF==="all"?null:HMF;
+    const pick=want||mPeakNow();let j=ix.v.findIndex(v=>v[0]===k&&v[2]===pick);if(j<0)j=ix.v.findIndex(v=>v[0]===k);if(j<0)return;await toggleHM();rtaDetail(j)});
+  const c=dec(r[2]);selPt(c[Math.floor(c.length/2)]);if(fit)pjFit(c,16)}
+async function toggleHM(f){const btn=document.getElementById("hmBtn");
+  if(hmOn){hmOn=false;hmVis(false);hmLayers(false);btn.classList.remove("odon");if(view==="hm"||view==="hmv")closePanel();return}
+  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(gcOn)await toggleGC();
+  if(!HM){try{const ix=await mIndex();HM=await (await fetch(BASE+"data/measured/heat.json?v="+encodeURIComponent(ix.meta.built||""))).json()}catch(e){HM={meta:{},s:[]}}}
+  if(f&&HM_K[f])HMF=f;
+  hmSetup();hmOn=true;hmVis(true);hmPaint();hmLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  hmOverview();if(!map.getBounds().contains([153.025,-27.47]))map.flyTo({center:[153.03,-27.48],zoom:11,duration:700})}
+document.getElementById("hmBtn").onclick=()=>toggleHM();
+map.on("click",e=>{if(!hmOn)return;const box=[[e.point.x-5,e.point.y-5],[e.point.x+5,e.point.y+5]];
+  const f=map.queryRenderedFeatures(box,{layers:["hm-line"]});if(!f.length)return;f.sort((a,b)=>(b.properties[HM_K[HMF]]||0)-(a.properties[HM_K[HMF]]||0));hmCard(+f[0].properties.i,false)});
 document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
@@ -1273,6 +1417,6 @@ window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAler
   document.getElementById("moreMenu").addEventListener("click",()=>set(false));
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
-  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
-  b.title="More: connections, on demand, go card vendors, Cross River Rail, The Wave, school routes, lost property, commuter catch-ups, feedback"})();
+  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn"),hm=document.getElementById("hmBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw,hm].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw,hm].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
+  b.title="More: connections, on demand, go card vendors, Cross River Rail, The Wave, real time average, delay heat map, school routes, lost property, commuter catch-ups, feedback"})();
 

@@ -1,0 +1,94 @@
+name: Measure peak-hour travel times
+
+# Records how long services actually take in the weekday peaks (Brisbane time AM 6:30-9:30, PM 3:30-6:30), then
+# rebuilds data/measured from the last four weeks of recordings. Weekends and Queensland public holidays are
+# skipped by the collector. Each run starts a little early and waits for the peak to begin.
+#   AM: 19:43 UTC Sunday-Thursday = 5:43 am Monday-Friday in Brisbane
+#   PM: 04:43 UTC Monday-Friday   = 2:43 pm in Brisbane
+on:
+  schedule:
+    - cron: "43 19 * * 0-4"
+    - cron: "43 4 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      band:
+        description: "Peak to record (am or pm), or 'rebuild' to only rebuild data/measured from saved recordings"
+        type: choice
+        options: [am, pm, rebuild]
+        default: rebuild
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: measure
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install requests gtfs-realtime-bindings holidays
+
+      - name: Which peak
+        id: band
+        run: |
+          if [ -n "${{ inputs.band }}" ]; then b="${{ inputs.band }}";
+          elif [ "$(date -u +%H)" -ge 12 ]; then b=am; else b=pm; fi
+          echo "band=$b" >> "$GITHUB_OUTPUT"
+          echo "day=$(TZ=Australia/Brisbane date -d '+30 min' +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Record the peak
+        if: steps.band.outputs.band != 'rebuild'
+        run: |
+          mkdir -p raw
+          python tools/collect_measured.py . --band ${{ steps.band.outputs.band }} --out raw/peak-${{ steps.band.outputs.day }}-${{ steps.band.outputs.band }}.csv.gz
+
+      - name: Keep the recording (35 days)
+        if: hashFiles('raw/*.csv.gz') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: peak-${{ steps.band.outputs.day }}-${{ steps.band.outputs.band }}
+          path: raw/*.csv.gz
+          retention-days: 35
+
+      - name: Fetch the last four weeks of recordings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p raw
+          since=$(date -u -d '-29 days' +%FT%TZ)
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name | startswith(\"peak-\")) | select(.expired | not) | select(.created_at >= \"$since\") | [.id, .name] | @tsv" |
+          while IFS=$'\t' read -r id name; do
+            [ -e "raw/$name.csv.gz" ] && continue
+            mkdir -p "raw/$name"
+            gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > "raw/$name.zip" && unzip -q -o "raw/$name.zip" -d "raw/$name" || true
+            rm -f "raw/$name.zip"
+          done
+          find raw -name '*.csv.gz' | wc -l
+
+      - name: Rebuild measured travel times
+        run: python tools/build_measured.py raw .
+
+      - name: Commit if anything changed
+        run: |
+          rm -rf raw
+          git add data/measured
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Measured travel times: ${{ steps.band.outputs.day }} ${{ steps.band.outputs.band }}"
+            for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 10; done
+          fi
