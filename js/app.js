@@ -265,7 +265,7 @@ function setMini(on){panel.classList.toggle("mini",on);pCloseBtn.textContent=on?
 pCloseBtn.onclick=()=>{if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
 panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
-  if(b.kind==="cn"){openPanel("Best connections",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
+  if(b.kind==="cn"){openPanel("Journey Search",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
   if(b.kind==="pj")return pjOverview();
   if(b.kind==="ccu")return showCatchups();
   if(b.kind==="rcard")return reopenCard(b);
@@ -866,7 +866,7 @@ map.on("click",e=>{if(!pjOn)return;const box=[[e.point.x-7,e.point.y-7],[e.point
   fetch(BASE+"data/platforms.json"+DV).then(r=>r.json()).then(P=>{if(!P.bau||!P.bau.length)return;
     w.querySelector(".moremenu").innerHTML=P.bau.map(m=>`<button data-bau="${esc(m.id)}" role="menuitem"><b>${esc(m.name)}</b><span>${esc(m.sub)}</span></button>`).join("");sortMenu(w.querySelector(".moremenu"));wire()}).catch(()=>{});
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
-// ---------- Best connections: stop/station to stop/station planner (data/plan/<day>.json, built weekly)
+// ---------- Journey Search (was Best connections): stop/station to stop/station planner (data/plan/<day>.json, built weekly)
 const PLAN={cache:{},from:null,to:null};
 // a journey end is a stop/station id, or a point {ll:[lon,lat],label,sub} (an address, a landmark, a place found online,
 // and later "my location"), so everything below asks these helpers rather than looking in ST directly
@@ -1084,7 +1084,7 @@ function placePicker(inpId,resId,onPick,onClear){const inp=document.getElementBy
   return {set:v=>{inp.value=chosen=v}}}
 function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;PLAN.from=fromId||null;PLAN.to=null;PLAN.last=null;   /* each visit starts fresh */
   const now=bneNow();const hh=String(Math.floor(now.min/60)).padStart(2,"0"),mm=String(now.min%60).padStart(2,"0");
-  openPanel("Best connections","Stations, places and addresses · unofficial",`
+  openPanel("Journey Search","Stations, places and addresses · unofficial",`
     <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Station, stop, place or address" autocomplete="off" value="${esc(epFull(PLAN.from))}"><div class="results" id="cnFromR"></div></div></div>
     <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Station, stop, place or address" autocomplete="off" value="${esc(epFull(PLAN.to))}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
     <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="leave">Leave at…</option><option value="arrive">Arrive by…</option></select><select id="cnDay" class="ttf cnsel cnday" style="display:none"></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
@@ -1430,5 +1430,5 @@ window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAler
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
   const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn"),hm=document.getElementById("hmBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw,hm].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw,hm].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
-  b.title="More: connections, on demand, go card vendors, Cross River Rail, The Wave, real time average, delay heat map, school routes, lost property, commuter catch-ups, feedback"})();
+  b.title="More: Translink journey planner, on demand, go card vendors, Cross River Rail, The Wave, real time average, delay heat map, school routes, lost property, commuter catch-ups, feedback"})();
 
