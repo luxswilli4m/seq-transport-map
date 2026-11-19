@@ -29,7 +29,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get install -y -qq tesseract-ocr
-          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract pyarrow requests lerc
+          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract pyarrow requests lerc pymupdf scikit-image
 
       - name: Download Translink SEQ GTFS
         run: |
@@ -85,6 +85,14 @@ jobs:
         continue-on-error: true
         run: python tools/build_heights.py .
 
+      - name: The Wave corridor (traced from TMR's corridor maps; only when they change)
+        continue-on-error: true
+        run: python tools/trace_wave.py .
+
+      - name: Cross River Rail and The Wave tabs (official progress, works notices, documents)
+        continue-on-error: true
+        run: python tools/build_projects.py .
+
       - name: Notify if parts of the map were held back
         if: hashFiles('zone_check.txt') != ''
         env:
@@ -102,7 +110,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             python tools/stamp.py   # new version tag so browsers fetch the fresh data
-            git add data index.html tools/ondemand_traced.json tools/ondemand_auto.json tools/ondemand_places.json tools/platform_shapes.json
+            git add data index.html tools/ondemand_traced.json tools/ondemand_auto.json tools/ondemand_places.json tools/platform_shapes.json tools/projects_geom.json tools/wave_geom.json
             git commit -m "Weekly Translink data refresh"
             git push
           fi

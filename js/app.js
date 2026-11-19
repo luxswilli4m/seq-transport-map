@@ -189,7 +189,7 @@ document.getElementById("themeBtn").onclick=()=>{
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
   const keep=new Set(L); map.getStyle().layers.map(l=>l.id).filter(id=>!keep.has(id)).forEach(id=>map.removeLayer(id));
   map.setSprite(BASE+"assets/sprites/v4/"+THEME[theme].sprite);
-  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();
+  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();if(typeof pjPaint==="function"){pjPaint("crr");pjPaint("wave")}
 };
 
 // ---------- layer toggles
@@ -220,7 +220,7 @@ allEl.onclick=()=>{setTimeout(saveChips,0);const anyOff=GROUPS.some(([g])=>MASS(
 GROUPS.forEach(([k,label,col])=>{const el=document.createElement("div");el.className="chip on";el.innerHTML=`<span class="dot" style="background:${col};border:1px solid #0004"></span>${label}<span class="onlytag">only</span>`;
   chipEl[k]=el;chipState[k]="on";el.onclick=()=>clickChip(k);chipBox.appendChild(el);renderChip(k)});chipState.live="off";setGroup("live",false);renderChip("live");renderAll();
 // remember layer filters between visits (this device only)
-function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;if(typeof gcOn!=="undefined"&&gcOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
+function saveChips(){try{if(typeof odOn!=="undefined"&&odOn)return;if(typeof pjOn!=="undefined"&&pjOn)return;if(typeof gcOn!=="undefined"&&gcOn)return;localStorage.setItem("seqmap_layers",JSON.stringify({s:chipState,k:soloKey,snap:soloSnap}))}catch(e){}}
 try{const sv=JSON.parse(localStorage.getItem("seqmap_layers")||"null");
   if(sv&&sv.s){GROUPS.forEach(([g])=>{const v=sv.s[g];if(v==="on"||v==="off"||v==="only"){chipState[g]=v;setGroup(g,v!=="off");renderChip(g)}});soloKey=sv.k||null;soloSnap=sv.snap||null;renderAll()}}catch(e){}
 const stopsOn=()=>map.getLayoutProperty("stops","visibility")!=="none";
@@ -233,7 +233,7 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-const MINI_VIEWS=new Set(["gc","gcv","od","odv"]);   // map-layer cards that shrink instead of closing
+const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv"]);   // map-layer cards that shrink instead of closing
 function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
@@ -264,6 +264,7 @@ pCloseBtn.onclick=()=>{if(MINI_VIEWS.has(view))return setMini(!panel.classList.c
 panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
   if(b.kind==="cn"){openPanel("Best connections",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
+  if(b.kind==="pj")return pjOverview();
   if(b.kind==="gc")return gcOverview();if(b.kind==="od")return odOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
@@ -739,7 +740,7 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=odNotes(a.notes)+`<div cla
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"odv"});setBack({kind:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
   if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od"||view==="odv")closePanel();return}
-  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();
+  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof pjOn!=="undefined"&&pjOn)await togglePJ(pjOn);
   if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json"+DV)).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
   odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   odOverview();odFit(odGroups().flatMap(x=>x.g.zones))}
@@ -748,6 +749,67 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
   if(map.queryRenderedFeatures(box,{layers:CLICK.filter(id=>map.getLayer(id)&&map.getLayoutProperty(id,"visibility")!=="none")}).length)return;
   const f=map.queryRenderedFeatures(box,{layers:["od-pin","od-fill"]});if(!f.length)return;const p=f.find(x=>x.layer.id==="od-pin")||f[0];
   odCard(+p.properties.ai,+p.properties.gi,false);if(p.layer.id==="od-pin")selPt(p.geometry.coordinates)});
+
+// ---------- Cross River Rail and The Wave (data/projects.json, refreshed weekly by tools/build_projects.py).
+// Like On demand: the other layers clear, the project's sites are drawn, and tapping a site opens its card.
+let PJ=null,pjOn=null,pjSnap=null;const PJ_BTN={crr:"crrBtn",wave:"waveBtn"};
+const pjDate=d=>{if(!d)return "";const t=new Date(d+"T00:00:00+10:00");return t.toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Brisbane"})};
+function pjSetup(k){const P=PJ[k];if(map.getSource("pj-"+k+"-a"))return;const col=P.colour;
+  const af=[],pf=[],lf=[];P.sites.forEach((t,i)=>{if(t.shape)af.push({type:"Feature",properties:{k,i},geometry:t.shape});if(t.ll)pf.push({type:"Feature",properties:{k,i,n:t.name},geometry:{type:"Point",coordinates:t.ll}})});
+  (P.line||[]).forEach(c=>lf.push({type:"Feature",properties:{dash:0},geometry:{type:"LineString",coordinates:c}}));
+  (P.lines||[]).forEach(l=>lf.push({type:"Feature",properties:{dash:l.planned?1:0,n:l.name||""},geometry:{type:"LineString",coordinates:l.coords}}));
+  map.addSource("pj-"+k+"-a",{type:"geojson",data:FC(af)});map.addSource("pj-"+k+"-p",{type:"geojson",data:FC(pf)});map.addSource("pj-"+k+"-l",{type:"geojson",data:FC(lf)});
+  const below=map.getLayer("bw-case")?"bw-case":undefined;
+  map.addLayer({id:"pj-"+k+"-line",type:"line",source:"pj-"+k+"-l",filter:["==",["get","dash"],0],layout:{"line-cap":"round"},paint:{"line-color":col,"line-width":["interpolate",["linear"],["zoom"],9,2.5,15,4],"line-opacity":.85}},below);
+  map.addLayer({id:"pj-"+k+"-plan",type:"line",source:"pj-"+k+"-l",filter:["==",["get","dash"],1],paint:{"line-color":col,"line-width":["interpolate",["linear"],["zoom"],9,2.5,15,5],"line-opacity":.8,"line-dasharray":[2,1.5]}},below);
+  map.addLayer({id:"pj-"+k+"-fill",type:"fill",source:"pj-"+k+"-a",paint:{"fill-color":col,"fill-opacity":.3}},below);
+  map.addLayer({id:"pj-"+k+"-edge",type:"line",source:"pj-"+k+"-a",paint:{"line-color":col,"line-width":1.6}},below);
+  map.addLayer({id:"pj-"+k+"-pin",type:"circle",source:"pj-"+k+"-p",paint:{"circle-color":"#ffffff","circle-radius":["interpolate",["linear"],["zoom"],9,4.5,14,7],"circle-stroke-color":col,"circle-stroke-width":2.5}},"sel");
+  map.addLayer({id:"pj-"+k+"-lbl",type:"symbol",source:"pj-"+k+"-p",minzoom:11.5,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":11.5,"text-offset":[0,1.1],"text-anchor":"top","text-optional":true},paint:{"text-color":col,"text-halo-color":"#ffffff","text-halo-width":1.8}},"sel");
+  L.push(...["line","plan","fill","edge","pin","lbl"].map(x=>"pj-"+k+"-"+x));pjPaint(k);
+  ["pin","fill"].forEach(x=>{const id="pj-"+k+"-"+x;map.on("mouseenter",id,e=>{map.getCanvas().style.cursor="pointer";if(x==="pin")pop.setLngLat(e.lngLat).setText(e.features[0].properties.n).addTo(map)});map.on("mouseleave",id,()=>{map.getCanvas().style.cursor="";pop.remove()})})}
+function pjPaint(k){if(!map.getLayer("pj-"+k+"-lbl"))return;const d=theme!=="light";map.setPaintProperty("pj-"+k+"-lbl","text-halo-color",d?"#0b1220":"#ffffff");map.setPaintProperty("pj-"+k+"-pin","circle-color",d?"#0b1220":"#ffffff")}
+function pjVis(k,v){["line","plan","fill","edge","pin","lbl"].forEach(x=>{const id="pj-"+k+"-"+x;map.getLayer(id)&&map.setLayoutProperty(id,"visibility",v?"visible":"none")})}
+function pjLayers(on){["plat-fill","plat-line","plat-dot","plat-num"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",on?"none":"visible"));if(on){pjSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{pjSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
+  else if(pjSnap){Object.entries(pjSnap).forEach(([g,v])=>{const st=v==="only"?"on":v;chipState[g]=st;if(g==="live")syncVehVis();else setGroup(g,st!=="off");renderChip(g)});pjSnap=null}
+  renderAll();hint()}
+function pjCoords(t){const out=[];const walk=c=>typeof c[0]==="number"?out.push(c):c.forEach(walk);if(t.shape)walk(t.shape.coordinates);if(t.ll)out.push(t.ll);return out}
+function pjFit(cs,maxZoom){let b=null;cs.forEach(([x,y])=>{b=b?[Math.min(b[0],x),Math.min(b[1],y),Math.max(b[2],x),Math.max(b[3],y)]:[x,y,x,y]});
+  if(b)map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:maxZoom||15.5})}
+const pjAll=k=>[...PJ[k].sites.flatMap(pjCoords),...(PJ[k].line||[]).flat(),...(PJ[k].lines||[]).flatMap(l=>l.coords)];
+function pjNotice(n,where){return `<li><span class="pjd">${esc(pjDate(n.d))}${where&&n.where?" · "+esc(n.where):""}</span> <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.t)}</a>${n.pdf?` <a class="pjpdf" href="${esc(n.pdf)}" target="_blank" rel="noopener">PDF ↗</a>`:""}</li>`}
+const pjLinks=P=>`<div class="grp">Official and related sites</div><ul class="pjlinks">`+P.links.map(([t,u])=>`<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)} ↗</a></li>`).join("")+`</ul>`;
+function pjWire(k){pB.querySelectorAll("[data-pjs]").forEach(a=>a.onclick=e=>{e.preventDefault();pjCard(k,+a.dataset.pjs,true)});const x=document.getElementById("pjAll");if(x)x.onclick=e=>{e.preventDefault();pjOverview()}}
+function pjOverview(){const k=pjOn;if(!k)return;const P=PJ[k];const groups=new Map();P.sites.forEach((t,i)=>{const g=t.group||t.kind;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(i)});
+  let h=(P.notes||[]).map(n=>`<div class="odwarn"><p>⚠ ${esc(n)}</p></div>`).join("")+P.overview.map(p=>`<p class="pjp">${esc(p)}</p>`).join("");
+  h+=`<div class="grp">Sites</div><div class="pjhint">Tap a site here or on the map for its details.</div>`+[...groups].map(([g,is])=>`<div class="pjg">${esc(g)}</div>`+is.map(i=>`<div class="odg"><a href="#" data-pjs="${i}">${esc(P.sites[i].name)}</a>${P.sites[i].when?` <span class="odnm">${esc(P.sites[i].when)}</span>`:""}</div>`).join("")).join("");
+  if(P.latest&&P.latest.length)h+=`<div class="grp">Latest works notices</div><ul class="pjn">${P.latest.map(n=>pjNotice(n,true)).join("")}</ul>`;
+  if(P.documents&&P.documents.length)h+=`<div class="grp">Documents from TMR</div><ul class="pjn">${P.documents.map(n=>pjNotice(n,false)).join("")}</ul>`;
+  h+=pjLinks(P)+`<div class="odnote">${esc(P.mapnote||"")} Unofficial summary of what the Queensland Government, TMR and Translink have published; dates and details can change, so check the official sites.</div>`;
+  openPanel(P.name,esc(P.sub||"")+(PJ.built?` · checked ${esc(pjDate(PJ.built))}`:""),h,{view:"pj"});backState=null;pBack.style.display="none";pjWire(k)}
+function pjCard(k,i,fit){const P=PJ[k],t=P.sites[i];let h=`<p class="pjp">${esc(t.about)}</p>`;
+  if(t.when)h+=`<div class="odstart">${esc(t.when)}</div>`;
+  if(t.status&&t.status.length)h+=`<div class="grp">Status</div>`+t.status.map(x=>`<p class="pjp">${esc(x)}</p>`).join("");
+  if(t.progress)h+=`<div class="grp">Latest official progress${P.progress_asof?` (up to ${esc(P.progress_asof)})`:""}</div><p class="pjp">${esc(t.progress)}</p>`;
+  if(t.facts&&t.facts.length)h+=`<ul class="pjf">${t.facts.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`;
+  if(t.notices&&t.notices.length)h+=`<div class="grp">Works notices</div><ul class="pjn">${t.notices.map(n=>pjNotice(n,false)).join("")}</ul>`;
+  else if(k==="crr")h+=`<div class="pjhint">No current works notices for this site.</div>`;
+  h+=`<p class="odlink"><a href="${esc(t.page)}" target="_blank" rel="noopener">${esc(t.pagelabel||(t.name+" on the official site"))} ↗</a></p>`;
+  if(t.approx)h+=`<div class="odnote">${esc(t.approxnote||"The shaded circle marks roughly where this site is; it isn't the site's actual boundary.")}</div>`;
+  h+=`<div class="odnote"><a href="#" id="pjAll">‹ All ${esc(P.name)} sites</a></div>`;
+  openPanel(t.name,esc(t.kind),h,{view:"pjv"});setBack({kind:"pj"});pjWire(k);if(fit)pjFit(pjCoords(t),16)}
+async function togglePJ(k){const btn=document.getElementById(PJ_BTN[k]);
+  if(pjOn===k){pjOn=null;pjVis(k,false);pjLayers(false);btn.classList.remove("odon");if(view==="pj"||view==="pjv")closePanel();return}
+  if(pjOn){const o=pjOn;pjOn=null;pjVis(o,false);document.getElementById(PJ_BTN[o]).classList.remove("odon");pjLayers(false)}
+  if(odOn)await toggleOD();if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();
+  if(!PJ){try{PJ=await (await fetch(BASE+"data/projects.json"+DV)).json()}catch(e){openPanel("Project information","",`<div class="sub">Project information is unavailable right now.</div>`);return}}
+  if(!PJ[k]){openPanel("Project information","",`<div class="sub">This project's information isn't available yet.</div>`);return}
+  pjSetup(k);pjOn=k;pjVis(k,true);pjLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  pjOverview();pjFit(PJ[k].focus?pjAll(k).filter(([x,y])=>x>=PJ[k].focus[0]&&y>=PJ[k].focus[1]&&x<=PJ[k].focus[2]&&y<=PJ[k].focus[3]):pjAll(k),13)}
+document.getElementById("crrBtn").onclick=()=>togglePJ("crr");document.getElementById("waveBtn").onclick=()=>togglePJ("wave");
+map.on("click",e=>{if(!pjOn)return;const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];const k=pjOn;
+  const f=map.queryRenderedFeatures(box,{layers:["pj-"+k+"-pin","pj-"+k+"-fill"].filter(id=>map.getLayer(id))});if(!f.length)return;const p=f.find(x=>x.layer.id.endsWith("-pin"))||f[0];
+  pjCard(k,+p.properties.i,false)});
 
 // ---------- platform areas and numbers at BAU stations (data/platforms.json), shown when zoomed in
 (async()=>{let P;try{P=await (await fetch(BASE+"data/platforms.json"+DV)).json()}catch(e){return}
@@ -1057,7 +1119,7 @@ function gcCard(i,fly){const r=GC.r[i];const cs=gcCaps(r[6]);
   document.getElementById("gcAll").onclick=e=>{e.preventDefault();gcOverview()}}
 async function toggleGC(){const btn=document.getElementById("gcBtn");
   if(gcOn){gcOn=false;gcVis(false);gcLayers(false);btn.classList.remove("gcon");if(view==="gc"||view==="gcv")closePanel();return}
-  if(odOn)await toggleOD();
+  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);
   if(!GC){try{GC=await (await fetch(BASE+"data/retailers.json"+DV)).json()}catch(e){openPanel("go card vendors","",`<div class="sub">Vendor locations unavailable. See translink.com.au or call 13 12 30.</div>`);return}}
   gcSetup();gcApply();gcOn=true;gcVis(true);gcLayers(true);btn.classList.add("gcon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   gcOverview()}
@@ -1168,6 +1230,6 @@ window.__ready=true;window.__map=map;window.__openStop=openStop;
   document.getElementById("moreMenu").addEventListener("click",()=>set(false));
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
-  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn");const mo=()=>b.classList.toggle("on",od.classList.contains("odon")||gc.classList.contains("gcon"));[od,gc].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
-  b.title="More: connections, on demand, go card vendors, school routes, lost property, feedback"})();
+  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
+  b.title="More: connections, on demand, go card vendors, Cross River Rail, The Wave, school routes, lost property, feedback"})();
 

@@ -1,0 +1,487 @@
+{
+ "_about": "Sites for the Cross River Rail and The Wave tabs. Each site's outline, latest official progress, status and works notices are filled in automatically by tools/build_projects.py. 'about' is a short summary written from the official pages; edit it if a site's role changes. 'at' is where the site is: a Translink station name, or [lon, lat]. 'notices' is the area name used on crossriverrail.qld.gov.au's works notices. 'progress' is how the site is named in the 'At …,' updates on the official progress page.",
+ "crr": {
+  "name": "Cross River Rail",
+  "colour": "#0f766e",
+  "sites": [
+   {
+    "id": "roma-street",
+    "name": "Roma Street",
+    "kind": "New underground station",
+    "at": [
+     153.019,
+     -27.4662
+    ],
+    "osm": "Cross River Rail",
+    "notices": "roma-street",
+    "progress": "Roma Street",
+    "page": "https://crossriverrail.qld.gov.au/roma-street/",
+    "about": "A new underground station beside the existing Roma Street station. The Delivery Authority describes it as becoming Queensland's most significant transport interchange, connecting suburban bus and rail with regional and interstate services.",
+    "group": "New underground stations"
+   },
+   {
+    "id": "albert-street",
+    "name": "Albert Street",
+    "kind": "New underground station",
+    "at": [
+     153.0268,
+     -27.4713
+    ],
+    "osm": "Cross River Rail",
+    "notices": "albert-street",
+    "progress": "Albert Street",
+    "page": "https://crossriverrail.qld.gov.au/albert-street/",
+    "about": "The first new train station in the Brisbane CBD in more than 120 years, serving the southern end of the CBD. The project also builds a new public space on Albert Street between Elizabeth and Mary streets, part of Brisbane City Council's Green Spine.",
+    "group": "New underground stations"
+   },
+   {
+    "id": "woolloongabba",
+    "name": "Woolloongabba",
+    "kind": "New underground station",
+    "at": [
+     153.0344,
+     -27.4852
+    ],
+    "osm": "Cross River Rail",
+    "notices": "woolloongabba",
+    "progress": "Woolloongabba",
+    "page": "https://crossriverrail.qld.gov.au/woolloongabba/",
+    "about": "A new underground station at Woolloongabba with high-frequency services and better access to the Gabba and the local entertainment area.",
+    "group": "New underground stations"
+   },
+   {
+    "id": "boggo-road",
+    "name": "Boggo Road",
+    "kind": "New underground station",
+    "at": [
+     153.0308,
+     -27.4965
+    ],
+    "osm": "Cross River Rail",
+    "notices": "boggo-road",
+    "progress": "Boggo Road",
+    "page": "https://crossriverrail.qld.gov.au/boggo-road/",
+    "about": "A new underground station at Boggo Road, serving the health, science and education precinct. The Delivery Authority expects it to become SEQ's second busiest transport interchange, with over 22,000 people using it each weekday by 2036.",
+    "group": "New underground stations"
+   },
+   {
+    "id": "dutton-park",
+    "name": "Dutton Park",
+    "kind": "Rebuilt station and southern tunnel entrance",
+    "at": "Dutton Park station",
+    "notices": "dutton-park",
+    "progress": "Dutton Park",
+    "page": "https://crossriverrail.qld.gov.au/dutton-park/",
+    "about": "Rebuilt as a fully accessible station, and the closest station to the tunnels' southern entrance, which is north of the station.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "northern-portal",
+    "name": "Northern tunnel portal (Normanby)",
+    "kind": "Tunnel portal",
+    "at": [
+     153.0159,
+     -27.459
+    ],
+    "notices": "northern-portal",
+    "progress": "Northern Portal",
+    "page": "https://crossriverrail.qld.gov.au/construction/northern-portal-construction/",
+    "about": "Where trains enter and leave the twin tunnels, in the rail corridor at Normanby.",
+    "group": "Tunnel portal and train stabling"
+   },
+   {
+    "id": "exhibition",
+    "name": "Exhibition",
+    "kind": "Upgraded station",
+    "at": [
+     153.0311,
+     -27.4501
+    ],
+    "notices": "exhibition",
+    "progress": "Exhibition",
+    "page": "https://crossriverrail.qld.gov.au/exhibition/",
+    "about": "Upgraded to give the Showgrounds area rail services all year round. Until then it opens only for major events at the Brisbane Showgrounds.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "mayne-yard",
+    "name": "Mayne Yard",
+    "kind": "Train stabling",
+    "at": [
+     153.037,
+     -27.4413
+    ],
+    "osm": "Mayne Rail Yard",
+    "notices": "mayne-yard",
+    "progress": "Mayne Yard",
+    "page": "https://crossriverrail.qld.gov.au/mayne-yard/",
+    "about": "New train stabling at Mayne Yard, with track and overhead line works around Breakfast Creek.",
+    "group": "Tunnel portal and train stabling"
+   },
+   {
+    "id": "clapham-yard",
+    "name": "Clapham Yard",
+    "kind": "Train stabling",
+    "at": [
+     153.0131,
+     -27.5365
+    ],
+    "notices": "salisbury-to-fairfield",
+    "progress": "Clapham Yard",
+    "page": "https://crossriverrail.qld.gov.au/about/rail-network-improvements/clapham-yard/",
+    "about": "New train stabling at Clapham Yard, Moorooka, including a new viaduct.",
+    "group": "Tunnel portal and train stabling"
+   },
+   {
+    "id": "fairfield",
+    "name": "Fairfield",
+    "kind": "Rebuilt station",
+    "at": "Fairfield station",
+    "notices": "salisbury-to-fairfield",
+    "progress": "Fairfield",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/salisbury-to-fairfield-line/fairfield-station/",
+    "about": "Rebuilt as a fully accessible station, one of the southside station rebuilds between Dutton Park and Salisbury.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "yeronga",
+    "name": "Yeronga",
+    "kind": "Rebuilt station",
+    "at": "Yeronga station",
+    "notices": "salisbury-to-fairfield",
+    "progress": "Yeronga",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/salisbury-to-fairfield-line/yeronga-station/",
+    "about": "Rebuilt as a fully accessible station, one of the southside station rebuilds between Dutton Park and Salisbury.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "yeerongpilly",
+    "name": "Yeerongpilly",
+    "kind": "Rebuilt station",
+    "at": "Yeerongpilly station",
+    "notices": "salisbury-to-fairfield",
+    "progress": "Yeerongpilly",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/salisbury-to-fairfield-line/yeerongpilly-station/",
+    "about": "Rebuilt as a fully accessible station, one of the southside station rebuilds between Dutton Park and Salisbury.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "moorooka",
+    "name": "Moorooka",
+    "kind": "Station being rebuilt",
+    "at": [
+     153.0139,
+     -27.5363
+    ],
+    "notices": "salisbury-to-fairfield",
+    "progress": "Moorooka",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/salisbury-to-fairfield-line/moorooka-station/",
+    "about": "Being rebuilt as a fully accessible station, one of the southside station rebuilds between Dutton Park and Salisbury.",
+    "osm": "Moorooka Railway Station Upgrade",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "rocklea",
+    "name": "Rocklea",
+    "kind": "Rebuilt station",
+    "at": "Rocklea station",
+    "notices": "salisbury-to-fairfield",
+    "progress": "Rocklea",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/salisbury-to-fairfield-line/rocklea-station/",
+    "about": "Rebuilt as a fully accessible station, one of the southside station rebuilds between Dutton Park and Salisbury.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "salisbury",
+    "name": "Salisbury",
+    "kind": "Rebuilt station",
+    "at": "Salisbury station",
+    "notices": "salisbury-to-fairfield",
+    "progress": "Salisbury",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/salisbury-to-fairfield-line/salisbury-station/",
+    "about": "Rebuilt as a fully accessible station, one of the southside station rebuilds between Dutton Park and Salisbury.",
+    "group": "Station rebuilds and upgrades"
+   },
+   {
+    "id": "pimpama",
+    "name": "Pimpama",
+    "kind": "New Gold Coast station",
+    "at": "Pimpama station",
+    "notices": "gold-coast-line",
+    "progress": "Pimpama",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/gold-coast-line/pimpama-station/",
+    "about": "One of three new stations on the Gold Coast line, on the Old Pacific Highway between Bedford Road and Mebbin Street.",
+    "group": "New Gold Coast line stations"
+   },
+   {
+    "id": "hope-island",
+    "name": "Hope Island",
+    "kind": "New Gold Coast station",
+    "at": "Hope Island station",
+    "notices": "gold-coast-line",
+    "progress": "Hope Island",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/gold-coast-line/hope-island-station/",
+    "about": "One of three new stations on the Gold Coast line.",
+    "group": "New Gold Coast line stations"
+   },
+   {
+    "id": "merrimac",
+    "name": "Merrimac",
+    "kind": "New Gold Coast station",
+    "at": [
+     153.3625,
+     -28.0474
+    ],
+    "notices": "gold-coast-line",
+    "progress": "Merrimac",
+    "page": "https://crossriverrail.qld.gov.au/stations-routes/gold-coast-line/merrimac-station/",
+    "about": "One of three new stations on the Gold Coast line, off Gooding Drive about 750 m east of the Pacific Motorway (exit 77), with about 200 parking spaces and a local bus terminus.",
+    "group": "New Gold Coast line stations"
+   }
+  ],
+  "overview": [
+   "Cross River Rail is a new 10.2 km rail line with 5.9 km of twin tunnels under the Brisbane River and CBD, and four new underground stations: Boggo Road, Woolloongabba, Albert Street and Roma Street.",
+   "The program also rebuilds stations from Dutton Park to Salisbury, upgrades Exhibition station, adds three new Gold Coast line stations (Pimpama, Hope Island and Merrimac), builds train stabling at Clapham Yard and Mayne Yard, and installs a new signalling system (European Train Control System).",
+   "It gives the rail network a second river crossing through the CBD, with capacity to run as many as 24 trains in each direction.",
+   "Timing and cost, as most recently published by the Queensland Government: first passenger services through the tunnels are expected in 2029, and the total cost to complete the project and associated works is $19.041 billion (October 2025).",
+   "Delivered by the Cross River Rail Delivery Authority, with Queensland Rail and Translink (Department of Transport and Main Roads)."
+  ],
+  "links": [
+   [
+    "Cross River Rail (official site)",
+    "https://crossriverrail.qld.gov.au/"
+   ],
+   [
+    "Construction progress",
+    "https://crossriverrail.qld.gov.au/construction/progress/"
+   ],
+   [
+    "Works notices",
+    "https://crossriverrail.qld.gov.au/construction/work-notices/"
+   ],
+   [
+    "Travel impacts and disruptions",
+    "https://crossriverrail.qld.gov.au/construction/travel-impacts/"
+   ],
+   [
+    "Project overview",
+    "https://crossriverrail.qld.gov.au/about/project-overview/"
+   ],
+   [
+    "Queensland Government media statements",
+    "https://statements.qld.gov.au/"
+   ],
+   [
+    "Translink service updates",
+    "https://translink.com.au/service-updates"
+   ]
+  ],
+  "sub": "Cross River Rail Delivery Authority",
+  "mapnote": "The teal line is the tunnel route. Shaded areas are the work sites as mapped in OpenStreetMap; circles mark stations where no site boundary is mapped.",
+  "focus": [
+   152.95,
+   -27.56,
+   153.1,
+   -27.42
+  ]
+ },
+ "wave": {
+  "name": "The Wave",
+  "colour": "#0369a1",
+  "sub": "Department of Transport and Main Roads",
+  "mapnote": "Shaded blue is the rail corridor and station precincts traced from TMR's corridor alignment maps; dashed lines are approximate (between map pages that couldn't be placed exactly, and the metro route beyond Mountain Creek, which is still being investigated).",
+  "overview": [
+   "The Wave is the Queensland Government's planned public transport link for the Sunshine Coast, announced on 25 March 2025 as part of the Brisbane 2032 Delivery Plan.",
+   "Stages 1 and 2 (rail): a new passenger rail line from Beerwah to Birtinya, previously called the Direct Sunshine Coast Rail Line. Stage 1 runs 19 km from Beerwah to Caloundra and Stage 2 about 7 km on to Birtinya. It joins the North Coast Line north of Beerwah, so trains continue to Moreton Bay and the Brisbane CBD.",
+   "Stage 3 (metro): a high-frequency, metro-style service from the Sunshine Coast University Hospital in Birtinya to Sunshine Coast Airport, via Mountain Creek and the Maroochydore CBD. The vehicle hasn't been chosen yet.",
+   "The Mooloolah River Interchange Upgrade is part of The Wave, with a new Mooloolah River crossing linking Kawana Way to the Sunshine Motorway.",
+   "Timing and funding as published by TMR: the Australian and Queensland governments have each committed $2.75 billion to Stage 1; Stage 2 construction is subject to funding. Rail construction is expected to start in 2027, subject to approvals, and no opening date has been given. For Stage 3, major construction is planned from 2027, with the corridor operating by 2032."
+  ],
+  "links": [
+   [
+    "The Wave (TMR)",
+    "https://www.tmr.qld.gov.au/thewave/projects"
+   ],
+   [
+    "The Wave Stages 1 and 2 (Rail): project page and documents",
+    "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail"
+   ],
+   [
+    "Rail corridor maps and station precincts",
+    "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps"
+   ],
+   [
+    "The Wave Stage 3 (Metro)",
+    "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro"
+   ],
+   [
+    "Stage 3 corridor and interactive map",
+    "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor"
+   ],
+   [
+    "Brisbane 2032 Delivery Plan: transport",
+    "https://www.delivering2032.com.au/legacy-for-queensland/transport"
+   ],
+   [
+    "Queensland Government media statements",
+    "https://statements.qld.gov.au/"
+   ],
+   [
+    "Translink",
+    "https://translink.com.au/"
+   ]
+  ],
+  "docs": [
+   "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail",
+   "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor"
+  ],
+  "focus": null,
+  "sites": [
+   {
+    "id": "rail-corridor",
+    "name": "Rail corridor, Beerwah to Birtinya",
+    "kind": "Stages 1 and 2 (rail)",
+    "group": "Stages 1 and 2 (rail)",
+    "shape": "corridor",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps",
+    "about": "About 26 km of new dual-track rail: 19 km from Beerwah to Caloundra (Stage 1) and about 7 km from Caloundra to Birtinya (Stage 2). It generally follows the corridor protected in 2001 by the Caboolture to Maroochydore Corridor Study (CAMCOS). TMR's maps show about 7 km of viaduct between Bells Creek (Aura) and Caloundra, and a proposed 1.2 km tunnel at Little Mountain between Caloundra West and Aroona.",
+    "approxnote": "Traced from TMR's corridor alignment maps (September 2025). Where a map page couldn't be placed exactly, the corridor is joined with a dashed line."
+   },
+   {
+    "id": "beerwah",
+    "name": "Beerwah",
+    "kind": "Station upgrade (Stage 1)",
+    "group": "Stages 1 and 2 (rail)",
+    "near": [
+     152.958,
+     -26.857
+    ],
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps",
+    "about": "The existing station is to be upgraded with an additional platform, with public access through the station between Beerwah Parade and Simpson Street. TMR has also published designs for a train stabling facility and an elevated rail structure north of the station."
+   },
+   {
+    "id": "bells-creek",
+    "name": "Bells Creek (Aura)",
+    "kind": "New station (Stage 1)",
+    "group": "Stages 1 and 2 (rail)",
+    "near": [
+     153.0661,
+     -26.8289
+    ],
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps",
+    "about": "A new station and town centre precinct at the southern end of the viaduct section, between Aura Boulevard and Bells Creek Arterial Road.",
+    "approxnote": "Placed between Aura Boulevard and Bells Creek Arterial Road as shown on TMR's map 9, because that map page couldn't be placed exactly; the circle isn't the precinct's boundary."
+   },
+   {
+    "id": "caloundra",
+    "name": "Caloundra",
+    "kind": "New station (Stage 1)",
+    "group": "Stages 1 and 2 (rail)",
+    "near": [
+     153.114,
+     -26.803
+    ],
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps",
+    "about": "A new station by Caloundra Road and Pelican Waters Boulevard, where Stage 1 ends. TMR's map shows the rail passing over Caloundra Road (no level crossing) and possible road upgrades at Pelican Waters Boulevard, Enterprise Street and Marks Road."
+   },
+   {
+    "id": "aroona",
+    "name": "Aroona",
+    "kind": "New station (Stage 2)",
+    "group": "Stages 1 and 2 (rail)",
+    "near": [
+     153.107,
+     -26.774
+    ],
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps",
+    "about": "A new Stage 2 station near Parklands Boulevard, just after the proposed Little Mountain tunnel between Caloundra West and Aroona."
+   },
+   {
+    "id": "birtinya",
+    "name": "Birtinya",
+    "kind": "New station: end of the rail line, start of the metro",
+    "group": "Stages 1 and 2 (rail)",
+    "near": [
+     153.116,
+     -26.739
+    ],
+    "marker": "Birtinya station precinct",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/thewaverail/project-location-and-maps",
+    "about": "The end of the rail line (Stage 2) and an interchange with the Stage 3 metro."
+   },
+   {
+    "id": "metro-corridor",
+    "name": "Metro corridor, Birtinya to the airport",
+    "kind": "Stage 3 (metro)",
+    "group": "Stage 3 (metro)",
+    "shape": "stage3",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": "A dedicated high-frequency corridor from the Sunshine Coast University Hospital in Birtinya to Sunshine Coast Airport, via Mountain Creek and the Maroochydore CBD. TMR released corridor alignment maps for Birtinya to Mountain Creek in June 2026; the section from Mountain Creek to the airport is still being investigated and is shown dashed.",
+    "approxnote": "Traced from TMR's Stage 3 overview map, so the line is approximate; north of Mountain Creek it's indicative only."
+   },
+   {
+    "id": "scuh",
+    "name": "Sunshine Coast University Hospital",
+    "kind": "Metro station (Stage 3)",
+    "group": "Stage 3 (metro)",
+    "marker": "Sunshine Coast University Hospital station",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   },
+   {
+    "id": "mountain-creek",
+    "name": "Mountain Creek",
+    "kind": "Metro station precinct (Stage 3)",
+    "group": "Stage 3 (metro)",
+    "marker": "Mountain Creek station precinct",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   },
+   {
+    "id": "maroochydore",
+    "name": "Maroochydore CBD",
+    "kind": "Metro station precinct (Stage 3)",
+    "group": "Stage 3 (metro)",
+    "marker": "Maroochydore CBD station precinct",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   },
+   {
+    "id": "airport",
+    "name": "Sunshine Coast Airport",
+    "kind": "Metro station precinct (Stage 3)",
+    "group": "Stage 3 (metro)",
+    "marker": "Sunshine Coast Airport precinct",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   },
+   {
+    "id": "mri",
+    "name": "Mooloolah River Interchange Upgrade",
+    "kind": "Road and river crossing upgrade",
+    "group": "Related works",
+    "marker": "Mooloolah River Interchange (MRI) Upgrade",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   },
+   {
+    "id": "kawana-crossing",
+    "name": "Kawana Way river crossing",
+    "kind": "Road and river crossing",
+    "group": "Related works",
+    "marker": "Kawana Way intersection and river crossing",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   },
+   {
+    "id": "kawana-island",
+    "name": "Kawana Way and Kawana Island Boulevard",
+    "kind": "Intersection upgrade",
+    "group": "Related works",
+    "marker": "Kawana Way and Kawana Island Blvd intersection",
+    "page": "https://www.yoursay-projects.tmr.qld.gov.au/the-wave-stage3-metro/new-public-transport-corridor",
+    "about": ""
+   }
+  ]
+ }
+}
