@@ -91,7 +91,14 @@ def main():
     meta = json.load(open(meta_p)) if os.path.exists(meta_p) else {}
     if ONLY:
         x, y = map(int, ONLY.split(",")); print("built" if build_tile(x, y) else "no data"); return
-    version = S.get(f"{SVC}/info/iteminfo?f=json", timeout=60).json().get("name") or "unknown"
+    version = None
+    for attempt in range(3):   # QldDem's version name; if the service can't be reached, try again next week
+        try:
+            version = S.get(f"{SVC}/info/iteminfo?f=json", timeout=60).json().get("name"); break
+        except Exception:
+            time.sleep(5 + 10 * attempt)
+    if not version:
+        print("heights: Queensland's elevation service couldn't be reached; keeping the saved heights"); return
     want = needed()
     same = meta.get("version") == version and not FORCE
     have = {tuple(t) for t in meta.get("tiles", [])} if same else set()
