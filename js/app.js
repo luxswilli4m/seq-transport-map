@@ -770,6 +770,12 @@ map.on("click",e=>{if(!odOn)return;const box=[[e.point.x-6,e.point.y-6],[e.point
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
 // ---------- Best connections: stop/station to stop/station planner (data/plan/<day>.json, built weekly)
 const PLAN={cache:{},from:null,to:null};
+// a journey end is a stop/station id, or a point {ll:[lon,lat],label,sub} (an address, a landmark, a place found online,
+// and later "my location"), so everything below asks these helpers rather than looking in ST directly
+const epIsStop=e=>typeof e==="string";
+const epXY=e=>epIsStop(e)?[ST[e][2],ST[e][1]]:e.ll;
+const epName=e=>epIsStop(e)?shortName(ST[e][0]):e.label;
+const epFull=e=>e==null?"":epIsStop(e)?ST[e][0]:e.label;
 async function planData(ymd){if(PLAN.cache[ymd])return PLAN.cache[ymd];const d=await (await fetch(BASE+"data/plan/"+ymd+".json"+DV)).json();
   d.idx=new Map(d.s.map((k,i)=>[k,i]));d.sp=d.s.map(()=>[]);
   d.p.forEach((p,pi)=>{p.s.forEach((s,pos)=>d.sp[s].push([pi,pos]));p.tt=p.t.map(r=>{const a=new Array(r.length);let c=0;for(let i=0;i<r.length;i++){c+=r[i];a[i]=c}return a})});
@@ -780,7 +786,7 @@ const walkMin=m=>Math.max(1,Math.ceil(m*1.25/80));   // 80 m a minute, 25% allow
 function nearIdx(d,xy,maxM){const out=[];const gx=Math.floor(xy[0]*98.7),gy=Math.floor(xy[1]*110.6);const r=Math.ceil(maxM/1000);
   for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const a=d.grid.get((gx+i)+","+(gy+j));if(a)for(const s of a){const m=mDist(xy,d.xy[s]);if(m<=maxM)out.push([s,m])}}return out}
 function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,INF=1e9;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
-  const fromXY=fromKeys.map(k=>[ST[k][2],ST[k][1]]),toXY=toKeys.map(k=>[ST[k][2],ST[k][1]]);
+  const fromXY=fromKeys.map(epXY),toXY=toKeys.map(epXY);if(startM<=0&&!fromKeys.every(epIsStop))startM=maxM;
   const start=new Map();if(startM<=0)fromKeys.forEach(k=>{if(d.idx.has(k))start.set(d.idx.get(k),{t:t0,m:0})});else fromXY.forEach(xy=>nearIdx(d,xy,startM).forEach(([s,m])=>{const t=t0+(m<30?0:walkMin(m));if(!start.has(s)||start.get(s).t>t)start.set(s,{t,m})}));
   const end=new Map();toXY.forEach(xy=>nearIdx(d,xy,maxM).forEach(([s,m])=>{const w=m<30?0:walkMin(m);if(!end.has(s)||end.get(s).w>w)end.set(s,{w,m})}));
   arr[0]=new Float64Array(n).fill(INF);par[0]=new Array(n);let marked=new Set();
@@ -828,27 +834,27 @@ async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.
       r.sort((a,b)=>a.arr-b.arr||a.changes-b.changes);for(const x of r){if(arriveBy&&x.arr>byT)continue;if(!o.some(y=>y.leave===x.leave&&y.arr===x.arr&&y.changes===x.changes))o.push(x)}
       const nd=Math.min(...r.map(x=>x.dep))+1;if(arriveBy&&(nd>byT||Math.min(...r.map(x=>x.arr))>byT))break;t=nd}
       if(arriveBy){o.sort((a,b)=>b.leave-a.leave||a.changes-b.changes);return o.slice(0,15)}return o};
-  let opts=run(0),wide=false,extra=null;
-  if(!opts.length){opts=run(maxM);wide=opts.length>0}
+  const fromStop=epIsStop(PLAN.from);let opts=run(fromStop?0:maxM),wide=false,extra=null;
+  if(!opts.length&&fromStop){opts=run(maxM);wide=opts.length>0}
   // Changes slider: 0 = direct only (falls back to the fewest changes if nothing is direct), 1-3, or any
   const maxCh=+document.getElementById("cnCh").value>=4?99:+document.getElementById("cnCh").value;let chNote="";
   if(maxCh>0&&maxCh<99){const f=opts.filter(x=>x.changes<=maxCh);if(f.length)opts=f;else if(opts.length)chNote=`Nothing gets there with ${maxCh} change${maxCh>1?"s":""} or fewer; showing the options with the fewest changes.`}
   if(maxCh===0&&opts.length&&!opts.some(x=>x.changes===0))chNote="No single service goes all the way, so these include changes.";
   if(arriveBy&&maxCh===0&&opts.some(x=>x.changes===0))opts=opts.filter(x=>x.changes===0);
-  else if(maxCh===0&&opts.some(x=>x.changes===0)){const sm=wide?maxM:0;let dir=opts.filter(x=>x.changes===0);let t=Math.max(...dir.map(x=>x.dep))+1;
+  else if(maxCh===0&&opts.some(x=>x.changes===0)){const sm=wide||!fromStop?maxM:0;let dir=opts.filter(x=>x.changes===0);let t=Math.max(...dir.map(x=>x.dep))+1;
     for(let i=0;i<8&&dir.length<3;i++){const r=raptor(d,fk,tk,t,maxM,1,sm);if(!r.length)break;const x=r.sort((a,b)=>a.arr-b.arr)[0];if(!dir.some(y=>y.dep===x.dep&&y.arr===x.arr))dir.push(x);t=x.dep+1}
     opts=dir}
-  else{const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
+  else if(fromStop){const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
   if(arriveBy)extra=null;
   opts.sort(arriveBy?((a,b)=>b.leave-a.leave||a.changes-b.changes):((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave));const pick=opts.slice(0,4);const show=pick.sort(arriveBy?((a,b)=>a.changes-b.changes||b.leave-a.leave):((a,b)=>a.changes-b.changes||a.arr-b.arr)).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
   if(!show.length){box.innerHTML=`<div class="sub">No connection found${arriveBy?` that arrives by ${clock(byT)}`:""}${maxM<1000?" — try a larger walking distance":""}. ${arriveBy?"Try a later time, or":"Services may have finished for the day; try a later day or"} check Translink's journey planner.</div>`;return}
-  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=(wide?`<div class="odnote" style="margin-top:0">No services from ${esc(shortName(ST[PLAN.from][0]))} itself get there, so these start from stops within ${maxM} m.</div>`:"")+(chNote?`<div class="odnote" style="margin-top:0">${chNote}</div>`:"");
+  PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=(wide?`<div class="odnote" style="margin-top:0">No services from ${esc(epName(PLAN.from))} itself get there, so these start from stops within ${maxM} m.</div>`:"")+(chNote?`<div class="odnote" style="margin-top:0">${chNote}</div>`:"");
   const main=show.filter(x=>!x.walkFirst);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&x.arr===minArr),minCh=show[0].changes;
   const byNote=arriveBy?`<div class="odnote" style="margin-top:0">Latest ways to arrive by ${clock(byT)}${dayOff?" on "+esc(document.getElementById("cnDay").selectedOptions[0].textContent):""}.</div>`:"";
   box.innerHTML=byNote+wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
     const tags=o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((oi===0&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
     return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}</div>`+
-      o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(shortName(ST[PLAN.from][0])):"from "+nm(l.from);const b=l.to==null?"to "+esc(shortName(ST[PLAN.to][0])):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
+      o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(epName(PLAN.from)):"from "+nm(l.from);const b=l.to==null?"to "+esc(epName(PLAN.to)):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
         const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
         return `<div class="cnl" data-leg="${oi},${li}">${bd}<div class="cnlt"><b>${clock(l.dep)}</b> ${nm(l.from)}${pl?` <span class="cnpl">${esc(pl)}</span>`:""} <span class="cnto">→ ${esc(cleanHead(TT.cal.hs[p.h]))}</span><br><b>${clock(l.arr)}</b> ${nm(l.to)} <span class="cnto">· ${l.apos-l.bpos} stop${l.apos-l.bpos>1?"s":""}</span>${li===o.legs.findIndex(x=>x.type==="ride")&&dayOff===0?`<span class="cnlive" id="cnLive${oi}"></span>`:""}</div></div>`}).join("")+`</div>`}).join("")+
     `<div class="odnote">Unofficial: always check times with Translink before travelling. Walking times are estimates. <a href="https://jp.translink.com.au/plan-your-journey/journey-planner" target="_blank" rel="noopener">Translink journey planner ↗</a></div>`;
@@ -860,9 +866,8 @@ function cnLayers(on){if(on){if(cnSnap)return;cnSnap={};GROUPS.forEach(([g])=>{c
   else if(cnSnap){GROUPS.forEach(([g])=>{if(g==="live")return;setGroup(g,cnSnap[g]!=="off")});cnSnap=null;chipBox.classList.remove("dim")}}
 function drawOption(oi,li){cnLayers(true);const {d,show}=PLAN.last;const o=show[oi];document.querySelectorAll(".cno").forEach(x=>x.classList.toggle("on",+x.dataset.o===oi));
   const lines=[],walks=[];let bb=null;const ext=c=>{bb=bb?[Math.min(bb[0],c[0]),Math.min(bb[1],c[1]),Math.max(bb[2],c[0]),Math.max(bb[3],c[1])]:[c[0],c[1],c[0],c[1]]};
-  const xyOf=k=>[ST[k][2],ST[k][1]];
   o.legs.forEach((l,i)=>{if(li!=null&&i!==li)return;if(l.type==="ride"){const p=d.p[l.pi];const c=p.s.slice(l.bpos,l.apos+1).map(s=>d.xy[s]);c.forEach(ext);lines.push({type:"Feature",properties:{c:R[p.r].c,mode:"route"},geometry:{type:"LineString",coordinates:c}})}
-    else{const a=l.from==null?xyOf(PLAN.from):d.xy[l.from],b=l.to==null?xyOf(PLAN.to):d.xy[l.to];ext(a);ext(b);walks.push({type:"Feature",properties:{c:"#475569"},geometry:{type:"LineString",coordinates:[a,b]}})}});
+    else{const a=l.from==null?epXY(PLAN.from):d.xy[l.from],b=l.to==null?epXY(PLAN.to):d.xy[l.to];ext(a);ext(b);walks.push({type:"Feature",properties:{c:"#475569"},geometry:{type:"LineString",coordinates:[a,b]}})}});
   map.getSource("hl").setData(FC(lines));map.getSource("hlvar").setData(FC(walks));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));
   const ss=[];o.legs.forEach(l=>{if(l.type==="ride"){ss.push(d.xy[l.from],d.xy[l.to])}});map.getSource("hlstops").setData(FC(ss.map(c=>({type:"Feature",properties:{c:"#111827"},geometry:{type:"Point",coordinates:c}}))));
   if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:16})}
@@ -871,21 +876,65 @@ async function planLive(show){let tf;try{tf=await getTrips()}catch(e){return}con
     for(const e of tf.entity){const tu=e.tu;if(!tu||!tu.stu||riOfRoute(tu.trip&&tu.trip.route)!==p.r)continue;
       for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;if(bneMin(ev.time-(ev.delay||0))!==l.dep%1440)continue;
         const dl=Math.round((ev.delay||0)/60);el.innerHTML=tu.trip.sr===3||u.sr===1?` <span class="lvx">Cancelled</span>`:dl>=2?` <span class="lvl">● ${dl} min late</span>`:` <span class="lvo">● On time</span>`;return}}})}
-function placePicker(inpId,resId,onPick){const inp=document.getElementById(inpId),res=document.getElementById(resId);
-  inp.oninput=()=>{const items=searchPlaces(inp.value).filter(e=>e.k==="s").slice(0,12);res.innerHTML=items.map((e,k)=>`<div class="r" data-k="${k}">${e.html}<span class="ty">${esc(e.ty)}</span></div>`).join("")||(inp.value.length>1?`<div class="empty">No stops or stations match</div>`:"");res.style.display=res.innerHTML?"block":"none";
-    res.querySelectorAll(".r").forEach(d=>d.onclick=()=>{const e=items[+d.dataset.k];inp.value=ST[e.id][0];res.style.display="none";onPick(e.id)})}}
+// From / To suggestions: stations and stops, then landmarks (with their official address), then street addresses
+// (G-NAF, data/addr/), and only when nothing matches, a search of OpenStreetMap limited to South East Queensland
+const ADDR={places:null,chunks:{}};
+const SEQB=[151.8,-28.4,153.6,-26.0],inSEQ=([x,y])=>x>=SEQB[0]&&x<=SEQB[2]&&y>=SEQB[1]&&y<=SEQB[3];
+const STTYPE={st:"street",rd:"road",dr:"drive",ct:"court",ave:"avenue",av:"avenue",cres:"crescent",cr:"crescent",pl:"place",pde:"parade",cct:"circuit",tce:"terrace",cl:"close",bvd:"boulevard",blvd:"boulevard",ln:"lane",hwy:"highway",esp:"esplanade",gr:"grove",pkwy:"parkway",sq:"square",mwy:"motorway"};
+function addrPlaces(){return ADDR.places||(ADDR.places=fetch(BASE+"data/addr/places.json"+DV).then(r=>r.json()).then(a=>a.map(p=>({n:p[0],k:p[1],a:p[2],ll:[p[3],p[4]],r:p[5],w:norm(p[0]).split(" ")}))).catch(()=>[]))}
+function addrChunk(k){return ADDR.chunks[k]||(ADDR.chunks[k]=fetch(BASE+"data/addr/"+k+".json"+DV).then(r=>r.ok?r.json():[]).then(rows=>rows.map(([st,sub,pc,nums,dx,dy])=>({st,sub,pc,nums,dx,dy,key:(st+" "+sub).toLowerCase()}))).catch(()=>[]))}
+function addrLL(row,i){let x=0,y=0;for(let j=0;j<=i;j++){x+=row.dx[j];y+=row.dy[j]}return [x/1e5,y/1e5]}
+function parseAddr(q){q=q.toLowerCase().replace(/[,]/g," ").replace(/\s+/g," ").trim();
+  const m=q.match(/^(?:(?:unit|u|shop|apt)\s*)?(?:\d+[a-z]?\s*\/\s*)?(\d+[a-z]?(?:-\d+[a-z]?)?)\s+(.+)$/);const rest=(m?m[2]:q).split(" ").map((w,i)=>i&&STTYPE[w]||w).join(" ");
+  return {num:m?m[1]:null,rest,key:(rest.replace(/[^a-z0-9]/g,"").slice(0,2)+"__").slice(0,2)}}
+async function cnSuggest(q){const out=[];const qn=norm(q);if(qn.length<2)return out;
+  searchPlaces(q).filter(e=>e.k==="s").slice(0,8).forEach(e=>out.push({g:"Stations and stops",t:ST[e.id][0],ty:e.ty,ep:e.id}));
+  const qw=qn.split(" ");const lm=(await addrPlaces()).filter(p=>qw.every(x=>p.w.some(w=>w.startsWith(x))))
+    .sort((a,b)=>(b.w.join(" ").startsWith(qn)-a.w.join(" ").startsWith(qn))||a.r-b.r||a.n.length-b.n.length).slice(0,8);
+  lm.forEach(p=>out.push({g:"Places",t:p.n,sub:p.a||p.k,ty:p.k,ep:{ll:p.ll,label:p.n,sub:p.a}}));
+  const pa=parseAddr(q);if(pa.rest.replace(/[^a-z0-9]/g,"").length>=2){const rows=(await addrChunk(pa.key)).filter(r=>r.key.startsWith(pa.rest)||(r.st.toLowerCase().startsWith(pa.rest)));
+    const adds=[];for(const r of rows){const where=`${r.sub} QLD ${r.pc}`.trim();
+      if(pa.num){let i=r.nums.indexOf(pa.num);const hits=i>=0?[i]:r.nums.map((n,j)=>n.startsWith(pa.num)?j:-1).filter(j=>j>=0).slice(0,3);
+        hits.forEach(j=>adds.push({g:"Addresses",t:`${r.nums[j].toUpperCase()} ${r.st}`,sub:where,ty:"Address",ep:{ll:addrLL(r,j),label:`${r.nums[j].toUpperCase()} ${r.st}, ${r.sub}`,sub:where}}))}
+      else{const j=r.nums.length>>1;adds.push({g:"Addresses",t:r.st,sub:where,ty:"Street",ep:{ll:addrLL(r,j),label:`${r.st}, ${r.sub}`,sub:where}})}
+      if(adds.length>=12)break}
+    out.push(...adds)}
+  return out}
+// one search of OpenStreetMap (Nominatim), only when asked, kept to SEQ; if the search names a suburb, results elsewhere are dropped
+async function cnOnline(q){const u="https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&countrycodes=au&bounded=1&viewbox="+[SEQB[0],SEQB[3],SEQB[2],SEQB[1]].join(",")+"&q="+encodeURIComponent(q);
+  let a;try{a=await (await fetch(u,{headers:{"Accept-Language":"en-AU"}})).json()}catch(e){return null}
+  const biz=new Set(["shop","craft","office"]);
+  let r=a.filter(x=>!biz.has(x.category)&&(x.address||{}).state==="Queensland"&&inSEQ([+x.lon,+x.lat])).map(x=>{const ad=x.address||{};const sub=ad.suburb||ad.town||ad.city_district||ad.village||ad.city||"";
+    const name=x.name||[ad.house_number,ad.road].filter(Boolean).join(" ")||x.display_name.split(",")[0];return {t:name,sub:[ad.house_number&&x.name?ad.house_number+" "+(ad.road||""):"",sub,ad.postcode].filter(Boolean).join(", "),sb:sub.toLowerCase(),ll:[+x.lon,+x.lat]}});
+  const ql=q.toLowerCase();const named=r.filter(x=>x.sb&&ql.includes(x.sb));if(named.length)r=named;
+  return r.map(x=>({g:"Found online (OpenStreetMap)",t:x.t,sub:x.sub,ty:"Online",ep:{ll:x.ll,label:x.t+(x.sb?", "+x.sub.split(", ").slice(-2,-1)[0]:""),sub:x.sub}}))}
+function placePicker(inpId,resId,onPick,onClear){const inp=document.getElementById(inpId),res=document.getElementById(resId);let items=[],act=-1,seq=0,chosen=inp.value;
+  const row=(e,k)=>`<div class="r" data-k="${k}"><span class="rt"><span>${esc(e.t)}</span>${e.sub?`<span class="rs">${esc(e.sub)}</span>`:""}</span><span class="ty">${esc(e.ty)}</span></div>`;
+  const draw=(list,extra)=>{items=list;act=-1;let g="";res.innerHTML=list.map((e,k)=>(e.g!==g?`<div class="rg">${esc(g=e.g)}</div>`:"")+row(e,k)).join("")+(extra||"");res.style.display=res.innerHTML?"block":"none";
+    res.querySelectorAll(".r").forEach(d=>d.onclick=()=>choose(items[+d.dataset.k]));const w=res.querySelector(".rweb");if(w)w.onclick=online};
+  async function online(){const q=inp.value.trim(),my=++seq;res.innerHTML=`<div class="empty">Searching OpenStreetMap…</div>`;const r=await cnOnline(q);if(my!==seq)return;
+    if(r&&r.length)draw(r,`<div class="rnote">Results from OpenStreetMap, limited to South East Queensland.</div>`);else res.innerHTML=`<div class="empty">${r?"Nothing found in South East Queensland":"Couldn't reach OpenStreetMap; try again"}</div>`}
+  function choose(e){if(!e)return;inp.value=chosen=e.ep&&!epIsStop(e.ep)?e.ep.label:e.t;res.style.display="none";inp.blur();onPick(e.ep)}
+  inp.oninput=async()=>{if(inp.value!==chosen){chosen=null;onClear&&onClear()}const q=inp.value,my=++seq;const list=await cnSuggest(q);if(my!==seq)return;
+    draw(list,!list.length&&norm(q).length>=3?`<div class="empty">No stations, places or addresses match</div><div class="r rweb">🔎 Search online for “${esc(q.trim())}”<span class="ty">OpenStreetMap</span></div>`:"")};
+  inp.onkeydown=ev=>{const rows=res.querySelectorAll(".r");if(ev.key==="ArrowDown"||ev.key==="ArrowUp"){ev.preventDefault();act=Math.max(0,Math.min(rows.length-1,act+(ev.key==="ArrowDown"?1:-1)));rows.forEach((r,k)=>r.classList.toggle("act",k===act));rows[act]&&rows[act].scrollIntoView({block:"nearest"})}
+    else if(ev.key==="Enter"){const r=rows[act>=0?act:0];if(r)r.click()}else if(ev.key==="Escape")res.style.display="none"};
+  inp.addEventListener("focus",()=>{if(inp.value&&inp.value!==chosen)inp.oninput()});
+  document.addEventListener("click",ev=>{if(!res.contains(ev.target)&&ev.target!==inp)res.style.display="none"});
+  return {set:v=>{inp.value=chosen=v}}}
 function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;PLAN.from=fromId||null;PLAN.to=null;PLAN.last=null;   /* each visit starts fresh */
   const now=bneNow();const hh=String(Math.floor(now.min/60)).padStart(2,"0"),mm=String(now.min%60).padStart(2,"0");
-  openPanel("Best connections","Stop or station to stop or station · unofficial",`
-    <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.from?esc(ST[PLAN.from][0]):""}"><div class="results" id="cnFromR"></div></div></div>
-    <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Search a stop or station" autocomplete="off" value="${PLAN.to?esc(ST[PLAN.to][0]):""}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
+  openPanel("Best connections","Stations, places and addresses · unofficial",`
+    <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Station, stop, place or address" autocomplete="off" value="${esc(epFull(PLAN.from))}"><div class="results" id="cnFromR"></div></div></div>
+    <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Station, stop, place or address" autocomplete="off" value="${esc(epFull(PLAN.to))}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
     <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="leave">Leave at…</option><option value="arrive">Arrive by…</option></select><select id="cnDay" class="ttf cnsel cnday" style="display:none"></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
     <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="1000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
     <div class="cnf"><label>Changes</label><input id="cnCh" type="range" min="0" max="4" step="1" value="${PLAN.ch??0}"><span id="cnChV" class="cnrv">${["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch??0]}</span></div>
-    <div class="cnhelp">Starts from your chosen stop or station; nearby stops within this distance are used to change, to finish, and to start only if nothing leaves from your stop.</div>
+    <div class="cnhelp">From a stop or station, services leaving there come first; nearby stops within this distance are used to change, to finish, and to start only if nothing leaves from your stop. From a place or address, you walk to the stops within this distance.</div>
     <div class="webrow"><button class="btn" id="cnGo">Find connections</button></div><div id="cnRes"></div>`,{view:"cn"});
-  placePicker("cnFrom","cnFromR",id=>{PLAN.from=id;planSearch()});placePicker("cnTo","cnToR",id=>{PLAN.to=id;planSearch()});
-  document.getElementById("cnSwap").onclick=()=>{[PLAN.from,PLAN.to]=[PLAN.to,PLAN.from];document.getElementById("cnFrom").value=PLAN.from?ST[PLAN.from][0]:"";document.getElementById("cnTo").value=PLAN.to?ST[PLAN.to][0]:"";planSearch()};
+  // a start filled in from a stop card stays until the box is edited; then it's cleared and you choose your own
+  const pf=placePicker("cnFrom","cnFromR",ep=>{PLAN.from=ep;planSearch()},()=>{PLAN.from=null}),pt=placePicker("cnTo","cnToR",ep=>{PLAN.to=ep;planSearch()},()=>{PLAN.to=null});
+  document.getElementById("cnSwap").onclick=()=>{[PLAN.from,PLAN.to]=[PLAN.to,PLAN.from];pf.set(epFull(PLAN.from));pt.set(epFull(PLAN.to));planSearch()};
   const w=document.getElementById("cnWhen");w.onchange=()=>{const later=w.value!=="now";document.getElementById("cnTime").style.display=later?"":"none";document.getElementById("cnDay").style.display=later?"":"none";planSearch()};document.getElementById("cnTime").onchange=planSearch;
   cnDays().then(days=>{const sel=document.getElementById("cnDay");if(!sel)return;sel.innerHTML=days.map(([ymd,lab])=>`<option value="${ymd}">${lab}</option>`).join("");sel.onchange=planSearch});
   const chs=document.getElementById("cnCh");chs.oninput=()=>{PLAN.ch=+chs.value;document.getElementById("cnChV").textContent=["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch]};chs.onchange=planSearch;

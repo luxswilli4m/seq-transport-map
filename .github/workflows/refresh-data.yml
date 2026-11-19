@@ -77,6 +77,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_retailers.py
 
+      - name: Addresses and landmarks for Best connections (G-NAF via Overture; only when Overture publishes a new release)
+        continue-on-error: true
+        run: python tools/build_addresses.py .
+
       - name: Notify if parts of the map were held back
         if: hashFiles('zone_check.txt') != ''
         env:
