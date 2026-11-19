@@ -236,7 +236,9 @@ const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
 const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv","hm","hmv"]);   // map-layer cards that shrink instead of closing
-function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+const PHONE_MQ="(max-width:640px), (max-height:500px) and (pointer:coarse)";
+function isPhone(){return matchMedia(PHONE_MQ).matches}
+function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view)&&!isPhone(),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
@@ -261,8 +263,10 @@ function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:
 function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
 function closePanel(){panel.classList.remove("mini");if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 const pCloseBtn=document.getElementById("pClose"),pCloseTxt=pCloseBtn.textContent,pCloseLbl=pCloseBtn.getAttribute("aria-label")||"Close";
-function setMini(on){panel.classList.toggle("mini",on);pCloseBtn.textContent=on?"+":"–";pCloseBtn.setAttribute("aria-label",on?"Expand":"Minimise");pCloseBtn.title=on?"Expand":"Minimise"}
-pCloseBtn.onclick=()=>{if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
+function setMini(on){if(isPhone())return phMini(on);panel.classList.toggle("mini",on);pCloseBtn.textContent=on?"+":"–";pCloseBtn.setAttribute("aria-label",on?"Expand":"Minimise");pCloseBtn.title=on?"Expand":"Minimise"}
+pCloseBtn.onclick=()=>{if(isPhone()){   // phones: ✕ always closes; a map mode (On demand, projects, vendors, heat map) switches off too
+    if((view==="od"||view==="odv")&&odOn)return toggleOD();if((view==="pj"||view==="pjv")&&pjOn)return togglePJ(pjOn);if((view==="gc"||view==="gcv")&&gcOn)return toggleGC();if((view==="hm"||view==="hmv")&&hmOn)return toggleHM();return closePanel()}
+  if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
 panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
   if(b.kind==="cn"){openPanel("Journey Search",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
@@ -1502,6 +1506,72 @@ document.getElementById("infoBtn").onclick=()=>info.style.display="flex";
 document.getElementById("infoClose").onclick=()=>info.style.display="none";
 info.onclick=e=>{if(e.target===info)info.style.display="none"};
 try{if(!localStorage.getItem("seqmap_seen")){info.style.display="flex";localStorage.setItem("seqmap_seen","1")}}catch(e){info.style.display="flex"}
+// ---------- phone layout: body.phone on narrow screens or a phone on its side (iPads and desktops are unchanged)
+const PHQ=matchMedia(PHONE_MQ);
+function phLayout(){const on=isPhone();document.body.classList.toggle("phone",on);document.body.classList.toggle("land",on&&innerWidth>innerHeight);
+  const tb=document.getElementById("titlebar");if(on&&tb)document.documentElement.style.setProperty("--barh",Math.round(tb.getBoundingClientRect().bottom)+"px");
+  if(!on){phDrop(null);panel.style.removeProperty("--ph")}}
+// drop-downs in the bar: one open at a time
+function phDrop(which){const b=document.body;["search","layers"].forEach(k=>{const on=which===k&&!b.classList.contains("p-"+k);b.classList.toggle("p-"+k,on);const btn=document.getElementById(k+"Btn");if(btn){btn.classList.toggle("on",on);btn.setAttribute("aria-expanded",on)}});
+  if(which!=="saved"){const sw=document.getElementById("savedWrap");sw.classList.remove("open");document.getElementById("savedBtn").setAttribute("aria-expanded",false)}
+  if(which&&which!=="more"&&which!=="bau")["moreWrap","bauWrap"].forEach(id=>{const w=document.getElementById(id);if(w)w.classList.remove("open")})}
+document.getElementById("layersBtn").onclick=e=>{e.stopPropagation();phDrop("layers")};
+document.getElementById("searchBtn").onclick=e=>{e.stopPropagation();const opening=!document.body.classList.contains("p-search");phDrop("search");if(opening)setTimeout(()=>document.getElementById("qRoute").focus(),50)};
+document.getElementById("searchJS").onclick=()=>{phDrop(null);showConnections()};
+(()=>{const w=document.getElementById("savedWrap"),b=document.getElementById("savedBtn");
+  b.onclick=e=>{e.stopPropagation();const o=!w.classList.contains("open");phDrop("saved");["moreWrap","bauWrap"].forEach(id=>{const x=document.getElementById(id);if(x)x.classList.remove("open")});w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
+  document.getElementById("savedStops").onclick=()=>{phDrop(null);document.getElementById("favStopsBtn").click()};
+  document.getElementById("savedRoutes").onclick=()=>{phDrop(null);document.getElementById("favRoutesBtn").click()};
+  // the Saved button shows the same counts and orange/red status as the two buttons it replaces
+  const sb=document.getElementById("favStopsBtn"),rb=document.getElementById("favRoutesBtn");
+  const sync=()=>{const cl=[sb,rb].flatMap(x=>[...x.classList].filter(c=>c.startsWith("st-")));b.classList.remove("st-al","st-cx","st-both");
+    const k=cl.includes("st-both")||(cl.includes("st-cx")&&cl.includes("st-al"))?"st-both":cl.includes("st-cx")?"st-cx":cl.includes("st-al")?"st-al":"";if(k)b.classList.add(k);
+    const n=FAV.stops.length+FAV.routes.length;b.textContent="★ Saved"+(n?" ("+n+")":"")+" ▾";
+    document.querySelector("#savedStops b").textContent=sb.textContent;document.querySelector("#savedRoutes b").textContent=rb.textContent;
+    document.querySelector("#savedStops span").textContent=sb.title||"";document.querySelector("#savedRoutes span").textContent=rb.title||""};
+  [sb,rb].forEach(x=>new MutationObserver(sync).observe(x,{attributes:true,childList:true,characterData:true,subtree:true}));sync()})();
+// More and BAU close the bar's own drop-downs
+["moreBtn","bauBtn"].forEach(id=>{const x=document.getElementById(id);if(x)x.addEventListener("click",()=>{if(isPhone()){document.body.classList.remove("p-search","p-layers");["searchBtn","layersBtn"].forEach(i=>document.getElementById(i).classList.remove("on"));document.getElementById("savedWrap").classList.remove("open");document.getElementById("savedBtn").setAttribute("aria-expanded",false)}},true)});
+document.addEventListener("click",e=>{if(!isPhone())return;if(e.target.closest("#searches,#chips,#layersBtn,#searchBtn,#savedWrap"))return;document.body.classList.remove("p-search","p-layers");["searchBtn","layersBtn"].forEach(i=>document.getElementById(i).classList.remove("on"));document.getElementById("savedWrap").classList.remove("open");document.getElementById("savedBtn").setAttribute("aria-expanded",false)});
+// picking a search result or a layer that opens a card closes the drop-down
+new MutationObserver(()=>{if(isPhone()&&panel.style.display!=="none"&&document.body.classList.contains("p-search")&&document.activeElement&&!document.activeElement.closest("#searches"))phDrop(null)}).observe(panel,{attributes:true,attributeFilter:["style"]});
+addEventListener("resize",phLayout);PHQ.addEventListener?PHQ.addEventListener("change",phLayout):PHQ.addListener(phLayout);phLayout();
+
+// cards: open at about 72% of the screen (portrait); drag the handle or title to resize; – shrinks to the title bar
+const pMinBtn=document.getElementById("pMin");
+const phSnaps=()=>{const top=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--barh"))||60;const H=innerHeight;return [H-top-6,Math.round(H*.72),Math.round(H*.36)]};
+function phSetH(h){panel.style.setProperty("--ph",Math.round(h)+"px")}
+function phMini(on){panel.classList.toggle("mini",on);pMinBtn.textContent=on?"+":"–";pMinBtn.title=on?"Expand":"Minimise";pMinBtn.setAttribute("aria-label",pMinBtn.title)}
+pMinBtn.onclick=e=>{e.stopPropagation();phMini(!panel.classList.contains("mini"))};
+// opening a new card (panel was hidden) starts at 72%, expanded
+new MutationObserver(m=>{if(!isPhone())return;for(const r of m){if(r.attributeName==="style"&&panel.style.display!=="none"&&r.oldValue&&/display:\s*none/.test(r.oldValue)){phSetH(innerHeight*.72);phMini(false)}}}).observe(panel,{attributes:true,attributeFilter:["style"],attributeOldValue:true});
+(()=>{let y0=null,h0=0,moved=false;const land=()=>document.body.classList.contains("land");
+  const start=(y)=>{y0=y;h0=panel.getBoundingClientRect().height;moved=false;panel.classList.add("dragging")};
+  const move=(y)=>{if(y0==null)return;const dy=y-y0;if(Math.abs(dy)>6)moved=true;if(!moved)return;
+    if(land()){panel.style.transform=dy>0?`translateY(${dy}px)`:"";return}
+    if(panel.classList.contains("mini")){phMini(false);h0=Math.max(h0,80)}phSetH(Math.max(70,Math.min(phSnaps()[0],h0-dy)))};
+  const end=(y)=>{if(y0==null)return;const dy=y-y0;panel.classList.remove("dragging");panel.style.transform="";y0=null;if(!moved)return;
+    if(land()){if(dy>60)phMini(true);else if(dy<-30)phMini(false);return}
+    const h=h0-dy;const s=phSnaps();if(h<s[2]*.6){phMini(true);return}phMini(false);phSetH(s.reduce((a,b)=>Math.abs(b-h)<Math.abs(a-h)?b:a))};
+  const handle=e=>!e.target.closest("button,a,input,select,summary,label");
+  [document.getElementById("pGrab"),panel.querySelector(".ph")].forEach(el=>{
+    el.addEventListener("pointerdown",e=>{if(!isPhone()||!handle(e))return;el.setPointerCapture(e.pointerId);start(e.clientY)});
+    el.addEventListener("pointermove",e=>move(e.clientY));el.addEventListener("pointerup",e=>end(e.clientY));el.addEventListener("pointercancel",e=>end(e.clientY))});
+  // pulling down on the card's content once it's scrolled to the top also moves the card
+  const pb=document.getElementById("pBody");let ty=null,tracking=false;
+  pb.addEventListener("touchstart",e=>{if(!isPhone())return;ty=e.touches[0].clientY;tracking=pb.scrollTop<=0},{passive:true});
+  pb.addEventListener("touchmove",e=>{if(!tracking||ty==null)return;const y=e.touches[0].clientY;if(y0==null){if(y-ty>8&&pb.scrollTop<=0)start(ty);else if(y<ty){tracking=false;return}}if(y0!=null){e.preventDefault();move(y)}},{passive:false});
+  pb.addEventListener("touchend",e=>{if(y0!=null)end(e.changedTouches[0].clientY);ty=null;tracking=false})})();
+
+// on phones, map moves keep what they show in the part of the screen the card isn't covering
+function phPad(){const top=(parseInt(getComputedStyle(document.documentElement).getPropertyValue("--barh"))||60)+10;
+  const open=panel.style.display!=="none";const r=open?panel.getBoundingClientRect():null;
+  if(document.body.classList.contains("land"))return {top,bottom:20,left:open&&!panel.classList.contains("mini")?r.right+20:20,right:20};
+  return {top,bottom:open?Math.min(innerHeight-top-80,r.height+16):30,left:20,right:20}}
+(()=>{const fb=map.fitBounds.bind(map),fly=map.flyTo.bind(map),ease=map.easeTo.bind(map);
+  map.fitBounds=(b,o)=>fb(b,isPhone()?{...(o||{}),padding:phPad()}:o);
+  const off=o=>{if(!isPhone()||!o||!o.center||o.offset)return o;const p=phPad();return {...o,offset:[(p.left-p.right)/2,(p.top-p.bottom)/2]}};
+  map.flyTo=(o,e)=>fly(off(o),e);map.easeTo=(o,e)=>ease(off(o),e)})();
 window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
@@ -1514,4 +1584,5 @@ window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAler
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
   const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn"),hm=document.getElementById("hmBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw,hm].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw,hm].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
   b.title="More: Translink journey planner, on demand, go card vendors, Cross River Rail, The Wave, real time average, delay heat map, school routes, lost property, commuter catch-ups, feedback"})();
+
 
