@@ -269,6 +269,7 @@ pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.s
   if(b.kind==="pj")return pjOverview();
   if(b.kind==="ccu")return showCatchups();
   if(b.kind==="rcard")return reopenCard(b);
+  if(b.kind==="hmon"){rtaBack=null;HMF=b.f||HMF;return toggleHM(b.f)}
   if(b.kind==="rta")return showRTA();if(b.kind==="rtav")return rtaDetail(b.i);if(b.kind==="hm")return hmOverview();
   if(b.kind==="gc")return gcOverview();if(b.kind==="od")return odOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
@@ -1228,10 +1229,10 @@ function mHeadHTML(){return `<div class="tvh" id="tvHead" style="display:none"><
 function mWireHead(){const h=document.getElementById("tvHead");if(!h)return;h.querySelectorAll("[data-mb]").forEach(b=>b.onclick=e=>{e.stopPropagation();mBand=b.dataset.mb;applyTravel()})}
 
 // ---------- "Real time average" tab
-let RTAF="all",RTAQ="";
+let RTAF="all",RTAQ="",rtaBack=null;
 const mLabel=k=>TNAME[k]?k+" "+TNAME[k]:k;
 const mLong=k=>{if(TNAME[k])return "Train line";const i=nameIdx[k];return i!=null?R[i].l:""};
-async function showRTA(){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+async function showRTA(back){if(back!==undefined)rtaBack=back;focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   const ix=await mIndex();
   const fb=(k,t)=>`<button class="gcb${RTAF===k?" on":""}" data-rf="${k}">${t}</button>`;
   openPanel("Real time average",`Measured travel times · weekday peaks · ${esc(mSince(ix))}`,
@@ -1239,7 +1240,7 @@ async function showRTA(){focusRoutes=null;backState=null;pBack.style.display="no
     <div class="odnote">How long services actually take, from Translink's live data, recorded every 30 seconds in the weekday peaks: AM 6:30–9:30 am and PM 3:30–6:30 pm, Brisbane time. Public holidays and weekends are left out; school holidays are included. Figures are medians over the last four weeks and update after every peak. Tap a route for its overview and stop-by-stop times. Unofficial; from Translink's real-time feeds.</div>`,{view:"rta",wide:true});
   const q=document.getElementById("rtaQ");q.oninput=()=>{RTAQ=q.value;rtaList(ix)};
   pB.querySelectorAll("[data-rf]").forEach(b=>b.onclick=()=>{RTAF=b.dataset.rf;pB.querySelectorAll("[data-rf]").forEach(x=>x.classList.toggle("on",x===b));rtaList(ix)});
-  document.getElementById("rtaHeat").onclick=()=>toggleHM(RTAF);rtaList(ix)}
+  document.getElementById("rtaHeat").onclick=()=>toggleHM(RTAF);if(rtaBack)setBack(rtaBack);rtaList(ix)}
 function rtaList(ix){const box=document.getElementById("rtaList");if(!box)return;const q=RTAQ.trim().toLowerCase();
   const rows=ix.v.map((v,i)=>({v,i})).filter(({v})=>(RTAF==="all"||v[2]===RTAF)&&(!q||[v[0],mLabel(v[0]),v[3],mLong(v[0])].join(" ").toLowerCase().includes(q)))
     .sort((a,b)=>cmpRoute(a.v[0],b.v[0])||a.v[2].localeCompare(b.v[2])||a.v[1].localeCompare(b.v[1]));
@@ -1288,7 +1289,7 @@ async function rtaDetail(i){const ix=await mIndex();const v=ix.v[i];if(!v)return
   pB.querySelectorAll("[data-ms]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=ST[a.dataset.ms];if(s){map.flyTo({center:[s[2],s[1]],zoom:Math.max(map.getZoom(),15),duration:700});selPt([s[2],s[1]])}});
   // the route on the map
   const cs=rows.filter(r=>ST[r.id]).map(r=>[ST[r.id][2],ST[r.id][1]]);if(cs.length>1){map.getSource("hl").setData(FC([{type:"Feature",properties:{c:TCOL[key]||(nameIdx[key]!=null?R[nameIdx[key]].c:"#888"),mode:"route"},geometry:{type:"LineString",coordinates:cs}}]));pjFit(cs,14)}}
-document.getElementById("rtaBtn").onclick=()=>showRTA();
+document.getElementById("rtaBtn").onclick=()=>showRTA(null);
 
 // ---------- delay heat map: each stretch between two stops, darker red the further it runs behind its timetabled time
 let HM=null,hmOn=false,hmSnap=null,HMF="all";
@@ -1314,18 +1315,18 @@ function hmOverview(){const fb=(k,t)=>`<button class="gcb${HMF===k?" on":""}" da
   const h=`<div class="gcf"><div class="gcfl">Peak</div><div class="gcbs">${fb("all","All")}${fb("am","AM")}${fb("pm","PM")}</div></div>
     <div class="hmleg"><span class="hmbar"></span><div class="hmlab"><span style="left:0">On time</span><span style="left:20%">+1 min</span><span style="left:40%">+2 min</span><span style="right:0">+5 min or more</span></div></div>
     <div class="grp">Biggest gaps from the timetable</div>${top.length?`<ul class="pjn">`+top.map(z=>`<li><a href="#" data-hs="${z.i}">${esc(nm(z.r[0]))} → ${esc(nm(z.r[1]))}</a> <b>${mSigned(z.v)}</b> <span class="odnm">${z.n} trips · ${esc(z.r[9].slice(0,5).join(", "))}</span></li>`).join("")+`</ul>`:`<div class="sub">${HM.s.length?"No stretches stand out yet.":"No peaks recorded yet. Recording runs every weekday peak, so the map fills in after the next one."}</div>`}
-    <div class="odnote">Each line is the stretch between two stops, coloured by how much longer it takes than timetabled: clear where services keep to time, through to dark red for the biggest gaps. All routes on a stretch are combined, and each direction is drawn on its own side. Weekday peaks (AM 6:30–9:30 am, PM 3:30–6:30 pm), ${esc(mSince(HM))}; public holidays left out. Tap a stretch for details. The – button shrinks this card.</div><div class="odnote"><a href="#" id="hmRta">Real time average for each route ›</a></div>`;
+    <div class="odnote">Each line is the stretch between two stops, coloured by how much longer it takes than timetabled: clear where services keep to time, through to dark red for the biggest gaps. All routes on a stretch are combined, and each direction is drawn on its own side. Weekday peaks (AM 6:30–9:30 am, PM 3:30–6:30 pm), ${esc(mSince(HM))}; public holidays left out. Tap a stretch for details. The – button shrinks this card.</div><div><button class="hmsearch" id="hmRta">🔍 Route, Line or Destination search</button></div>`;
   openPanel("Delay heat map","Where services run slower than timetabled · weekday peaks",h,{view:"hm"});backState=null;pBack.style.display="none";
   pB.querySelectorAll("[data-hf]").forEach(b=>b.onclick=()=>{HMF=b.dataset.hf;hmPaint();hmOverview()});
   pB.querySelectorAll("[data-hs]").forEach(a=>a.onclick=e=>{e.preventDefault();hmCard(+a.dataset.hs,true)});
-  document.getElementById("hmRta").onclick=e=>{e.preventDefault();toggleHM().then(showRTA)}}
+  document.getElementById("hmRta").onclick=async()=>{const f=HMF;await toggleHM();showRTA({kind:"hmon",f})}}
 function hmCard(i,fit){const r=HM.s[i];const nm=id=>ST[id]?ST[id][0]:id;
   const band=(b,x,s,n)=>n?`<div class="hmrow"><b>${b}</b> ${mSigned(x)} <span class="odnm">· ${(s/60).toFixed(1)} min timetabled, ${((s+x)/60).toFixed(1)} min measured · ${n} trip${n===1?"":"s"}</span></div>`:`<div class="hmrow"><b>${b}</b> <span class="odnm">not recorded</span></div>`;
   const h=band("AM peak",r[3],r[4],r[5])+band("PM peak",r[6],r[7],r[8])+`<div class="grp">Routes on this stretch</div><div class="badges">${r[9].map(k=>{const ri=nameIdx[k];return TNAME[k]?`<span class="rb" data-hk="${esc(k)}" style="background:${TCOL[k]};color:${/T2|T5/.test(k)?"#111":"#fff"}">${esc(k)}</span>`:ri!=null?`<span class="rb" data-hk="${esc(k)}" style="background:${R[ri].c};color:${R[ri].tc}">${esc(k)}</span>`:""}).join("")}</div><div class="pjhint">Tap a route for its real time average.</div><div class="odnote"><a href="#" id="hmAll">‹ Heat map overview</a></div>`;
   openPanel(`${nm(r[0])} → ${nm(r[1])}`,"Stretch between two stops",h,{view:"hmv"});setBack({kind:"hm"});
   document.getElementById("hmAll").onclick=e=>{e.preventDefault();hmOverview()};
   pB.querySelectorAll("[data-hk]").forEach(b=>b.onclick=async()=>{const ix=await mIndex();const k=b.dataset.hk;const want=HMF==="all"?null:HMF;
-    const pick=want||mPeakNow();let j=ix.v.findIndex(v=>v[0]===k&&v[2]===pick);if(j<0)j=ix.v.findIndex(v=>v[0]===k);if(j<0)return;await toggleHM();rtaDetail(j)});
+    const pick=want||mPeakNow();let j=ix.v.findIndex(v=>v[0]===k&&v[2]===pick);if(j<0)j=ix.v.findIndex(v=>v[0]===k);if(j<0)return;const f=HMF;await toggleHM();rtaBack={kind:"hmon",f};rtaDetail(j)});
   const c=dec(r[2]);selPt(c[Math.floor(c.length/2)]);if(fit)pjFit(c,16)}
 async function toggleHM(f){const btn=document.getElementById("hmBtn");
   if(hmOn){hmOn=false;hmVis(false);hmLayers(false);btn.classList.remove("odon");if(view==="hm"||view==="hmv")closePanel();return}

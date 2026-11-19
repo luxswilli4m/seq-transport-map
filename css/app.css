@@ -440,3 +440,7 @@ body:not(.light) .rtad.fast,body:not(.light) .mtab td.fast,body:not(.light) .mti
 .hmleg{margin:8px 0 4px}.hmbar{display:block;height:10px;border-radius:5px;background:linear-gradient(90deg,rgba(150,150,150,.3) 0%,#fecaca 7%,#f87171 25%,#dc2626 40%,#991b1b 67%,#5f0f0f 100%)}
 .hmlab{position:relative;height:15px;font-size:11px;color:var(--muted);margin-top:3px}.hmlab span{position:absolute;top:0;white-space:nowrap}.hmlab span:nth-child(2),.hmlab span:nth-child(3){transform:translateX(-50%)}
 .hmrow{margin:6px 0;font-size:14px}
+/* More menu: two columns on wide screens (iPad landscape and up), reading down the first column then the second */
+@media (min-width:900px){#moreMenu{columns:2;column-gap:6px;width:540px}#moreMenu>*{break-inside:avoid}}
+.hmsearch{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:8px 16px;border:1px solid #2563eb;border-radius:999px;color:#2563eb;background:transparent;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+.hmsearch:hover{background:#2563eb14}body:not(.light) .hmsearch{border-color:#7fb0ff;color:#7fb0ff}
