@@ -5,5 +5,5 @@ import re, time, os
 p = os.path.join(os.path.dirname(__file__), "..", "index.html")
 v = time.strftime("%Y%m%d%H%M")
 s = open(p).read()
-s = re.sub(r'((?:href|src)="(?:css/app\.css|js/app\.js|js/rt\.js))(\?v=\d+)?"', lambda m: f'{m.group(1)}?v={v}"', s)
+s = re.sub(r'((?:href|src)="(?:css/app\.css|js/app\.js|js/rt\.js|js/walk\.js))(\?v=\d+)?"', lambda m: f'{m.group(1)}?v={v}"', s)
 open(p, "w").write(s); print("stamped", v)

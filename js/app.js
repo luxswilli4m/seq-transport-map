@@ -782,7 +782,9 @@ async function planData(ymd){if(PLAN.cache[ymd])return PLAN.cache[ymd];const d=a
   d.xy=d.s.map(k=>ST[k]?[ST[k][2],ST[k][1]]:[0,0]);d.grid=new Map();d.xy.forEach(([x,y],i)=>{const g=Math.floor(x*98.7)+","+Math.floor(y*110.6);let a=d.grid.get(g);if(!a)d.grid.set(g,a=[]);a.push(i)});
   return PLAN.cache[ymd]=d}
 const mDist=(a,b)=>Math.hypot((a[0]-b[0])*98.7,(a[1]-b[1])*110.6)*1000;
-const walkMin=m=>Math.max(1,Math.ceil(m*1.25/80));   // 80 m a minute, 25% allowance for street layout
+const walkMin=m=>Math.max(1,Math.ceil(m*1.25/80));   // 80 m a minute, 25% allowance for street layout (straight-line estimates)
+const routeMin=m=>Math.max(1,Math.ceil(m/80));        // 80 m a minute along a real walking route
+const legMin=l=>l.route?routeMin(l.m):walkMin(l.m);
 function nearIdx(d,xy,maxM){const out=[];const gx=Math.floor(xy[0]*98.7),gy=Math.floor(xy[1]*110.6);const r=Math.ceil(maxM/1000);
   for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const a=d.grid.get((gx+i)+","+(gy+j));if(a)for(const s of a){const m=mDist(xy,d.xy[s]);if(m<=maxM)out.push([s,m])}}return out}
 function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,INF=1e9;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
@@ -818,7 +820,7 @@ function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,IN
 async function cnDays(){const now=bneNow();let days;try{days=(await (await fetch(BASE+"data/plan/index.json"+DV)).json()).days}catch(e){days=[0,1,2,3,4,5,6].map(k=>shiftDay(now.ymd,now.dow,k).ymd)}
   return days.filter(y=>y>=now.ymd).map(y=>{const dt=new Date(Date.UTC(+y.slice(0,4),+y.slice(4,6)-1,+y.slice(6,8)));
     const lab=dt.toLocaleDateString("en-AU",{weekday:"short",day:"numeric",month:"short",timeZone:"UTC"});return [y,y===now.ymd?"Today":y===shiftDay(now.ymd,now.dow,1).ymd?"Tomorrow":lab.replace(",","")]})}
-async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.from||!PLAN.to){box.innerHTML=`<div class="sub">Choose where you're starting and where you're going.</div>`;return}
+async function planSearch(){const box=document.getElementById("cnRes");const my=PLAN.seq=(PLAN.seq||0)+1;if(!PLAN.from||!PLAN.to){box.innerHTML=`<div class="sub">Choose where you're starting and where you're going.</div>`;return}
   box.innerHTML=`<div class="sub">Finding connections…</div>`;await ensureCal();
   const now=bneNow();const mode=document.getElementById("cnWhen").value;
   let t0=now.min;if(mode!=="now"){const v=document.getElementById("cnTime").value||"08:00";const [h,m]=v.split(":").map(Number);t0=h*60+m}
@@ -847,14 +849,32 @@ async function planSearch(){const box=document.getElementById("cnRes");if(!PLAN.
   else if(fromStop){const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
   if(arriveBy)extra=null;
   opts.sort(arriveBy?((a,b)=>b.leave-a.leave||a.changes-b.changes):((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave));const pick=opts.slice(0,4);const show=pick.sort(arriveBy?((a,b)=>a.changes-b.changes||b.leave-a.leave):((a,b)=>a.changes-b.changes||a.arr-b.arr)).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
-  if(!show.length){box.innerHTML=`<div class="sub">No connection found${arriveBy?` that arrives by ${clock(byT)}`:""}${maxM<1000?" — try a larger walking distance":""}. ${arriveBy?"Try a later time, or":"Services may have finished for the day; try a later day or"} check Translink's journey planner.</div>`;return}
+  // every walk follows real streets and paths (js/walk.js); times are then worked out from the real distance
+  const noSteps=!!PLAN.noSteps;box.innerHTML=`<div class="sub">Finding walking routes…</div>`;
+  const xyA=l=>l.from==null?epXY(PLAN.from):d.xy[l.from],xyB=l=>l.to==null?epXY(PLAN.to):d.xy[l.to];
+  await Promise.all(show.flatMap(o=>o.legs.filter(l=>l.type==="walk"&&l.m>=40).map(async l=>{try{const r=await walkRoute(xyA(l),xyB(l),{noSteps});if(r){l.route=r;l.m=r.m}}catch(e){}})));
+  if(my!==PLAN.seq)return;   // a newer search has started
+  show.forEach(o=>{const rides=o.legs.filter(l=>l.type==="ride"),f=o.legs[0],z=o.legs[o.legs.length-1];if(!rides.length)return;
+    o.leave=f.type==="walk"&&f.from==null?rides[0].dep-legMin(f):rides[0].dep;o.arr=z.type==="walk"&&z.to==null?rides[rides.length-1].arr+legMin(z):rides[rides.length-1].arr});
+  if(arriveBy)for(let i=show.length-1;i>=0;i--)if(show[i].arr>byT)show.splice(i,1);
+  // walking all the way: offered when it's within the walking distance, or gets there no later than the fastest service
+  // (arrive by: lets you leave no earlier). It goes first only when it's the quickest.
+  let walkAll=null;const trans=show.filter(o=>!o.walkFirst);const fastArr=trans.length?Math.min(...trans.map(o=>o.arr)):Infinity,lateLeave=trans.length?Math.max(...trans.map(o=>o.leave)):-Infinity;
+  const D=mDist(epXY(PLAN.from),epXY(PLAN.to));
+  if(D>=40&&D<=5000&&(D<=maxM*1.1||(arriveBy?byT-routeMin(D)>=lateLeave-10:t0+routeMin(D)<=fastArr+10))){let r=null;try{r=await walkRoute(epXY(PLAN.from),epXY(PLAN.to),{noSteps})}catch(e){}
+    const m=r?r.m:D*1.25,mins=routeMin(m);const leave=arriveBy?byT-mins:t0,arr=leave+mins;const quick=arriveBy?leave>=lateLeave:arr<=fastArr;
+    if(m<=maxM||quick)walkAll={walkAll:true,quick,legs:[{type:"walk",from:null,to:null,m,route:r}],leave,arr,dep:leave,changes:0}}
+  if(my!==PLAN.seq)return;
+  if(walkAll){if(walkAll.quick)show.unshift(walkAll);else show.push(walkAll)}
+  if(!show.length){box.innerHTML=`<div class="sub">No connection found${arriveBy?` that arrives by ${clock(byT)}`:""}${maxM<2000?" — try a larger walking distance":""}. ${arriveBy?"Try a later time, or":"Services may have finished for the day; try a later day or"} check Translink's journey planner.</div>`;return}
   PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=(wide?`<div class="odnote" style="margin-top:0">No services from ${esc(epName(PLAN.from))} itself get there, so these start from stops within ${maxM} m.</div>`:"")+(chNote?`<div class="odnote" style="margin-top:0">${chNote}</div>`:"");
-  const main=show.filter(x=>!x.walkFirst);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&x.arr===minArr),minCh=show[0].changes;
+  const main=show.filter(x=>!x.walkFirst&&!x.walkAll);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&!x.walkAll&&x.arr===minArr),minCh=main.length?main[0].changes:0;
   const byNote=arriveBy?`<div class="odnote" style="margin-top:0">Latest ways to arrive by ${clock(byT)}${dayOff?" on "+esc(document.getElementById("cnDay").selectedOptions[0].textContent):""}.</div>`:"";
   box.innerHTML=byNote+wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
-    const tags=o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((oi===0&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
-    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}</div>`+
-      o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(epName(PLAN.from)):"from "+nm(l.from);const b=l.to==null?"to "+esc(epName(PLAN.to)):"to "+nm(l.to);return `<div class="cnl walk">🚶 Walk ${Math.round(l.m/10)*10} m (about ${walkMin(l.m)} min) ${a} ${b}</div>`}
+    const stepsTag=o.legs.some(l=>l.route&&l.route.steps)?`<span class="cnt cnsteps" title="${noSteps?"No step-free way was found for part of this walk":"Part of the walk uses steps"}">Includes steps</span>`:"";
+    const tags=o.walkAll?`<span class="cnt cnwa">Walk all the way</span>${o.quick?`<span class="cnt">Quickest</span>`:""}`:o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((o===main[0]&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
+    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.walkAll?"walk":o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}${stepsTag}</div>`+
+      o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(epName(PLAN.from)):"from "+nm(l.from);const b=l.to==null?"to "+esc(epName(PLAN.to)):"to "+nm(l.to);return `<div class="cnl walk" data-leg="${oi},${li}">🚶 Walk ${Math.round(l.m/10)*10} m (about ${legMin(l)} min) ${a} ${b}</div>`}
         const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
         return `<div class="cnl" data-leg="${oi},${li}">${bd}<div class="cnlt"><b>${clock(l.dep)}</b> ${nm(l.from)}${pl?` <span class="cnpl">${esc(pl)}</span>`:""} <span class="cnto">→ ${esc(cleanHead(TT.cal.hs[p.h]))}</span><br><b>${clock(l.arr)}</b> ${nm(l.to)} <span class="cnto">· ${l.apos-l.bpos} stop${l.apos-l.bpos>1?"s":""}</span>${li===o.legs.findIndex(x=>x.type==="ride")&&dayOff===0?`<span class="cnlive" id="cnLive${oi}"></span>`:""}</div></div>`}).join("")+`</div>`}).join("")+
     `<div class="odnote">Unofficial: always check times with Translink before travelling. Walking times are estimates. <a href="https://jp.translink.com.au/plan-your-journey/journey-planner" target="_blank" rel="noopener">Translink journey planner ↗</a></div>`;
@@ -867,7 +887,7 @@ function cnLayers(on){if(on){if(cnSnap)return;cnSnap={};GROUPS.forEach(([g])=>{c
 function drawOption(oi,li){cnLayers(true);const {d,show}=PLAN.last;const o=show[oi];document.querySelectorAll(".cno").forEach(x=>x.classList.toggle("on",+x.dataset.o===oi));
   const lines=[],walks=[];let bb=null;const ext=c=>{bb=bb?[Math.min(bb[0],c[0]),Math.min(bb[1],c[1]),Math.max(bb[2],c[0]),Math.max(bb[3],c[1])]:[c[0],c[1],c[0],c[1]]};
   o.legs.forEach((l,i)=>{if(li!=null&&i!==li)return;if(l.type==="ride"){const p=d.p[l.pi];const c=p.s.slice(l.bpos,l.apos+1).map(s=>d.xy[s]);c.forEach(ext);lines.push({type:"Feature",properties:{c:R[p.r].c,mode:"route"},geometry:{type:"LineString",coordinates:c}})}
-    else{const a=l.from==null?epXY(PLAN.from):d.xy[l.from],b=l.to==null?epXY(PLAN.to):d.xy[l.to];ext(a);ext(b);walks.push({type:"Feature",properties:{c:"#475569"},geometry:{type:"LineString",coordinates:[a,b]}})}});
+    else{const c=l.route?l.route.coords:[l.from==null?epXY(PLAN.from):d.xy[l.from],l.to==null?epXY(PLAN.to):d.xy[l.to]];c.forEach(ext);walks.push({type:"Feature",properties:{c:"#475569"},geometry:{type:"LineString",coordinates:c}})}});
   map.getSource("hl").setData(FC(lines));map.getSource("hlvar").setData(FC(walks));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));
   const ss=[];o.legs.forEach(l=>{if(l.type==="ride"){ss.push(d.xy[l.from],d.xy[l.to])}});map.getSource("hlstops").setData(FC(ss.map(c=>({type:"Feature",properties:{c:"#111827"},geometry:{type:"Point",coordinates:c}}))));
   if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:16})}
@@ -928,8 +948,9 @@ function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.dis
     <div class="cnf"><label>From</label><div class="cnin"><input id="cnFrom" class="ttf" placeholder="Station, stop, place or address" autocomplete="off" value="${esc(epFull(PLAN.from))}"><div class="results" id="cnFromR"></div></div></div>
     <div class="cnf"><label>To</label><div class="cnin"><input id="cnTo" class="ttf" placeholder="Station, stop, place or address" autocomplete="off" value="${esc(epFull(PLAN.to))}"><div class="results" id="cnToR"></div></div><button class="btn cnsw" id="cnSwap" title="Swap">⇅</button></div>
     <div class="cnf"><label>When</label><select id="cnWhen" class="ttf cnsel"><option value="now">Leave now</option><option value="leave">Leave at…</option><option value="arrive">Arrive by…</option></select><select id="cnDay" class="ttf cnsel cnday" style="display:none"></select><input id="cnTime" type="time" class="ttf cntime" value="${hh}:${mm}" style="display:none"></div>
-    <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="1000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
+    <div class="cnf"><label>Walk up to</label><input id="cnRad" type="range" min="100" max="2000" step="100" value="${PLAN.rad||1000}"><span id="cnRadV" class="cnrv">${PLAN.rad||1000} m</span></div>
     <div class="cnf"><label>Changes</label><input id="cnCh" type="range" min="0" max="4" step="1" value="${PLAN.ch??0}"><span id="cnChV" class="cnrv">${["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch??0]}</span></div>
+    <div class="cnf"><label>Avoid steps</label><label class="cnsw2"><input type="checkbox" id="cnNoSteps"${PLAN.noSteps?" checked":""}><span></span></label><span class="cnrv" id="cnNoStepsV">${PLAN.noSteps?"On":"Off"}</span></div>
     <div class="cnhelp">From a stop or station, services leaving there come first; nearby stops within this distance are used to change, to finish, and to start only if nothing leaves from your stop. From a place or address, you walk to the stops within this distance.</div>
     <div class="webrow"><button class="btn" id="cnGo">Find connections</button></div><div id="cnRes"></div>`,{view:"cn"});
   // a start filled in from a stop card stays until the box is edited; then it's cleared and you choose your own
@@ -939,6 +960,7 @@ function showConnections(fromId){focusRoutes=null;backState=null;pBack.style.dis
   cnDays().then(days=>{const sel=document.getElementById("cnDay");if(!sel)return;sel.innerHTML=days.map(([ymd,lab])=>`<option value="${ymd}">${lab}</option>`).join("");sel.onchange=planSearch});
   const chs=document.getElementById("cnCh");chs.oninput=()=>{PLAN.ch=+chs.value;document.getElementById("cnChV").textContent=["Direct","Up to 1","Up to 2","Up to 3","Any"][PLAN.ch]};chs.onchange=planSearch;
   const rd=document.getElementById("cnRad");rd.oninput=()=>{PLAN.rad=+rd.value;document.getElementById("cnRadV").textContent=rd.value+" m"};rd.onchange=planSearch;
+  const ns=document.getElementById("cnNoSteps");ns.onchange=()=>{PLAN.noSteps=ns.checked;document.getElementById("cnNoStepsV").textContent=ns.checked?"On":"Off";planSearch()};
   document.getElementById("cnGo").onclick=planSearch;if(PLAN.from&&PLAN.to)planSearch();else document.getElementById("cnRes").innerHTML=""}
 // ---------- go card vendors (data/retailers.json from Translink's retailer feed, refreshed weekly)
 let GC=null,gcOn=false,gcSnap=null;const GCF={svc:"",card:""};
