@@ -1,4 +1,4 @@
-"""Record how long services actually take during the weekday peaks.
+"""Record how long services actually take in the morning and afternoon windows, every day.
 
 Polls Translink's live GTFS-RT feeds (TripUpdates and VehiclePositions) every 30 seconds through one peak
 window and writes, for every trip and stop seen, the timetabled time and the time the service actually got
@@ -7,9 +7,9 @@ files into data/measured/.
 
 Usage: python3 tools/collect_measured.py <repo_dir> --band am|pm --out raw.csv.gz [--gtfs gtfs_dir] [--minutes N]
 
-The windows are Brisbane time on weekdays: AM 6:30-9:30, PM 3:30-6:30. Queensland public holidays and weekends
-are skipped (the script exits without writing). School holidays are kept. Without --minutes the script waits for
-the window to open and stops when it closes.
+The windows are Brisbane time, every day of the year (weekends and public holidays included; tools/build_measured.py
+sorts days into school-term weekdays, school-holiday weekdays, weekends and public holidays): AM 6:30-9:30,
+PM 3:30-6:30. Without --minutes the script waits for the window to open and stops when it closes.
 """
 import sys, os, io, csv, gzip, json, time, zipfile, argparse, datetime as dt
 import requests
@@ -22,11 +22,6 @@ GTFS_URL = "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"
 TLINE_BY_COLOUR = {"27855A": "T1", "6CC6E9": "T2", "9B60A6": "T3", "4778B2": "T4", "FFC425": "T5", "D53E45": "T6"}
 POLL = 30          # seconds between polls
 FRESH = 120        # a stop's last prediction counts only if it was made within this many seconds of the time itself
-
-
-def peak_day(d):
-    import holidays
-    return d.weekday() < 5 and d not in holidays.Australia(subdiv="QLD", years=d.year)
 
 
 def read_csv(z, name, cols):
@@ -90,9 +85,6 @@ def main():
     end = now.replace(hour=h1, minute=m1, second=0, microsecond=0)
     if a.minutes:          # test run: collect from now for a few minutes
         start, end = now, now + dt.timedelta(minutes=a.minutes)
-    elif not peak_day(now.date()):
-        print(now.date(), "is not a weekday peak day (weekend or Queensland public holiday); nothing to collect")
-        return
     elif now >= end:
         print("the", a.band.upper(), "peak has already finished today"); return
 

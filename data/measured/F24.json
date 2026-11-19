@@ -1,1 +1,0 @@
-{"1":{"pm":{"seg":{"place_qutuft>place_marift":[92,360,7,76,119]},"stop":{"place_qutuft":[183,7],"place_marift":[-59,7]},"e2e":[["place_qutuft","place_marift",92,360,7]],"trips":7,"days":1}},"0":{"pm":{"seg":{"place_marift>place_qutuft":[87,360,8,72,103]},"stop":{"place_marift":[184,8],"place_qutuft":[-90,8]},"e2e":[["place_marift","place_qutuft",87,360,8]],"trips":8,"days":1}}}

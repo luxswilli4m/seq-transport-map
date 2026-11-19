@@ -14,6 +14,8 @@ on:
 permissions:
   contents: write
   issues: write
+  pages: write
+  id-token: write
 
 jobs:
   refresh:
@@ -93,6 +95,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_projects.py .
 
+      - name: Queensland school holidays and public holidays, for measured travel times (keeps last list if unavailable)
+        continue-on-error: true
+        run: python tools/build_school_days.py .
+
       - name: Queensland Rail Commuter Catch-Ups (keeps last list if the page can't be read)
         continue-on-error: true
         run: python tools/build_catchups.py .
@@ -114,7 +120,12 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             python tools/stamp.py   # new version tag so browsers fetch the fresh data
-            git add data index.html tools/ondemand_traced.json tools/ondemand_auto.json tools/ondemand_places.json tools/platform_shapes.json tools/projects_geom.json tools/wave_geom.json
+            git add data index.html tools/ondemand_traced.json tools/ondemand_auto.json tools/ondemand_places.json tools/platform_shapes.json tools/projects_geom.json tools/wave_geom.json tools/qld_days.json
             git commit -m "Weekly Translink data refresh"
             git push
           fi
+
+  # publish the refreshed site (pushes made by a workflow don't start the Publish workflow by themselves)
+  publish:
+    needs: refresh
+    uses: ./.github/workflows/pages.yml

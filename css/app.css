@@ -444,3 +444,14 @@ body:not(.light) .rtad.fast,body:not(.light) .mtab td.fast,body:not(.light) .mti
 @media (min-width:900px){#moreMenu{columns:2;column-gap:6px;width:540px}#moreMenu>*{break-inside:avoid}}
 .hmsearch{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:8px 16px;border:1px solid #2563eb;border-radius:999px;color:#2563eb;background:transparent;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
 .hmsearch:hover{background:#2563eb14}body:not(.light) .hmsearch{border-color:#7fb0ff;color:#7fb0ff}
+/* period and kind-of-day filters (Real time average, delay heat map) */
+.mfil{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}
+.mfsel{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line,#cbd5e1);border-radius:8px;background:var(--panel);color:var(--ink);max-width:100%}
+.mfx{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.mdd{position:relative}
+.mdd summary{list-style:none;cursor:pointer;font-size:13px;padding:5px 10px;border:1px solid var(--line,#cbd5e1);border-radius:8px;user-select:none;white-space:nowrap}
+.mdd summary::-webkit-details-marker{display:none}
+.mdd[open] summary{border-color:#7c3aed}
+.mddb{position:absolute;z-index:5;top:calc(100% + 4px);left:0;min-width:240px;background:var(--panel);border:1px solid var(--line,#cbd5e1);border-radius:10px;box-shadow:0 8px 24px #0003;padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.mddb label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.mfcap{margin:-4px 0 8px}

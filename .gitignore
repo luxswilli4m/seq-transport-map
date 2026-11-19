@@ -1,1 +1,3 @@
 __pycache__/
+# measured travel times are published from the measured-data release, not kept in git
+data/measured/
