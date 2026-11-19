@@ -109,14 +109,24 @@ window.walkRoute=walkRoute;
 // LiDAR, 1 m across urban SEQ, with buildings and trees removed). If that can't be reached: Amazon's open terrain
 // tiles (registry.opendata.aws/terrain-tiles), which in Australia are 30 m SRTM satellite heights that include
 // buildings and trees. Those are fine for a rough climb, not for flagging steep stretches, so flags are left out then.
-const QLD="https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/getSamples";
-async function qldHeights(lls){const out=[];for(let i=0;i<lls.length;i+=400){const part=lls.slice(i,i+400);
-    const body=new URLSearchParams({geometry:JSON.stringify({points:part.map(p=>[+p[0].toFixed(6),+p[1].toFixed(6)]),spatialReference:{wkid:4326}}),
-      geometryType:"esriGeometryMultipoint",returnFirstValueOnly:"true",interpolation:"RSP_BilinearInterpolation",f:"json"});
-    const r=await fetch(QLD,{method:"POST",body});if(!r.ok)throw new Error("QldDem "+r.status);const j=await r.json();if(!j.samples)throw new Error("QldDem: no samples");
-    const v=new Array(part.length).fill(NaN);for(const sm of j.samples){const x=parseFloat(sm.value);if(sm.locationId!=null&&isFinite(x)&&x>-100&&x<2000)v[sm.locationId]=x}
-    for(let k=0;k<v.length;k++)if(!isFinite(v[k])){let a=k-1,b=k+1;while(a>=0&&!isFinite(v[a]))a--;while(b<v.length&&!isFinite(v[b]))b++;v[k]=a>=0&&b<v.length?(v[a]+v[b])/2:a>=0?v[a]:b<v.length?v[b]:NaN}
-    if(v.some(x=>!isFinite(x)))throw new Error("QldDem: no data here");out.push(...v)}return out}
+// QldDem is read as its cached elevation tiles (zoom 15, about 4 m a pixel here, in the same grid as the map), which
+// come back in about a second; asking for points one by one takes 15 seconds or more. The tiles are LERC-compressed,
+// decoded with Esri's open-source decoder (lib/lerc, Apache 2.0), loaded only when a walk's heights are needed.
+const QLD="https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/tile/15/",QZ=15,qCache=new Map();let lercP=null;
+const libURL=f=>new URL("lib/lerc/"+f,location.href).href;
+function lerc(){return lercP||(lercP=new Promise((res,rej)=>{const sc=document.createElement("script");sc.src=libURL("LercDecode.js");
+  sc.onload=()=>window.Lerc.load({locateFile:()=>libURL("lerc-wasm.wasm")}).then(()=>res(window.Lerc),rej);sc.onerror=rej;document.head.appendChild(sc)}).catch(e=>{lercP=null;throw e}))}
+function qldTile(x,y){const k=x+"/"+y;if(!qCache.has(k))qCache.set(k,(async()=>{const L=await lerc();const r=await fetch(QLD+y+"/"+x);if(!r.ok)throw new Error("QldDem "+r.status);
+  const d=L.decode(await r.arrayBuffer());return {w:d.width,px:d.pixels[0],mask:d.mask||null}})().catch(err=>{qCache.delete(k);throw err}));return qCache.get(k)}
+async function qldHeights(lls){const Pq=(1<<QZ)*256;
+  const xy=lls.map(([lon,lat])=>[(lon+180)/360*Pq,(1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*Pq]);
+  const need=new Set(xy.map(([x,y])=>Math.floor(x/256)+"/"+Math.floor(y/256)));const tiles=new Map();
+  await Promise.all([...need].map(async k=>{const [x,y]=k.split("/").map(Number);tiles.set(k,await qldTile(x,y))}));
+  // each tile is 257 x 257 heights on its corners and edges, so a point always has its four neighbours in one tile
+  const v=xy.map(([x,y])=>{const tx=Math.floor(x/256),ty=Math.floor(y/256),T=tiles.get(tx+"/"+ty);const fx=x-tx*256,fy=y-ty*256,i=Math.floor(fx),j=Math.floor(fy),u=fx-i,w=fy-j;
+    const at=(a,b)=>{const o=b*T.w+a;return T.mask&&!T.mask[o]?NaN:T.px[o]};const z=at(i,j)*(1-u)*(1-w)+at(i+1,j)*u*(1-w)+at(i,j+1)*(1-u)*w+at(i+1,j+1)*u*w;return z>-100&&z<2000?z:NaN});
+  for(let k=0;k<v.length;k++)if(!isFinite(v[k])){let a=k-1,b=k+1;while(a>=0&&!isFinite(v[a]))a--;while(b<v.length&&!isFinite(v[b]))b++;v[k]=a>=0&&b<v.length?(v[a]+v[b])/2:a>=0?v[a]:b<v.length?v[b]:NaN}
+  if(v.some(x=>!isFinite(x)))throw new Error("QldDem: no data here");return v}
 // Amazon terrain tiles ("terrarium" PNGs) at zoom 14, about 8.6 m a pixel here
 const ET="https://elevation-tiles-prod.s3.amazonaws.com/terrarium/14/",eCache=new Map();
 function elevTile(x,y){const k=x+"/"+y;if(!eCache.has(k))eCache.set(k,(async()=>{const r=await fetch(ET+x+"/"+y+".png");if(!r.ok)throw new Error("terrain "+r.status);
