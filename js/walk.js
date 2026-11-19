@@ -149,6 +149,23 @@ async function qldHeights(lls){const Pq=(1<<QZ)*256;
     const at=(a,b)=>{const o=b*T.w+a;return T.mask&&!T.mask[o]?NaN:T.px[o]};const z=at(i,j)*(1-u)*(1-w)+at(i+1,j)*u*(1-w)+at(i,j+1)*(1-u)*w+at(i+1,j+1)*u*w;return z>-100&&z<2000?z:NaN});
   for(let k=0;k<v.length;k++)if(!isFinite(v[k])){let a=k-1,b=k+1;while(a>=0&&!isFinite(v[a]))a--;while(b<v.length&&!isFinite(v[b]))b++;v[k]=a>=0&&b<v.length?(v[a]+v[b])/2:a>=0?v[a]:b<v.length?v[b]:NaN}
   if(v.some(x=>!isFinite(x)))throw new Error("QldDem: no data here");return v}
+// Saved copy of QldDem kept with this site (data/heights/, built by tools/build_heights.py for everywhere within 2 km
+// of a stop, refreshed when Queensland republishes): read first, so walks don't depend on the Queensland service.
+// Zoom 14 PNGs, 257 x 257 heights on the tile's corners and edges, tenths of a metre above -100 m in red/green; 0 = none.
+let hMeta=null;const hCache=new Map();const siteURL=f=>new URL(f,location.href).href;
+function heightsMeta(){return hMeta||(hMeta=fetch(siteURL("data/heights/meta.json"),{cache:"no-cache"}).then(r=>r.ok?r.json():null).then(m=>m&&{v:m.version+"-"+m.built,has:new Set(m.tiles.map(t=>t[0]+"/"+t[1]))}).catch(()=>null))}
+function savedTile(x,y,v){const k=x+"/"+y;if(!hCache.has(k))hCache.set(k,(async()=>{const r=await fetch(siteURL(`data/heights/14/${x}/${y}.png?v=${encodeURIComponent(v)}`));if(!r.ok)throw new Error("saved heights "+r.status);
+  const bm=await createImageBitmap(await r.blob(),{premultiplyAlpha:"none",colorSpaceConversion:"none"});const c=typeof OffscreenCanvas!=="undefined"?new OffscreenCanvas(257,257):Object.assign(document.createElement("canvas"),{width:257,height:257});
+  const g=c.getContext("2d",{willReadFrequently:true});g.drawImage(bm,0,0);const d=g.getImageData(0,0,257,257).data;const e=new Float32Array(257*257);
+  for(let i=0;i<e.length;i++){const v=d[i*4]*256+d[i*4+1];e[i]=v?v/10-100:NaN}return e})().catch(err=>{hCache.delete(k);throw err}));return hCache.get(k)}
+async function savedHeights(lls){const m=await heightsMeta();if(!m)throw new Error("no saved heights");const P14=(1<<14)*256;
+  const xy=lls.map(([lon,lat])=>[(lon+180)/360*P14,(1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*P14]);
+  const need=new Set(xy.map(([x,y])=>Math.floor(x/256)+"/"+Math.floor(y/256)));for(const k of need)if(!m.has.has(k))throw new Error("outside the saved area");
+  const tiles=new Map();await Promise.all([...need].map(async k=>{const [x,y]=k.split("/").map(Number);tiles.set(k,await savedTile(x,y,m.v))}));
+  const v=xy.map(([x,y])=>{const tx=Math.floor(x/256),ty=Math.floor(y/256),T=tiles.get(tx+"/"+ty);const fx=x-tx*256,fy=y-ty*256,i=Math.floor(fx),j=Math.floor(fy),u=fx-i,w=fy-j;
+    const at=(a,b)=>T[b*257+a];return at(i,j)*(1-u)*(1-w)+at(i+1,j)*u*(1-w)+at(i,j+1)*(1-u)*w+at(i+1,j+1)*u*w});
+  for(let k=0;k<v.length;k++)if(!isFinite(v[k])){let a=k-1,b=k+1;while(a>=0&&!isFinite(v[a]))a--;while(b<v.length&&!isFinite(v[b]))b++;v[k]=a>=0&&b<v.length?(v[a]+v[b])/2:a>=0?v[a]:b<v.length?v[b]:NaN}
+  if(v.some(x=>!isFinite(x)))throw new Error("saved heights: no data here");return v}
 // Amazon terrain tiles ("terrarium" PNGs) at zoom 14, about 8.6 m a pixel here
 const ET="https://elevation-tiles-prod.s3.amazonaws.com/terrarium/14/",eCache=new Map();
 function elevTile(x,y){const k=x+"/"+y;if(!eCache.has(k))eCache.set(k,(async()=>{const r=await fetch(ET+x+"/"+y+".png");if(!r.ok)throw new Error("terrain "+r.status);
@@ -169,8 +186,10 @@ async function walkProfile(route){if(!route||!route.coords||route.coords.length<
   const cum=[0];for(let i=1;i<C.length;i++)cum.push(cum[i-1]+dM(C[i-1],C[i]));const L=cum[cum.length-1];if(L<1)return null;
   const STEP=5,n=Math.max(2,Math.round(L/STEP)+1),pts=[];let j=0;
   for(let i=0;i<n;i++){const s=L*i/(n-1);while(j<C.length-2&&cum[j+1]<s)j++;const t=cum[j+1]>cum[j]?(s-cum[j])/(cum[j+1]-cum[j]):0;pts.push({s,ll:[C[j][0]+(C[j+1][0]-C[j][0])*t,C[j][1]+(C[j+1][1]-C[j][1])*t]})}
-  let e=null,rough=false;try{e=await qldHeights(pts.map(p=>p.ll))}catch(err){e=null}
-  if(!e){rough=true;e=await srtmHeights(pts.map(p=>p.ll))}
+  // saved copy of the Queensland LiDAR first, then the live Queensland service, then satellite heights
+  const lls=pts.map(p=>p.ll);let e=null,src="saved";try{e=await savedHeights(lls)}catch(err){e=null}
+  if(!e){src="qld";try{e=await qldHeights(lls)}catch(err){e=null}}
+  if(!e){src="satellite";e=await srtmHeights(lls)}const rough=src==="satellite";
   // bridges, tunnels and underpasses: the terrain shows the ground or water beneath, so join their two ends in a straight line
   for(const g of route.segs||[]){if(!g.lift)continue;const a=cum[g.from],b=cum[g.to];const ia=Math.max(0,Math.floor(a/L*(n-1))),ib=Math.min(n-1,Math.ceil(b/L*(n-1)));
     for(let i=ia+1;i<ib;i++)e[i]=e[ia]+(e[ib]-e[ia])*(i-ia)/(ib-ia)}
@@ -203,7 +222,7 @@ async function walkProfile(route){if(!route||!route.coords||route.coords.length<
   for(const r of route.indoor||[])flags.push({kind:"indoor",len:r.b-r.a,at:r.a,end:r.b,street:r.near});
   flags.sort((x,y)=>x.at-y.at);
   const label=rough?"":maxG<2?"Flat":maxG<=5?"Gentle":maxG<=RAMP?"Moderate":maxG<=KERB?"Steep":"Very steep";
-  return {L,up,down,maxG,label,rough,flags,concern:flags.some(f=>f.kind!=="indoor"),prof:pts.map((p,i)=>[p.s,e[i]]),forced:!!route.forced}}
+  return {L,up,down,maxG,label,rough,src,flags,concern:flags.some(f=>f.kind!=="indoor"),prof:pts.map((p,i)=>[p.s,e[i]]),forced:!!route.forced}}
 window.walkProfile=walkProfile;
 window.WALK_BANDS={RAMP,KERB,ASSIST};
 window.walkTilesWarm=(a)=>{const g=toG(a);return tile(Math.floor(g[0]/EXT),Math.floor(g[1]/EXT))};

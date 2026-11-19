@@ -29,7 +29,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get install -y -qq tesseract-ocr
-          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract pyarrow requests
+          pip install pandas shapely scipy pillow contourpy pmtiles mapbox-vector-tile opencv-python-headless pytesseract pyarrow requests lerc
 
       - name: Download Translink SEQ GTFS
         run: |
@@ -80,6 +80,10 @@ jobs:
       - name: Addresses and landmarks for Best connections (G-NAF via Overture; only when Overture publishes a new release)
         continue-on-error: true
         run: python tools/build_addresses.py .
+
+      - name: Walking heights (saved copy of Queensland LiDAR near stops; only downloads when Queensland republishes or new stops need it)
+        continue-on-error: true
+        run: python tools/build_heights.py .
 
       - name: Notify if parts of the map were held back
         if: hashFiles('zone_check.txt') != ''
