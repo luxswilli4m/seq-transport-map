@@ -93,18 +93,23 @@ def main():
         x, y = map(int, ONLY.split(",")); print("built" if build_tile(x, y) else "no data"); return
     version = S.get(f"{SVC}/info/iteminfo?f=json", timeout=60).json().get("name") or "unknown"
     want = needed()
-    have = {tuple(t) for t in meta.get("tiles", [])} if meta.get("version") == version and not FORCE else set()
+    same = meta.get("version") == version and not FORCE
+    have = {tuple(t) for t in meta.get("tiles", [])} if same else set()
+    empty = {tuple(t) for t in meta.get("empty", [])} if same else set()   # tiles with no heights at all (open sea)
+    have |= empty
     todo = sorted(want - have)
     print(f"heights: QldDem {version}; {len(want)} tiles needed, {len(todo)} to download")
     if not todo and set(map(tuple, meta.get("tiles", []))) <= want:
         return
-    done, failed = set(have & want), 0
+    done, failed = set((have - empty) & want), 0
     with cf.ThreadPoolExecutor(6) as ex:
         futs = {ex.submit(build_tile, x, y): (x, y) for x, y in todo}
         for i, f in enumerate(cf.as_completed(futs)):
             try:
                 if f.result():
                     done.add(futs[f])
+                else:
+                    empty.add(futs[f])
             except Exception as e:
                 failed += 1
             if i % 100 == 0:
@@ -115,7 +120,7 @@ def main():
         if os.path.exists(p):
             os.remove(p)
     json.dump({"version": version, "built": datetime.date.today().isoformat(), "z": Z, "radius_km": RADIUS_KM,
-               "tiles": sorted([list(t) for t in done])}, open(meta_p, "w"), separators=(",", ":"))
+               "tiles": sorted([list(t) for t in done]), "empty": sorted([list(t) for t in empty & want])}, open(meta_p, "w"), separators=(",", ":"))
     print(f"heights: {len(done)} tiles saved, {failed} failed (tried again next week)")
     if failed and not done:
         raise SystemExit(1)
