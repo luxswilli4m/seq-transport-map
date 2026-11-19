@@ -527,7 +527,7 @@ function livePlat(box,k,v){const el=box.querySelector(`[data-plat="${k}"]`);if(!
   if(v.lpl!==el.dataset.sch){el.textContent="Now "+v.lpl.charAt(0).toLowerCase()+v.lpl.slice(1);el.classList.add("chg");el.title="Changed from "+el.dataset.sch}else{el.textContent=v.lpl;el.classList.remove("chg");el.title=""}}
 // alerts
 async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
-  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn();if(typeof applyFavStatus==="function")applyFavStatus()}catch(e){console.warn(e)}}
+  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn();pjAlertsChanged();if(typeof applyFavStatus==="function")applyFavStatus()}catch(e){console.warn(e)}}
 const fmtDay=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});
 function todaysAlerts(){const now=Date.now()/1000;const bneMid=Math.floor((now+36000)/86400)*86400-36000,end=bneMid+86400;
   return LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<end&&(!p.end||p.end>bneMid)))}
@@ -779,15 +779,26 @@ function pjFit(cs,maxZoom){let b=null;cs.forEach(([x,y])=>{b=b?[Math.min(b[0],x)
 const pjAll=k=>[...PJ[k].sites.flatMap(pjCoords),...(PJ[k].line||[]).flat(),...(PJ[k].lines||[]).flatMap(l=>l.coords)];
 function pjNotice(n,where){return `<li><span class="pjd">${esc(pjDate(n.d))}${where&&n.where?" · "+esc(n.where):""}</span> <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.t)}</a>${n.pdf?` <a class="pjpdf" href="${esc(n.pdf)}" target="_blank" rel="noopener">PDF ↗</a>`:""}</li>`}
 const pjLinks=P=>`<div class="grp">Official and related sites</div><ul class="pjlinks">`+P.links.map(([t,u])=>`<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)} ↗</a></li>`).join("")+`</ul>`;
+// Service alerts caused by the project: today's Translink alerts that name it ("Cross River Rail", "CRR", "The Wave"),
+// or that affect a project station and talk about works. Station = a train or bus station within 300 m of a site.
+const PJ_NAME={crr:/cross river rail|\bcrr\b/i,wave:/\bthe wave\b/i};const PJ_WORKS=/\b(works?|construction|upgrade|rebuild|closure)\b/i;
+function pjStations(k,t){if(t._st)return t._st;const set=new Set();if(t.ll)for(const [id,v] of Object.entries(ST)){if(v[3]!=="train"&&v[3]!=="busstn")continue;
+    if(Math.hypot((v[2]-t.ll[0])*99.4,(v[1]-t.ll[1])*110.6)<0.3){set.add(id);(KIDS[id]||[]).forEach(x=>set.add(x))}}return t._st=set}
+function pjAlerts(k,i){const P=PJ[k];const sites=i==null?P.sites:[P.sites[i]];
+  return todaysAlerts().filter(a=>{const txt=(a.header||"")+" "+(a.desc||"");const named=PJ_NAME[k].test(txt);const st=alertStops(a);
+    const atSite=sites.some(t=>[...pjStations(k,t)].some(x=>st.has(x))||(i!=null&&new RegExp("\\b"+t.name.replace(/\s*\(.*?\)/g,"").replace(/[^\w ]/g,"").trim()+"\\b","i").test(txt)));
+    return i==null?(named||(atSite&&PJ_WORKS.test(txt))):(atSite&&(named||PJ_WORKS.test(txt)))})}
+function pjAlertHTML(k,i){const L=pjAlerts(k,i);if(!L.length)return "";
+  return `<details class="alerts pjal"><summary>⚠ ${L.length} service alert${L.length>1?"s":""} linked to ${esc(PJ[k].name)}</summary>`+L.slice(0,12).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information</a>`:""}</div>`).join("")+`<div class="pjhint">Today's Translink alerts that name ${esc(PJ[k].name)}, or works at its stations.</div></details>`}
 function pjWire(k){pB.querySelectorAll("[data-pjs]").forEach(a=>a.onclick=e=>{e.preventDefault();pjCard(k,+a.dataset.pjs,true)});const x=document.getElementById("pjAll");if(x)x.onclick=e=>{e.preventDefault();pjOverview()}}
 function pjOverview(){const k=pjOn;if(!k)return;const P=PJ[k];const groups=new Map();P.sites.forEach((t,i)=>{const g=t.group||t.kind;if(!groups.has(g))groups.set(g,[]);groups.get(g).push(i)});
-  let h=(P.notes||[]).map(n=>`<div class="odwarn"><p>⚠ ${esc(n)}</p></div>`).join("")+P.overview.map(p=>`<p class="pjp">${esc(p)}</p>`).join("");
+  let h=pjAlertHTML(k)+(P.notes||[]).map(n=>`<div class="odwarn"><p>⚠ ${esc(n)}</p></div>`).join("")+P.overview.map(p=>`<p class="pjp">${esc(p)}</p>`).join("");
   h+=`<div class="grp">Sites</div><div class="pjhint">Tap a site here or on the map for its details.</div>`+[...groups].map(([g,is])=>`<div class="pjg">${esc(g)}</div>`+is.map(i=>`<div class="odg"><a href="#" data-pjs="${i}">${esc(P.sites[i].name)}</a>${P.sites[i].when?` <span class="odnm">${esc(P.sites[i].when)}</span>`:""}</div>`).join("")).join("");
   if(P.latest&&P.latest.length)h+=`<div class="grp">Latest works notices</div><ul class="pjn">${P.latest.map(n=>pjNotice(n,true)).join("")}</ul>`;
   if(P.documents&&P.documents.length)h+=`<div class="grp">Documents from TMR</div><ul class="pjn">${P.documents.map(n=>pjNotice(n,false)).join("")}</ul>`;
   h+=pjLinks(P)+`<div class="odnote">${esc(P.mapnote||"")} Unofficial summary of what the Queensland Government, TMR and Translink have published; dates and details can change, so check the official sites.</div>`;
   openPanel(P.name,esc(P.sub||"")+(PJ.built?` · checked ${esc(pjDate(PJ.built))}`:""),h,{view:"pj"});backState=null;pBack.style.display="none";pjWire(k)}
-function pjCard(k,i,fit){const P=PJ[k],t=P.sites[i];let h=`<p class="pjp">${esc(t.about)}</p>`;
+function pjCard(k,i,fit){const P=PJ[k],t=P.sites[i];let h=pjAlertHTML(k,i)+`<p class="pjp">${esc(t.about)}</p>`;
   if(t.when)h+=`<div class="odstart">${esc(t.when)}</div>`;
   if(t.status&&t.status.length)h+=`<div class="grp">Status</div>`+t.status.map(x=>`<p class="pjp">${esc(x)}</p>`).join("");
   if(t.progress)h+=`<div class="grp">Latest official progress${P.progress_asof?` (up to ${esc(P.progress_asof)})`:""}</div><p class="pjp">${esc(t.progress)}</p>`;
@@ -798,6 +809,7 @@ function pjCard(k,i,fit){const P=PJ[k],t=P.sites[i];let h=`<p class="pjp">${esc(
   if(t.approx)h+=`<div class="odnote">${esc(t.approxnote||"The shaded circle marks roughly where this site is; it isn't the site's actual boundary.")}</div>`;
   h+=`<div class="odnote"><a href="#" id="pjAll">‹ All ${esc(P.name)} sites</a></div>`;
   openPanel(t.name,esc(t.kind),h,{view:"pjv"});setBack({kind:"pj"});pjWire(k);if(fit)pjFit(pjCoords(t),16)}
+function pjAlertsChanged(){try{if(!pjOn||!PJ||view!=="pj")return}catch(e){return}const sc=pB.scrollTop;pjOverview();pB.scrollTop=sc}
 async function togglePJ(k){const btn=document.getElementById(PJ_BTN[k]);
   if(pjOn===k){pjOn=null;pjVis(k,false);pjLayers(false);btn.classList.remove("odon");if(view==="pj"||view==="pjv")closePanel();return}
   if(pjOn){const o=pjOn;pjOn=null;pjVis(o,false);document.getElementById(PJ_BTN[o]).classList.remove("odon");pjLayers(false)}
@@ -1220,7 +1232,7 @@ document.getElementById("infoBtn").onclick=()=>info.style.display="flex";
 document.getElementById("infoClose").onclick=()=>info.style.display="none";
 info.onclick=e=>{if(e.target===info)info.style.display="none"};
 try{if(!localStorage.getItem("seqmap_seen")){info.style.display="flex";localStorage.setItem("seqmap_seen","1")}}catch(e){info.style.display="flex"}
-window.__ready=true;window.__map=map;window.__openStop=openStop;
+window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
 // ---------- "More" menu (School routes, On demand, future extras)
