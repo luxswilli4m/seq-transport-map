@@ -641,7 +641,8 @@ function showFavRoutes(){focusRoutes=null;rtFocus=false;syncVehVis();backState=n
   openPanel("Saved routes",`${FAV.routes.length} saved on this device`,FAV.routes.map(k=>{const ids=new Set(keyIds(k));const nv=LIVE.veh.filter(v=>ids.has(v.ri)).length;
     const na=LIVE.alerts.filter(a=>(a.sel||[]).some(x=>x.route&&ids.has(riOfRoute(x.route)))&&(!a.periods||!a.periods.length||a.periods.some(p=>!p.end||p.end>=now))).length;
     return `<div class="favr" data-rt="${esc(k)}">${keyBadge(k)}<div class="favrn"><b>${esc(keyName(k))}</b><span>${LIVE.vehAt?nv+" running now":""}</span><span class="favst"></span></div><button class="favx" data-unfav="${esc(k)}" title="Remove">✕</button></div>`}).join(""),{view:"favr"});
-  pB.querySelectorAll("[data-rt]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-unfav]"))return;e.stopPropagation();openRouteTable(el.dataset.rt,null,{kind:"favr",cam:{center:map.getCenter(),zoom:map.getZoom()}})});
+  pB.querySelectorAll("[data-rt]").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-unfav]"))return;e.stopPropagation();const k=el.dataset.rt,b={kind:"favr",cam:{center:map.getCenter(),zoom:map.getZoom()}};
+    if(TNAME[k])showLine(k);else if(nameIdx[k]!=null)showRoute(nameIdx[k],false);else return openRouteTable(k,null,b);setBack(b)});
   pB.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=e=>{e.stopPropagation();FAV.routes=FAV.routes.filter(x=>x!==b.dataset.unfav);saveFav();showFavRoutes()});applyFavStatus()}
 // ---------- route timetable page (all stops, Earlier / Later, day picker, live, updates)
 const RTC={};const COLS=5;
