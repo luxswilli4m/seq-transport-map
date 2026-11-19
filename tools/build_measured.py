@@ -91,14 +91,17 @@ def piece(days):
     seg = defaultdict(list); late = defaultdict(list); e2e = defaultdict(list); ntrips = defaultdict(int); ndays = defaultdict(set)
     for day in days:
         for (band, key, d, tid, date), obs in rows_for(day).items():
-            obs = sorted(obs); cols = []
+            obs = sorted(obs); cols = []; seqs = []
             for seq, sid, sch, act in obs:
                 if abs(act - sch) > 7200 or (cols and cols[-1][0] == sid): continue
-                cols.append((sid, sch, act))
+                cols.append((sid, sch, act)); seqs.append(seq)
             if len(cols) < 2: continue
             g = (key, d, band); ntrips[g] += 1; ndays[g].add(day)
             for c, sch, act in cols: late[g + (c,)].append(act - sch)
-            for (ca, sa, aa), (cb, sb, ab) in zip(cols, cols[1:]):
+            for i, ((ca, sa, aa), (cb, sb, ab)) in enumerate(zip(cols, cols[1:])):
+                # only stops next to each other on the trip: if the live feed missed the stops in between,
+                # the time across the gap can't be split between them, so that part of the trip is left out
+                if seqs[i + 1] != seqs[i] + 1: continue
                 m, s = ab - aa, sb - sa
                 if m < 0 or s < 0 or m > 3 * s + 900: continue
                 seg[g + (ca + ">" + cb,)].append((m, s))
