@@ -378,3 +378,5 @@ body:not(.light) .wkline{stroke:#93c5fd}body:not(.light) .wkarea{fill:#93c5fd22}
 .wkinfo summary{font-weight:700;cursor:pointer;font-size:13px}
 .wkinfo p,.wkinfo ul{margin:6px 0}
 .wkinfo li{margin:3px 0}
+.wf-indoor{fill:#64748b33}
+.wkflag.indoor{border-color:#64748b;background:#64748b14}

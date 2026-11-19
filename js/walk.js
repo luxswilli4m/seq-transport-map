@@ -17,16 +17,22 @@ function readValue(p){let v=null;while(p.p<p.b.length){const k=p.varint(),f=k>>3
   if(f===1)v=p.str();else if(f===2){v=new DataView(p.b.buffer,p.b.byteOffset+p.p,4).getFloat32(0,true);p.p+=4}
   else if(f===3){v=new DataView(p.b.buffer,p.b.byteOffset+p.p,8).getFloat64(0,true);p.p+=8}
   else if(f===4||f===5)v=p.varint();else if(f===6){const n=p.varint();v=(n>>>1)^-(n&1)}else if(f===7)v=!!p.varint();else p.skip(t)}return v}
-function readRoads(buf,tx,ty){const p=new Pbf(new Uint8Array(buf));const out=[];
+function readRoads(buf,tx,ty){const p=new Pbf(new Uint8Array(buf));const out=[],bld=[];out.bld=bld;
   while(p.p<p.b.length){const k=p.varint();if((k>>3)!==3||(k&7)!==2){p.skip(k&7);continue}
     const L=p.sub();let name="",ext=EXT;const feats=[],keys=[],vals=[];
     while(L.p<L.b.length){const k2=L.varint(),f=k2>>3;
       if(f===1)name=L.str();else if(f===2)feats.push(L.sub());else if(f===3)keys.push(L.str());else if(f===4)vals.push(readValue(L.sub()));else if(f===5)ext=L.varint();else L.skip(k2&7)}
-    if(name!=="roads")continue;const sc=EXT/ext;
+    if(name!=="roads"&&name!=="buildings")continue;const sc=EXT/ext;
     for(const F of feats){let tags=null,type=0,geom=null;
       while(F.p<F.b.length){const k3=F.varint(),f=k3>>3;
         if(f===2||f===4){const s=F.sub();const a=[];while(s.p<s.b.length)a.push(s.varint());if(f===2)tags=a;else geom=a}
         else if(f===3)type=F.varint();else F.skip(k3&7)}
+      if(name==="buildings"){if(type!==3||!geom)continue;   // building outlines, to spot walks that pass through a building
+        let x=0,y=0,i=0,ring=null;const rings=[];let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+        while(i<geom.length){const c=geom[i++],id=c&7,n=c>>3;if(id===7)continue;
+          for(let j=0;j<n;j++){const dx=geom[i++],dy=geom[i++];x+=(dx>>>1)^-(dx&1);y+=(dy>>>1)^-(dy&1);if(id===1){ring=[];rings.push(ring)}
+            const gx=tx*EXT+x*sc,gy=ty*EXT+y*sc;ring.push(gx,gy);x0=Math.min(x0,gx);y0=Math.min(y0,gy);x1=Math.max(x1,gx);y1=Math.max(y1,gy)}}
+        if(rings.length)bld.push({rings,bb:[x0,y0,x1,y1]});continue}
       if(type!==2||!tags||!geom)continue;const pr={};for(let i=0;i+1<tags.length;i+=2)pr[keys[tags[i]]]=vals[tags[i+1]];
       if(!WALK_KIND[pr.kind]||NO_DETAIL[pr.kind_detail]||(pr.is_tunnel&&pr.kind!=="path"))continue;
       let x=0,y=0,i=0,line=null;const lines=[];
@@ -36,7 +42,7 @@ function readRoads(buf,tx,ty){const p=new Pbf(new Uint8Array(buf));const out=[];
       for(const l of lines)if(l.length>=4)out.push({g:l,name:pr.name||"",steps:pr.kind_detail==="steps",kind:pr.kind,detail:pr.kind_detail||"",lift:!!(pr.is_bridge||pr.is_tunnel)})}}
   return out}
 async function tile(tx,ty){const k=tx+"/"+ty;if(!tileCache.has(k))tileCache.set(k,(async()=>{
-  if(!pm)pm=new pmtiles.PMTiles(new URL("tiles/seq.pmtiles",location.href).href);const r=await pm.getZxy(Z,tx,ty);return r&&r.data?readRoads(r.data,tx,ty):[]})().catch(()=>[]));return tileCache.get(k)}
+  if(!pm)pm=new pmtiles.PMTiles(new URL("tiles/seq.pmtiles",location.href).href);const r=await pm.getZxy(Z,tx,ty);return r&&r.data?readRoads(r.data,tx,ty):Object.assign([],{bld:[]})})().catch(()=>Object.assign([],{bld:[]})));return tileCache.get(k)}
 
 // ---- geometry: global tile-pixel coordinates <-> lon/lat and metres
 const gLon=gx=>gx/W*360-180,gLat=gy=>Math.atan(Math.sinh(Math.PI*(1-2*gy/W)))*180/Math.PI;
@@ -98,11 +104,25 @@ async function walkRoute(a,b,opt={}){
   const coords=[[a[0],a[1]]],segs=[];let tot=0,steps=false;const push=(gx,gy)=>{const c=[gLon(gx),gLat(gy)];const l=coords[coords.length-1];if(Math.abs(l[0]-c[0])>1e-7||Math.abs(l[1]-c[1])>1e-7)coords.push(c)};
   for(const [u,v,e] of seq){const inf=info[e[2]]||{};if(e[3])for(let i=0;i<e[3].length;i+=2)push(e[3][i],e[3][i+1]);push(XX(v),YY(v));tot+=e[1];steps=steps||!!inf.steps;
     // unnamed footpaths and crossings take the name of the street they run beside
-    let nm=inf.name;if(!nm&&!inf.steps){const h=G.near((XX(u)+XX(v))/2,(YY(u)+YY(v))/2,30,s=>info[s[2]].name&&info[s[2]].kind!=="path");if(h)nm=info[h.s[2]].name}
+    // unnamed footpaths take a street's name only when they run alongside it (within 15 m); a little further off
+    // they're "footpath near" that street
+    let nm=inf.name;if(!nm&&!inf.steps){const mx=(XX(u)+XX(v))/2,my=(YY(u)+YY(v))/2,named=s=>info[s[2]].name&&info[s[2]].kind!=="path";
+      const h=G.near(mx,my,15,named);if(h)nm=info[h.s[2]].name;else{const h2=G.near(mx,my,40,named);if(h2)nm="footpath near "+info[h2.s[2]].name}}
     if(!nm)nm=inf.kind==="path"?(inf.steps?"steps":inf.detail==="cycleway"?"bike path":"path"):"";const last=segs[segs.length-1];
     if(last&&last.name===nm&&last.steps===!!inf.steps&&last.lift===!!inf.lift){last.m+=e[1];last.to=coords.length-1}else segs.push({m:e[1],name:nm,steps:!!inf.steps,lift:!!inf.lift,from:Math.max(0,coords.length-2),to:coords.length-1})}
   if(tot>straight*4+300)return null;   // the street data doesn't join up here; better to fall back to a straight-line estimate
-  return {m:tot,coords,segs,steps,forced}}
+  // stretches through a building: the height data is bare ground, which isn't known under buildings
+  const bl=(await Promise.all(tiles.map(([x,y])=>tile(x,y)))).flatMap(t=>t.bld||[]);const indoor=[];
+  if(bl.length){const CB=60/mpg,bg=new Map();bl.forEach((b,bi)=>{for(let a=Math.floor(b.bb[0]/CB);a<=Math.floor(b.bb[2]/CB);a++)for(let c=Math.floor(b.bb[1]/CB);c<=Math.floor(b.bb[3]/CB);c++){const k=a+","+c;let l=bg.get(k);if(!l)bg.set(k,l=[]);l.push(bi)}});
+    const inside=(x,y)=>{for(const bi of bg.get(Math.floor(x/CB)+","+Math.floor(y/CB))||[]){const b=bl[bi];if(x<b.bb[0]||x>b.bb[2]||y<b.bb[1]||y>b.bb[3])continue;let c=false;
+      for(const r of b.rings)for(let i=0,j=r.length-2;i<r.length;j=i,i+=2){const xi=r[i],yi=r[i+1],xj=r[j],yj=r[j+1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}if(c)return true}return false};
+    const dm=(p,q)=>{const k=Math.cos((p[1]+q[1])/2*Math.PI/180);return Math.hypot((p[0]-q[0])*111320*k,(p[1]-q[1])*110574)};
+    let cum=0,run=null;const ST=5;
+    for(let i=1;i<coords.length;i++){const L=dm(coords[i-1],coords[i]);for(let d=0;d<L;d+=ST){const t=d/L,ll=[coords[i-1][0]+(coords[i][0]-coords[i-1][0])*t,coords[i-1][1]+(coords[i][1]-coords[i-1][1])*t];const g=toG(ll);
+        if(inside(g[0],g[1])){if(!run)run={a:cum+d,b:cum+d,gs:[]};run.b=cum+d;run.gs.push(g)}else if(run){if(run.b-run.a>=10)indoor.push(run);run=null}}cum+=L}
+    if(run&&run.b-run.a>=10)indoor.push(run);
+    for(const r of indoor){const mid=r.gs[r.gs.length>>1];const h=G.near(mid[0],mid[1],60,s=>info[s[2]].name&&info[s[2]].kind!=="path");r.near=h?info[h.s[2]].name:"";r.a=Math.max(0,r.a-ST/2);r.b+=ST/2;delete r.gs}}
+  return {m:tot,coords,segs,steps,forced,indoor}}
 window.walkRoute=walkRoute;
 
 // ---- elevation along a walk. First choice: the Queensland Government's elevation service (QldDem: bare-earth
@@ -116,7 +136,9 @@ const QLD="https://spatial-img.information.qld.gov.au/arcgis/rest/services/Eleva
 const libURL=f=>new URL("lib/lerc/"+f,location.href).href;
 function lerc(){return lercP||(lercP=new Promise((res,rej)=>{const sc=document.createElement("script");sc.src=libURL("LercDecode.js");
   sc.onload=()=>window.Lerc.load({locateFile:()=>libURL("lerc-wasm.wasm")}).then(()=>res(window.Lerc),rej);sc.onerror=rej;document.head.appendChild(sc)}).catch(e=>{lercP=null;throw e}))}
-function qldTile(x,y){const k=x+"/"+y;if(!qCache.has(k))qCache.set(k,(async()=>{const L=await lerc();const r=await fetch(QLD+y+"/"+x);if(!r.ok)throw new Error("QldDem "+r.status);
+function qldTile(x,y){const k=x+"/"+y;if(!qCache.has(k))qCache.set(k,(async()=>{const L=await lerc();let r;
+  for(let t=0;t<2;t++){try{r=await fetch(QLD+y+"/"+x);if(r.ok)break}catch(e){r=null}if(t===0)await new Promise(z=>setTimeout(z,600))}   // one retry
+  if(!r||!r.ok)throw new Error("QldDem "+(r?r.status:"unreachable"));
   const d=L.decode(await r.arrayBuffer());return {w:d.width,px:d.pixels[0],mask:d.mask||null}})().catch(err=>{qCache.delete(k);throw err}));return qCache.get(k)}
 async function qldHeights(lls){const Pq=(1<<QZ)*256;
   const xy=lls.map(([lon,lat])=>[(lon+180)/360*Pq,(1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*Pq]);
@@ -152,10 +174,13 @@ async function walkProfile(route){if(!route||!route.coords||route.coords.length<
   // bridges, tunnels and underpasses: the terrain shows the ground or water beneath, so join their two ends in a straight line
   for(const g of route.segs||[]){if(!g.lift)continue;const a=cum[g.from],b=cum[g.to];const ia=Math.max(0,Math.floor(a/L*(n-1))),ib=Math.min(n-1,Math.ceil(b/L*(n-1)));
     for(let i=ia+1;i<ib;i++)e[i]=e[ia]+(e[ib]-e[ia])*(i-ia)/(ib-ia)}
+  // through buildings: join the two ends in a straight line too, and don't measure a slope there
+  const inBld=sv=>(route.indoor||[]).some(r=>sv>=r.a&&sv<=r.b);
+  for(const r of route.indoor||[]){const ia=Math.max(0,Math.floor(r.a/L*(n-1))-1),ib=Math.min(n-1,Math.ceil(r.b/L*(n-1))+1);for(let i=ia+1;i<ib;i++)e[i]=e[ia]+(e[ib]-e[ia])*(i-ia)/(ib-ia)}
   // smooth over about 15 m either side, so kerbs, gutters and driveways don't read as slopes
   const W=3;e=e.map((_,i)=>{let s=0,c=0;for(let k=Math.max(0,i-W);k<=Math.min(n-1,i+W);k++){s+=e[k];c++}return s/c});
   let up=0,down=0;for(let i=1;i<n;i++){const d=e[i]-e[i-1];if(d>0)up+=d;else down-=d}
-  const stepOf=s=>{for(const g of route.segs||[])if(g.steps&&s>=cum[g.from]-1&&s<=cum[g.to]+1)return g;return null};
+  const stepOf=s=>{if(inBld(s))return true;for(const g of route.segs||[])if(g.steps&&s>=cum[g.from]-1&&s<=cum[g.to]+1)return g;return null};
   const nameAt=(a,b)=>{const w=new Map();for(const g of route.segs||[]){if(g.steps||!g.name||g.name==="path"||g.name==="bike path")continue;const o=Math.min(b,cum[g.to])-Math.max(a,cum[g.from]);if(o>0)w.set(g.name,(w.get(g.name)||0)+o)}
     let best="",bm=0;for(const [k,v] of w)if(v>bm){bm=v;best=k}return best};
   // gradient over a 30 m window at each point; flagged stretches are 30 m or longer, steps excluded
@@ -175,9 +200,10 @@ async function walkProfile(route){if(!route||!route.coords||route.coords.length<
     for(const q of pcs){if(!q.b)continue;const [a,e]=ext(q);if(e-a<30)continue;let peak=0;for(let i=q.i;i<q.k;i++)if(band(i)===q.b||q.b===2)peak=Math.max(peak,Math.abs(gr[i]));
       if(q.b===1)peak=Math.min(peak,KERB);flags.push({kind:q.b===2?"kerb":"ramp",pct:peak,len:e-a,at:a,end:e,dir:q.sg>0?"uphill":"downhill",street:nameAt(a,e)})}}
   for(const g of route.segs||[])if(g.steps)flags.push({kind:"steps",len:g.m,at:cum[g.from],end:cum[g.to],street:nameAt(cum[g.from]-40,cum[g.to]+40)});
+  for(const r of route.indoor||[])flags.push({kind:"indoor",len:r.b-r.a,at:r.a,end:r.b,street:r.near});
   flags.sort((x,y)=>x.at-y.at);
   const label=rough?"":maxG<2?"Flat":maxG<=5?"Gentle":maxG<=RAMP?"Moderate":maxG<=KERB?"Steep":"Very steep";
-  return {L,up,down,maxG,label,rough,flags,concern:flags.length>0,prof:pts.map((p,i)=>[p.s,e[i]]),forced:!!route.forced}}
+  return {L,up,down,maxG,label,rough,flags,concern:flags.some(f=>f.kind!=="indoor"),prof:pts.map((p,i)=>[p.s,e[i]]),forced:!!route.forced}}
 window.walkProfile=walkProfile;
 window.WALK_BANDS={RAMP,KERB,ASSIST};
 window.walkTilesWarm=(a)=>{const g=toG(a);return tile(Math.floor(g[0]/EXT),Math.floor(g[1]/EXT))};
