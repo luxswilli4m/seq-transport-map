@@ -1,5 +1,5 @@
 {
- "_help": "BAU stations: the quick-zoom list under BAU ▾ on the map. Each one also gets platform outlines and numbers when zoomed in (tools/build_platforms.py). To add one, add the station's name exactly as it appears on the map (for example \"Toowong station\" or \"Chermside bus station\"), commit, and the next refresh (or Actions -> Refresh Translink data -> Run workflow) does the rest. Order here is the order in the menu.",
+ "_help": "BAU stations: the quick-zoom list under BAU ▾ on the map. Each one also gets platform outlines and numbers when zoomed in (tools/build_platforms.py). To add one, add the station's name exactly as it appears on the map (for example \"Toowong station\" or \"Chermside bus station\"), commit, and the next refresh (or Actions -> Refresh Translink data -> Run workflow) does the rest. The menu sorts itself alphabetically, so the order here doesn't matter.",
  "stations": [
   "Queen Street bus station",
   "Cultural Centre station",

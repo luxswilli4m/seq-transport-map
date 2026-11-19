@@ -850,7 +850,7 @@ map.on("click",e=>{if(!pjOn)return;const box=[[e.point.x-7,e.point.y-7],[e.point
   const wire=()=>w.querySelectorAll("[data-bau]").forEach(x=>x.onclick=()=>{set(false);const id=x.dataset.bau;if(!ST[id])return;webCam=null;openStop(id,true)});wire();
   // the list itself comes from tools/bau.json via data/platforms.json, so adding a station there updates this menu
   fetch(BASE+"data/platforms.json"+DV).then(r=>r.json()).then(P=>{if(!P.bau||!P.bau.length)return;
-    w.querySelector(".moremenu").innerHTML=P.bau.map(m=>`<button data-bau="${esc(m.id)}" role="menuitem"><b>${esc(m.name)}</b><span>${esc(m.sub)}</span></button>`).join("");wire()}).catch(()=>{});
+    w.querySelector(".moremenu").innerHTML=P.bau.map(m=>`<button data-bau="${esc(m.id)}" role="menuitem"><b>${esc(m.name)}</b><span>${esc(m.sub)}</span></button>`).join("");sortMenu(w.querySelector(".moremenu"));wire()}).catch(()=>{});
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
 // ---------- Best connections: stop/station to stop/station planner (data/plan/<day>.json, built weekly)
 const PLAN={cache:{},from:null,to:null};
@@ -1160,6 +1160,10 @@ async function showLost(q){focusRoutes=null;backState=null;pBack.style.display="
     document.getElementById("lpQ").oninput=e=>showLost(e.target.value)}
   document.getElementById("lpList").innerHTML=body}
 document.getElementById("lostBtn").onclick=()=>showLost("");
+// menus list their items alphabetically by title (ignoring case and a leading "The"), so anything added later falls into place
+function sortMenu(m){if(!m)return;const key=x=>((x.querySelector("b")||x).textContent||"").trim().replace(/^the\s+/i,"").toLowerCase();
+  [...m.children].sort((a,b)=>key(a).localeCompare(key(b),"en-AU")).forEach(x=>m.appendChild(x))}
+sortMenu(document.getElementById("moreMenu"));sortMenu(document.querySelector("#bauWrap .moremenu"));
 // ---------- Queensland Rail Commuter Catch-Ups (data/catchups.json, from Queensland Rail's page, refreshed weekly)
 let CCU=null;
 async function showCatchups(){focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;

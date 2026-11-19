@@ -224,4 +224,5 @@ for m in MENU:
     kinds = [k if i == 0 or k == "G:link" else k.lower() for i, k in enumerate(kinds)]
     m["sub"] = (" and ".join(kinds) + " station") if kinds else "Station"
     m.pop("with")
+MENU.sort(key=lambda m: m["name"].lower())   # the BAU menu is alphabetical, whatever order tools/bau.json lists them in
 json.dump({"stations": out, "bau": MENU}, open(os.path.join(REPO, "data", "platforms.json"), "w"), separators=(",", ":"))

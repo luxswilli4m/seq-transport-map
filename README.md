@@ -99,6 +99,8 @@ An interactive map of South East Queensland public transport: the Northern, Sout
 
 **Commuter Catch-Ups** (More ▾) lists Queensland Rail's upcoming drop-in sessions at stations (date, station, time), copied weekly from Queensland Rail's Commuter Catch-Ups page by `tools/build_catchups.py`. Sessions already past drop off by themselves, and today's is tagged. Tap a station to open its card, then ‹ to go back. The card gives the contact email and Queensland Rail's number (13 16 17), plus links to the page, the email notifications for new sessions, and customer reference groups. If the page can't be read, the last list stays.
 
+**Menu order.** The BAU ▾ and More ▾ menus list their items alphabetically by title, ignoring case and a leading "The" (so The Wave sorts under W). They sort themselves when the page loads, so anything added later lands in the right place without editing the order. The order in `tools/bau.json` doesn't matter.
+
 **More ▾ menu.** Extras live under **More ▾** in the top bar: On demand, School routes, Lost property and a link to Translink's feedback form, with room for future additions. **Journey planner ↗** sits next to ★ Routes.
 
 **School routes.** School routes (under More ▾) lists Translink's school-only buses by number and name. They aren't drawn on the map. Some share numbers with everyday routes (school route S700 is not everyday route 700), which is why they're kept on a separate list.
