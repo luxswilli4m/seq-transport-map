@@ -263,6 +263,7 @@ function setMini(on){panel.classList.toggle("mini",on);pCloseBtn.textContent=on?
 pCloseBtn.onclick=()=>{if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
 panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
+  if(b.kind==="cn"){openPanel("Best connections",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
   if(b.kind==="gc")return gcOverview();if(b.kind==="od")return odOverview();if(b.kind==="favs")return showFavStops();if(b.kind==="favr")return showFavRoutes();if(b.kind==="rt")return openRouteTable(b.key,b.st);openStop(b.id,false,b.web,true,true)};
 function setBack(b){backState=b;pBack.style.display="block"}
 function sortRoutes(ids){return ids.slice().sort((a,b)=>cmpRoute(R[a].n,R[b].n))}
@@ -871,16 +872,56 @@ async function planSearch(){const box=document.getElementById("cnRes");const my=
   const main=show.filter(x=>!x.walkFirst&&!x.walkAll);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&!x.walkAll&&x.arr===minArr),minCh=main.length?main[0].changes:0;
   const byNote=arriveBy?`<div class="odnote" style="margin-top:0">Latest ways to arrive by ${clock(byT)}${dayOff?" on "+esc(document.getElementById("cnDay").selectedOptions[0].textContent):""}.</div>`:"";
   box.innerHTML=byNote+wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
-    const stepsTag=o.legs.some(l=>l.route&&l.route.steps)?`<span class="cnt cnsteps" title="${noSteps?"No step-free way was found for part of this walk":"Part of the walk uses steps"}">Includes steps</span>`:"";
+    // with Avoid steps on, a journey whose walk can't avoid steps says so; otherwise steps show as the orange "!" by Walking
+    const stepsTag=o.legs.some(l=>l.route&&l.route.forced)?`<span class="cnt cnsteps" title="No step-free way was found for part of the walking">Includes steps</span>`:"";
     const tags=o.walkAll?`<span class="cnt cnwa">Walk all the way</span>${o.quick?`<span class="cnt">Quickest</span>`:""}`:o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((o===main[0]&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
-    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.walkAll?"walk":o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${tags}${stepsTag}</div>`+
+    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.walkAll?"walk":o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${o.legs.some(l=>l.type==="walk")?`<span class="cnwb"><span class="cnwarn" id="cnWarn${oi}" title="A walk in this journey has a steep stretch or steps" hidden>!</span><button class="cnwalk" data-w="${oi}">Walking ›</button></span>`:""}</div>${tags||stepsTag?`<div class="cntags">${tags}${stepsTag}</div>`:""}`+
       o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(epName(PLAN.from)):"from "+nm(l.from);const b=l.to==null?"to "+esc(epName(PLAN.to)):"to "+nm(l.to);return `<div class="cnl walk" data-leg="${oi},${li}">🚶 Walk ${Math.round(l.m/10)*10} m (about ${legMin(l)} min) ${a} ${b}</div>`}
         const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
         return `<div class="cnl" data-leg="${oi},${li}">${bd}<div class="cnlt"><b>${clock(l.dep)}</b> ${nm(l.from)}${pl?` <span class="cnpl">${esc(pl)}</span>`:""} <span class="cnto">→ ${esc(cleanHead(TT.cal.hs[p.h]))}</span><br><b>${clock(l.arr)}</b> ${nm(l.to)} <span class="cnto">· ${l.apos-l.bpos} stop${l.apos-l.bpos>1?"s":""}</span>${li===o.legs.findIndex(x=>x.type==="ride")&&dayOff===0?`<span class="cnlive" id="cnLive${oi}"></span>`:""}</div></div>`}).join("")+`</div>`}).join("")+
     `<div class="odnote">Unofficial: always check times with Translink before travelling. Walking times are estimates. <a href="https://jp.translink.com.au/plan-your-journey/journey-planner" target="_blank" rel="noopener">Translink journey planner ↗</a></div>`;
-  box.querySelectorAll(".cno").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-leg]"))return;drawOption(+el.dataset.o)});
+  box.querySelectorAll(".cno").forEach(el=>el.onclick=e=>{if(e.target.closest("[data-leg],.cnwb"))return;drawOption(+el.dataset.o)});
+  box.querySelectorAll(".cnwalk").forEach(b=>b.onclick=e=>{e.stopPropagation();showWalking(+b.dataset.w)});
+  // elevation for every walk, so a journey with a steep stretch or steps gets its orange "!" beside the Walking button
+  show.forEach((o,oi)=>Promise.all(o.legs.filter(l=>l.type==="walk").map(legProfile)).then(ps=>{if(my!==PLAN.seq)return;const w=document.getElementById("cnWarn"+oi);if(w&&ps.some(p=>p&&p.concern))w.hidden=false}));
   box.querySelectorAll("[data-leg]").forEach(el=>el.onclick=()=>{const [oi,li]=el.dataset.leg.split(",").map(Number);drawOption(oi,li)});
   drawOption(0);if(dayOff===0)planLive(show)}
+// ---------- Walking card: every walk in a journey, with its climb, an elevation profile and any steep stretches or steps
+const legProfile=l=>l.route?(l.profP||(l.profP=walkProfile(l.route).catch(()=>null))):Promise.resolve(null);
+const ORD=["First","Second","Third","Fourth","Fifth","Sixth"];
+const gradTxt=p=>{const deg=Math.atan(p/100)*180/Math.PI,one=100/p;return `${p.toFixed(1)}% · ${deg.toFixed(1)}° · 1 in ${one<10?one.toFixed(1):Math.round(one)}`};
+const r10=m=>Math.max(10,Math.round(m/10)*10);
+function profSVG(pr){const P=pr.prof,L=pr.L;let lo=Math.min(...P.map(p=>p[1])),hi=Math.max(...P.map(p=>p[1]));if(hi-lo<10){const c=(hi+lo)/2;lo=c-5;hi=c+5}
+  const X=s=>(s/L*300).toFixed(1),Y=e=>(70-(e-lo)/(hi-lo)*62).toFixed(1);
+  const sh=pr.flags.map(f=>`<rect x="${X(f.at)}" y="0" width="${Math.max(1.5,(f.end-f.at)/L*300).toFixed(1)}" height="72" class="wf-${f.kind}"/>`).join("");
+  const line=P.map((p,i)=>(i?"L":"M")+X(p[0])+","+Y(p[1])).join("");
+  return `<div class="wkpr"><div class="wkax"><span>${Math.round(hi)} m</span><span>${Math.round(lo)} m</span></div><svg viewBox="0 0 300 72" preserveAspectRatio="none" role="img" aria-label="Elevation profile">${sh}<path d="${line}L300,72L0,72Z" class="wkarea"/><path d="${line}" class="wkline" vector-effect="non-scaling-stroke"/></svg></div><div class="wkdx"><span>Start</span><span>${r10(L)} m</span></div>`}
+function flagHTML(f){const where=`${f.street?(f.kind==="steps"?" near ":" on ")+esc(f.street):""}, from about ${Math.round(f.at/10)*10} m into the walk`;
+  if(f.kind==="steps")return `<div class="wkflag steps"><b>Steps</b><span>About ${r10(f.len)} m of steps${where}</span></div>`;
+  return `<div class="wkflag ${f.kind}"><b>${f.kind==="kerb"?"Steeper than a kerb ramp":"Steeper than an accessible ramp"}</b><span>Up to ${gradTxt(f.pct)}${f.pct>WALK_BANDS.ASSIST?" · beyond assisted access":""}</span><span>About ${r10(f.len)} m ${f.dir}${where}</span></div>`}
+const WALK_INFO=`<details class="wkinfo"><summary>What this means</summary>
+  <p>Steepness is shown three ways. "1 in 14" means the path rises 1 m for every 14 m you walk along it, which is a 7.1% gradient or 4.1°. The bigger the second number, the gentler the slope.</p>
+  <p>The bands come from the Australian Standard for access and mobility, AS 1428.1, and the Disability Standards for Accessible Public Transport (DSAPT):</p>
+  <ul><li><b>Walkway</b>: up to 1 in 20 (5%, 2.9°). Treated as a level path.</li>
+  <li><b>Ramp</b>: 1 in 20 to 1 in 14 (5% to 7.1%). The steepest an accessible ramp may be, and it needs landings to rest on.</li>
+  <li><b>Steeper than an accessible ramp</b>: over 1 in 14 (7.1%, 4.1°). Flagged in orange.</li>
+  <li><b>Steeper than a kerb ramp</b>: over 1 in 8 (12.5%, 7.1°). Kerb ramps may be this steep only because they're very short. Flagged in red.</li>
+  <li><b>Beyond assisted access</b>: over 1 in 4 (25%, 14°). Steeper than any ramp the standards allow, even with someone helping.</li></ul>
+  <p>Each walk is labelled by its steepest stretch: Flat (under 2%), Gentle (up to 5%), Moderate (up to 7.1%), Steep (over 7.1%) or Very steep (over 12.5%). ↗ is the total climb and ↘ the total descent.</p>
+  <p>Heights come from the Queensland Government's elevation service (QldDem), which across South East Queensland's built-up areas is 1 m LiDAR of the bare ground, with buildings and trees removed. Heights are smoothed over about 30 m, so only stretches of about 30 m or longer are flagged; a short steep driveway, kerb or ramp won't show. Bridges and tunnels are taken as running straight between their two ends. If that service can't be reached, Amazon's open terrain tiles are used as a backup, but they include buildings and trees, so only steps are marked then. Steps come from OpenStreetMap, the same data as the base map. Avoid steps keeps walks off steps where the map has another way. This is a guide only, not official accessibility advice; check lifts, kerbs and crossings with Translink before travelling.</p></details>`;
+function showWalking(oi){const {d,show}=PLAN.last;const o=show[oi];
+  const saved={kind:"cn",nodes:[...pB.childNodes],sub:pS.innerHTML,scroll:pB.scrollTop,prev:backState,oi};
+  const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const walks=o.legs.map((l,li)=>[l,li]).filter(([l])=>l.type==="walk");
+  const html=walks.map(([l,li],k)=>{const a=l.from==null?esc(epName(PLAN.from)):nm(l.from),b=l.to==null?esc(epName(PLAN.to)):nm(l.to);
+    return `<div class="wk" data-li="${li}"><div class="wkh">${walks.length>1?`<b>${ORD[k]||"Next"} walk:</b> `:"<b>Walk:</b> "}${a} to ${b}</div>
+      <div class="wks" id="wks${li}">${r10(l.m)} m · about ${legMin(l)} min</div><div id="wkp${li}" class="wkp">${l.route?`<div class="sub">Loading elevation…</div>`:`<div class="sub">No walking route was found in the map data here, so this is a straight-line estimate.</div>`}</div><div id="wkf${li}"></div></div>`}).join("")+WALK_INFO;
+  openPanel("Walking",`${clock(o.leave)} → ${clock(o.arr)} · ${walks.length} walk${walks.length>1?"s":""}`,html,{view:"cn"});setBack(saved);drawOption(oi);
+  pB.querySelectorAll(".wkh").forEach(h=>h.onclick=()=>drawOption(oi,+h.parentNode.dataset.li));
+  walks.forEach(([l,li])=>legProfile(l).then(pr=>{const p=document.getElementById("wkp"+li),f=document.getElementById("wkf"+li),st=document.getElementById("wks"+li);if(!p||!l.route)return;
+    if(!pr){p.innerHTML=`<div class="sub">Elevation isn't available right now.</div>`;return}
+    if(pr.rough)p.innerHTML=`<div class="odnote" style="margin-top:0">Queensland's elevation service couldn't be reached, and the backup satellite heights include buildings and trees, so the climb and steep stretches aren't shown for this walk. Steps are still marked.</div>`;
+    else{st.innerHTML=`${r10(l.m)} m · about ${legMin(l)} min · ↗ ${Math.round(pr.up)} m · ↘ ${Math.round(pr.down)} m · <span class="wkl wkl-${pr.label.replace(" ","").toLowerCase()}">${pr.label}</span>`;p.innerHTML=profSVG(pr)}
+    f.innerHTML=(pr.forced?`<div class="odnote" style="margin-top:6px">No step-free way was found for this walk, so it uses steps.</div>`:"")+(pr.flags.length?pr.flags.map(flagHTML).join(""):`<div class="wkok">${pr.rough?"No steps on this walk.":"No stretches steeper than an accessible ramp, and no steps."}</div>`)}))}
 var cnSnap=null;
 function cnLayers(on){if(on){if(cnSnap)return;cnSnap={};GROUPS.forEach(([g])=>{cnSnap[g]=chipState[g];if(g==="live")return;setGroup(g,false)});chipBox.classList.add("dim")}
   else if(cnSnap){GROUPS.forEach(([g])=>{if(g==="live")return;setGroup(g,cnSnap[g]!=="off")});cnSnap=null;chipBox.classList.remove("dim")}}
