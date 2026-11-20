@@ -25,6 +25,7 @@ permissions:
   pages: write
   id-token: write
   actions: write
+  issues: write
 
 concurrency:
   group: measure
@@ -127,3 +128,34 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X POST "repos/${{ github.repository }}/actions/workflows/wait.yml/dispatches" -f ref=main
+
+  # missed-window alert: if a window in the last 3 days has no recording, open a GitHub issue (which emails the owner)
+  check:
+    needs: measure
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Look for missed windows
+        run: |
+          start=$(date -d "2026-11-20 12:00 +1000" +%s)   # the backups began here; earlier gaps are known
+          now=$(date +%s)
+          have=$(gh release view measured-raw --json assets --jq '.assets[].name')
+          for d in 0 1 2 3; do
+            day=$(TZ=Australia/Brisbane date -d "-$d day" +%F)
+            for w in "am 09:45 AM (6:30-9:30 am)" "pm 18:45 PM (3:30-6:30 pm)"; do
+              set -- $w; band=$1; due=$(date -d "$day $2 +1000" +%s); shift 2; label="$*"
+              if [ $due -gt $now ] || [ $due -lt $start ]; then continue; fi
+              if grep -qxF "peak-$day-$band.csv.gz" <<< "$have"; then continue; fi
+              title="Travel-time recording missed: $(TZ=Australia/Brisbane date -d "$day" '+%a %-d %b %Y') $band"
+              if [ -n "$(gh issue list --state all --search "\"$title\" in:title" --json number --jq '.[].number')" ]; then continue; fi
+              printf '%s\n' "The $label window on $day wasn't recorded, so it's missing from the measured travel times." "" \
+                "The recording is started by GitHub's timer, by the waiter workflow after each recording, and by the Cloudflare worker's 6:00/6:20 am and 3:00/3:20 pm checks. If all three missed it, check the recent runs: https://github.com/$GH_REPO/actions" "" \
+                "If the Cloudflare checks keep failing, the worker's GITHUB_TOKEN secret may have been removed or revoked." "" \
+                "Nothing needs fixing for the past window (the live feed has no history); later windows record as normal. Close this issue once read." > body.txt
+              gh issue create --title "$title" --body-file body.txt
+              echo "opened: $title"
+            done
+          done
