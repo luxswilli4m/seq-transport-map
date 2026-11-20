@@ -1,0 +1,49 @@
+name: Wait for the next recording window
+
+# Starts "Measure travel times" about 45 minutes before each window (AM 6:30, PM 3:30 Brisbane time), as a backup
+# for GitHub's own timetable (scheduled runs can be late or skipped). Each recording run starts this waiter when it
+# finishes; the waiter sleeps until it's time, then starts the next recording. A run can last at most about 6 hours,
+# so for longer gaps (overnight) it hands over to a fresh copy of itself. Only one waiter runs at a time.
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: wait-for-window
+  cancel-in-progress: true
+
+jobs:
+  wait:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Sleep until the next window, then start it
+        run: |
+          now=$(date -u +%s)
+          # the next window start (Brisbane is UTC+10 all year), minus 45 minutes
+          best=""; band=""
+          for d in 0 1; do
+            day=$(TZ=Australia/Brisbane date -d "+$d day" +%F)
+            for w in "am 06:30" "pm 15:30"; do
+              set -- $w
+              t=$(date -u -d "$day $2 +1000" +%s); t=$((t - 2700))
+              if [ $t -gt $((now + 60)) ] && { [ -z "$best" ] || [ $t -lt $best ]; }; then best=$t; band=$1; fi
+            done
+          done
+          wait=$((best - now))
+          echo "next: $band window, start the recording at $(TZ=Australia/Brisbane date -d @$best '+%a %d %b %H:%M') Brisbane time (in $((wait / 60)) min)"
+          if [ $wait -gt 19800 ]; then
+            sleep 19800
+            gh api -X POST "repos/$REPO/actions/workflows/wait.yml/dispatches" -f ref=main
+            echo "handed over to a fresh waiter"
+            exit 0
+          fi
+          sleep $wait
+          gh api -X POST "repos/$REPO/actions/workflows/measure.yml/dispatches" -f ref=main -f "inputs[band]=$band"
+          echo "started the $band recording"

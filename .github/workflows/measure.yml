@@ -2,7 +2,8 @@ name: Measure travel times
 
 # Records how long services actually take in the morning and afternoon windows (Brisbane time AM 6:30-9:30,
 # PM 3:30-6:30), every day of the year, then rebuilds the measured travel times and publishes the site.
-# Each run starts a little early and waits for its window.
+# Each run starts a little early and waits for its window. GitHub's timetable can be late or skip runs, so each
+# run also starts "Wait for the next recording window" (wait.yml), which starts the next one itself.
 #   AM: 19:43 UTC = 5:43 am in Brisbane      PM: 04:43 UTC = 2:43 pm in Brisbane
 # Storage (GitHub releases in this repository, not the git history):
 #   measured-raw   every recording (peak-YYYY-MM-DD-am.csv.gz), kept for 12 months then deleted, oldest first
@@ -23,6 +24,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
   group: measure
@@ -63,6 +65,9 @@ jobs:
         run: |
           mkdir -p raw
           f=raw/peak-${{ steps.band.outputs.day }}-${{ steps.band.outputs.band }}.csv.gz
+          # started twice (GitHub's timetable and the waiter)? the second one finds the recording already saved
+          have=$(gh release view measured-raw -R "$REPO" --json assets --jq '.assets[].name')
+          if grep -qxF "$(basename "$f")" <<< "$have"; then echo "already recorded"; exit 0; fi
           python tools/collect_measured.py . --band ${{ steps.band.outputs.band }} --out "$f"
           if [ -e "$f" ]; then gh release upload measured-raw "$f" --clobber -R "$REPO"; fi
 
@@ -112,3 +117,13 @@ jobs:
   publish:
     needs: measure
     uses: ./.github/workflows/pages.yml
+
+  # start the waiter for the next window (a backup in case GitHub's timetable is late or skips a run)
+  next:
+    needs: measure
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/actions/workflows/wait.yml/dispatches" -f ref=main
