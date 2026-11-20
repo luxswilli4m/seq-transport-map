@@ -574,7 +574,14 @@ function liftOutages(){const out=new Map();let al=[];try{al=todaysAlerts()}catch
     if(!ids.size)for(const [sid,v] of Object.entries(ACC.st))if(new RegExp("\\b"+v.n.replace(/[^\w ]/g,"").trim()+"( railway)? station\\b","i").test(txt))ids.add(sid);
     ids.forEach(i=>{if(!out.has(i))out.set(i,[]);out.get(i).push(a)})}
   return out}
-function accHTML(id){const a=accOf(id),outs=liftOutages().get(id)||liftOutages().get(parentOf[id])||[];if(!a&&!outs.length)return "";
+// Brisbane City Council's bus stop accessibility audit: [stop type, boarding point, road gradient, cross fall, tactile, audited]
+const BS_R={E:["Easy","independent"],M:["Medium","assisted"],H:["Hard","limited"]};
+function busAccHTML(id){const b=(ACC.bs||{})[id];if(!b)return "";const [typ,bp,gr,cf,tac,aud]=b;const r=x=>BS_R[x]?BS_R[x][0]:"not rated";
+  const audT=aud?new Date(aud+"T00:00:00+10:00").toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Brisbane"}):"";
+  return `<details class="acc"><summary><span class="acci" aria-hidden="true">♿</span> <b>Accessibility</b>${BS_R[bp]?` <span class="accl ${BS_R[bp][1]}">Boarding point: ${BS_R[bp][0]}</span>`:""}</summary><div class="accb">
+    <table class="acct"><tr><th>Boarding point</th><td>${r(bp)}</td></tr><tr><th>Slope along the road</th><td>${r(gr)}</td></tr><tr><th>Sideways slope (cross fall)</th><td>${r(cf)}</td></tr><tr><th>Tactile ground indicators</th><td>${tac==null?"not recorded":tac?"Yes":"No"}</td></tr>${typ?`<tr><th>Stop type</th><td>${esc(typ)}</td></tr>`:""}<tr><th>Last audited</th><td>${audT||"not recorded"}</td></tr></table>
+    <div class="odnote">From Brisbane City Council's bus stop accessibility audit (Brisbane City Council open data, CC BY 4.0), checked weekly; ratings are the council's own, and some audits are several years old. Stops outside the Brisbane City Council area aren't covered.</div></div></details>`}
+function accHTML(id){const a=accOf(id),outs=liftOutages().get(id)||liftOutages().get(parentOf[id])||[];if(!a&&!outs.length)return busAccHTML(id);
   let h=`<details class="acc"${outs.length?" open":""}><summary><span class="acci" aria-hidden="true">♿</span> <b>Accessibility</b>${a&&a.lvl?` <span class="accl ${a.lvl}">${ACC_LVL[a.lvl]}</span>`:""}${outs.length?` <span class="accout">⚠ Lift out of service</span>`:a&&a.f.includes("Lift")?` <span class="accn">Lift</span>`:""}</summary><div class="accb">`;
   outs.forEach(al=>{h+=`<div class="odwarn"><p><b>${esc(al.header||"Lift notice")}</b>${al.desc?"<br>"+esc(al.desc).slice(0,500):""}${al.url?` <a href="${esc(al.url)}" target="_blank" rel="noopener">More ↗</a>`:""}</p></div>`});
   if(a){if(a.f.length)h+=`<div class="accf">${a.f.map(f=>`<span>${esc(f)}</span>`).join("")}</div>`;
@@ -588,6 +595,7 @@ function accHTML(id){const a=accOf(id),outs=liftOutages().get(id)||liftOutages()
 function accJourneyTags(o,d){const seen=new Set(),tags=[];const outs=liftOutages();
   for(const l of o.legs){if(l.type!=="ride")continue;for(const k of [l.from,l.to]){const id=d.s[k];if(!id||seen.has(id))continue;seen.add(id);const a=accOf(id);const nm=ST[id]?shortName(ST[id][0]):id;
     if(outs.has(id)||outs.has(parentOf[id]))tags.push(`<span class="cnt cnacc out" title="Translink has posted a lift outage for this station today">Lift out: ${esc(nm)}</span>`);
+    const bb=(ACC.bs||{})[id];if(bb&&bb[1]==="H")tags.push(`<span class="cnt cnacc limited" title="Brisbane City Council rates the boarding point at this stop hard; see the stop card for details">Hard boarding: ${esc(nm)}</span>`);
     if(a&&a.lvl&&a.lvl!=="independent")tags.push(`<span class="cnt cnacc ${a.lvl}" title="Queensland Rail rates this station ${ACC_LVL[a.lvl].toLowerCase()}; see the station card for details">${ACC_LVL[a.lvl]}: ${esc(nm)}</span>`)}}
   if(o.legs.some(l=>l.route&&l.route.elev))tags.push(`<span class="cnt cnacc lift" title="A walk in this journey uses a lift (from OpenStreetMap)">Uses a lift</span>`);
   return tags.join("")}

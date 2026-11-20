@@ -11,7 +11,10 @@ Writes data/access.json:
   "lifts": lifts mapped in OpenStreetMap across SEQ (highway=elevator points and lines, lift doors, entrances with a
            lift), [lon, lat], from the Overpass API. The
            Journey Search walking routes use them to get around steps.
-Either part keeps its previous copy if its source can't be read this week.
+  "bs":    Brisbane City Council's bus stop accessibility audit (data.brisbane.qld.gov.au, "Bus Stop locations",
+           CC BY 4.0), for stops in the Brisbane City Council area: {stop id: [stop type, boarding point, road gradient,
+           cross fall, tactile indicators, last audit date]}, ratings E(asy) / M(edium) / H(ard).
+Each part keeps its previous copy if its source can't be read this week.
 """
 import sys, os, re, json, html, time, datetime as dt
 import requests
@@ -107,5 +110,25 @@ for url in OVERPASS:
         print("Overpass", url, "failed:", e)
 if not lifts or len(lifts) < 50: lifts = old.get("lifts", [])
 
-json.dump({"checked": dt.date.today().isoformat(), "st": stations, "lifts": [list(x) for x in lifts]}, open(OUT, "w"), separators=(",", ":"))
-print("wrote", OUT, "stations", len(stations), "lifts", len(lifts))
+bs = {}
+try:
+    rows = None
+    for a in range(4):
+        try:
+            rows = requests.get("https://data.brisbane.qld.gov.au/api/explore/v2.1/catalog/datasets/brisbane-bus-stops/exports/json",
+                                headers=UA, timeout=180).json(); break
+        except Exception as e: print("Brisbane bus stops, try", a + 1, "failed:", e); time.sleep(10)
+    R1 = lambda v: (v or "")[:1].upper() if (v or "")[:1].upper() in "EMH" else ""
+    for r in rows or []:
+        sid = str(r.get("hastus") or "").strip()
+        if sid not in ST and sid not in parent: continue
+        typ = re.sub(r"^\d+\s*-\s*", "", r.get("bus_stop_type") or "")
+        tac = {"Y": 1, "N": 0}.get((r.get("tactile_ground_surf_indicat_y_n") or "").upper())
+        bs[sid] = [typ, R1(r.get("boarding_point")), R1(r.get("road_gradient")), R1(r.get("cross_fall")), tac, (r.get("date_of_last_audit") or "")[:10]]
+    print("Brisbane City Council bus stops", len(rows or []), "matched", len(bs))
+except Exception as e:
+    print("Brisbane bus stop accessibility unavailable, keeping the previous copy:", e)
+if len(bs) < 3000: bs = old.get("bs", {})
+
+json.dump({"checked": dt.date.today().isoformat(), "st": stations, "lifts": [list(x) for x in lifts], "bs": bs}, open(OUT, "w"), separators=(",", ":"))
+print("wrote", OUT, "stations", len(stations), "lifts", len(lifts), "Brisbane bus stops", len(bs))
