@@ -1245,8 +1245,9 @@ document.getElementById("ccuBtn").onclick=()=>showCatchups();
 const NOTES_KEY="seqmap_notes";
 function notesLoad(){try{const a=JSON.parse(localStorage.getItem(NOTES_KEY)||"[]");return Array.isArray(a)?a:[]}catch(e){return []}}
 function notesSave(a){try{localStorage.setItem(NOTES_KEY,JSON.stringify(a));return true}catch(e){return false}}
-const noteAuto=n=>{const w=(n.text||"").trim().split(/\s+/).filter(Boolean);return w.length?w.slice(0,6).join(" ")+(w.length>6?"…":""):"Empty note"};
-const noteTitle=n=>(n.title||"").trim()||noteAuto(n);
+const NT_MAX=25;const ntCut=t=>{t=(t||"").replace(/\s+/g," ").trim();return t.length>NT_MAX?t.slice(0,NT_MAX).trimEnd()+"…":t};
+const noteAuto=n=>ntCut(n.text)||"Empty note";
+const noteTitle=n=>ntCut(n.title)||noteAuto(n);
 const noteWhen=t=>new Date(t).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"});
 const noteId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const isApple=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
@@ -1298,14 +1299,14 @@ function notesList(){const box=document.getElementById("nList");if(!box)return;c
     noteConfirm(row,row,`Delete “${noteTitle(notesLoad().find(x=>x.id===id)||{})}”? This can't be undone.`,()=>{notesSave(notesLoad().filter(x=>x.id!==id));showNotes("Note deleted.")})})}
 function showNote(id,fresh){nCloseMenu();const n=notesLoad().find(x=>x.id===id);if(!n)return showNotes();
   openPanel(noteTitle(n),`Last edited ${noteWhen(n.updated)}`,
-    `<input id="nTitle" class="ttf ntitle" placeholder="Title: ${esc(noteAuto(n))}" value="${esc(n.title||"")}" autocomplete="off" aria-label="Title (leave empty to use the first words)">
+    `<input id="nTitle" class="ttf ntitle" maxlength="25" placeholder="Title: ${esc(noteAuto(n))}" value="${esc(n.title||"")}" autocomplete="off" aria-label="Title (leave empty to use the first words)">
     <textarea id="nText" class="ntext" placeholder="Write your note…">${esc(n.text||"")}</textarea><div id="nMsg" class="nmsg"></div>
     <div class="nbar" id="nBar"><button class="btn" id="nExp1" aria-haspopup="true">Export ▾</button><button class="btn" id="nCopy">Copy</button><button class="btn ndel" id="nDel">Delete</button></div>
     <div class="odnote">Saved as you type, on this device only. The title is the note's first few words unless you type your own in the top box.</div>`,{view:"note"});
   setBack({kind:"notes"});
   const upd=f=>{const a=notesLoad(),x=a.find(y=>y.id===id);if(!x)return;f(x);x.updated=Date.now();notesSave(a);pT.textContent=noteTitle(x);pS.textContent="Last edited "+noteWhen(x.updated)};
   const ta=document.getElementById("nText"),ti=document.getElementById("nTitle");
-  ta.oninput=()=>{upd(x=>x.text=ta.value);ti.placeholder="Title: "+noteAuto({text:ta.value})};ti.oninput=()=>upd(x=>x.title=ti.value.trim());
+  ta.oninput=()=>{upd(x=>x.text=ta.value);ti.placeholder="Title: "+noteAuto({text:ta.value})};ti.oninput=()=>upd(x=>x.title=ti.value.slice(0,NT_MAX).trim());
   ti.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();ta.focus()}};if(fresh)setTimeout(()=>ta.focus(),60);
   const cur=()=>notesLoad().find(y=>y.id===id);
   const ex=document.getElementById("nExp1");ex.onclick=e=>{e.stopPropagation();
@@ -1326,7 +1327,7 @@ async function notesImport(file){let txt="";try{txt=await file.text()}catch(e){r
     for(const m of list){if(!m||typeof m!=="object")continue;const n={id:String(m.id||noteId()),title:String(m.title||""),text:String(m.text||""),created:+m.created||Date.now(),updated:+m.updated||Date.now()};
       const ex=a.find(x=>x.id===n.id);if(!ex){a.push(n);added++}else if(n.updated>ex.updated){Object.assign(ex,n);newer++}else same++}}
   else{const stem=file.name.replace(/\.[^.]+$/,"").trim();const n={id:noteId(),title:"",text:txt.replace(/\r\n/g,"\n"),created:Date.now(),updated:Date.now()};
-    if(stem&&stem!==fileSafe(noteAuto(n))&&!/^seq-map-note/i.test(stem)){n.title=stem;const lines=n.text.split("\n");if(lines[0].trim()===stem){n.text=lines.slice(1).join("\n").replace(/^\n+/,"")}}
+    if(stem&&stem!==fileSafe(noteAuto(n))&&!/^seq-map-note/i.test(stem)){n.title=stem.slice(0,NT_MAX).trim();const lines=n.text.split("\n");if(lines[0].trim()===stem){n.text=lines.slice(1).join("\n").replace(/^\n+/,"")}}
     a.push(n);added++}
   if(!notesSave(a))return showNotes("Couldn't save: this browser's storage is full or blocked.");
   showNotes(`Added ${added} note${added===1?"":"s"}`+(newer?`, updated ${newer} with newer copies`:"")+(same?`, ${same} already here`:"")+".")}
