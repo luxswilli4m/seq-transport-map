@@ -8,7 +8,8 @@ Writes data/access.json:
            ramps, stairs, level boarding, boarding ramp, hearing loop, accessible toilet and parking ...), its
            platform notes, and links to the station's accessibility map (picture and PDF) and audio description.
            Keyed by the map's station ids (Queensland Rail lists Translink's stop ids for each station).
-  "lifts": lifts mapped in OpenStreetMap (highway=elevator) across SEQ, [lon, lat], from the Overpass API. The
+  "lifts": lifts mapped in OpenStreetMap across SEQ (highway=elevator points and lines, lift doors, entrances with a
+           lift), [lon, lat], from the Overpass API. The
            Journey Search walking routes use them to get around steps.
 Either part keeps its previous copy if its source can't be read this week.
 """
@@ -88,13 +89,19 @@ except Exception as e:
 if len(stations) < 100: stations = old.get("st", {})
 
 lifts = None
-q = f'[out:json][timeout:120];node["highway"="elevator"]({SEQ_BBOX[0]},{SEQ_BBOX[1]},{SEQ_BBOX[2]},{SEQ_BBOX[3]});out;'
+# lifts mapped as points or as short lines (highway=elevator), and doors or entrances tagged as lift doors
+bb = ",".join(map(str, SEQ_BBOX))
+q = (f'[out:json][timeout:180];(node["highway"="elevator"]({bb});way["highway"="elevator"]({bb});'
+     f'node["door"="elevator"]({bb});node["entrance"]["elevator"="yes"]({bb}););out center;')
 for url in OVERPASS:
     try:
         r = requests.post(url, data={"data": q}, headers={"User-Agent": UA["User-Agent"]}, timeout=180)
         r.raise_for_status()
         els = r.json().get("elements", [])
-        lifts = sorted({(round(e["lon"], 6), round(e["lat"], 6)) for e in els if "lat" in e})
+        pts = [(e["lon"], e["lat"]) if "lat" in e else (e["center"]["lon"], e["center"]["lat"]) for e in els if "lat" in e or "center" in e]
+        lifts = []
+        for x, y in sorted(pts):             # the same lift mapped twice (a point and its doors): keep one within 5 m
+            if not any(abs(x - a) < 5e-5 and abs(y - b) < 5e-5 for a, b in lifts[-40:]): lifts.append((round(x, 6), round(y, 6)))
         print("OpenStreetMap lifts", len(lifts), "from", url); break
     except Exception as e:
         print("Overpass", url, "failed:", e)

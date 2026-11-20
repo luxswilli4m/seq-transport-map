@@ -519,3 +519,5 @@ body:not(.light) .accl.independent{background:#16a34a33;color:#86efac}body:not(.
 .cnt.cnacc.assisted{background:#fef3c7;color:#92400e}.cnt.cnacc.limited,.cnt.cnacc.out{background:#fee2e2;color:#991b1b}.cnt.cnacc.lift{background:#e0e7ff;color:#3730a3}
 body:not(.light) .cnt.cnacc.assisted{background:#f59e0b33;color:#fcd34d}body:not(.light) .cnt.cnacc.limited,body:not(.light) .cnt.cnacc.out{background:#dc262633;color:#fca5a5}body:not(.light) .cnt.cnacc.lift{background:#6366f133;color:#c7d2fe}
 .wklift{font-size:13px;margin:6px 0;padding:6px 8px;border-radius:8px;background:var(--hover)}
+.hmsearch.hmtop{margin:0;padding:5px 14px;font-size:13px}
+body.phone .hmsearch.hmtop{display:none}body:not(.phone) .hmbot{display:none}
