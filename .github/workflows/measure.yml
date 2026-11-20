@@ -51,7 +51,11 @@ jobs:
       - name: Which window
         id: band
         run: |
+          # a timed run takes its window from the timetable entry that started it, not the clock: GitHub sometimes
+          # starts timed runs hours late, and a late morning run must not turn into an afternoon one
           if [ -n "${{ inputs.band }}" ]; then b="${{ inputs.band }}";
+          elif [ "${{ github.event.schedule }}" = "43 19 * * *" ]; then b=am;
+          elif [ "${{ github.event.schedule }}" = "43 4 * * *" ]; then b=pm;
           elif [ "$(date -u +%H)" -ge 12 ]; then b=am; else b=pm; fi
           echo "band=$b" >> "$GITHUB_OUTPUT"
           echo "day=$(TZ=Australia/Brisbane date -d '+30 min' +%F)" >> "$GITHUB_OUTPUT"
