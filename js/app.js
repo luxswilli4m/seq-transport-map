@@ -344,7 +344,7 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
   let h="";
   if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,25).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
   const modeBtns=modes.length>1?`<div class="modeseg">${modes.map(m=>`<button data-mode="${m}" class="${m===mode?"on":""}">${MODE_LBL[m]}</button>`).join("")}</div>`:"";
-  const locB=locBtns(id);
+  const locB=locBtns(id);h+=accHTML(id);
   if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>${locB}${modeBtns}`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
     h+=`<div id="ttBox" class="tt"><div class="sub">Loading timetable…</div></div>`}
   else h+=(locB?`<div class="webrow">${locB}</div>`:"")+`<div class="sub">No scheduled services in this timetable.</div>`;
@@ -561,6 +561,36 @@ const DISRUPT=new Set([3,4,5,6,8,11,12]),PLANNED=new Set([9,10]);
 const parentOf={};for(const [p,ks] of Object.entries(KIDS))ks.forEach(k=>parentOf[k]=p);
 // Translink station locality maps (data/locality.json, matched to stations by tools/build_locality.py each week)
 let LOC={};fetch(BASE+"data/locality.json"+DV).then(r=>r.json()).then(d=>{LOC=d.maps||{}}).catch(()=>{});
+// ---------- station accessibility (data/access.json, weekly from Queensland Rail's station details) and lift outages
+// (today's Translink service alerts about lifts). The OpenStreetMap lifts in the same file go to the walking routes.
+let ACC={st:{},lifts:[]};
+fetch(BASE+"data/access.json"+DV).then(r=>r.json()).then(d=>{ACC=d;window.__LIFTS=d.lifts||[];if(window.walkSetLifts)walkSetLifts(window.__LIFTS)}).catch(()=>{});
+const accOf=id=>ACC.st[id]||ACC.st[parentOf[id]]||null;
+const ACC_LVL={independent:"Independent access",assisted:"Assisted access",limited:"Limited access"};
+const LIFT_RE=/\b(lifts?|elevators?)\b/i,LIFT_OUT=/out of (service|order)|unavailable|not (available|operating|working|in service)|closed|closure|outage|maintenance|repair|replace|upgrade|fault|offline/i;
+function liftOutages(){const out=new Map();let al=[];try{al=todaysAlerts()}catch(e){}
+  for(const a of al){const txt=(a.header||"")+" "+(a.desc||"");if(!LIFT_RE.test(txt)||!LIFT_OUT.test(txt))continue;const ids=new Set();
+    for(const x of alertStops(a)){const p=ST[x]?x:parentOf[x];if(p&&ST[p])ids.add(p)}
+    if(!ids.size)for(const [sid,v] of Object.entries(ACC.st))if(new RegExp("\\b"+v.n.replace(/[^\w ]/g,"").trim()+"( railway)? station\\b","i").test(txt))ids.add(sid);
+    ids.forEach(i=>{if(!out.has(i))out.set(i,[]);out.get(i).push(a)})}
+  return out}
+function accHTML(id){const a=accOf(id),outs=liftOutages().get(id)||liftOutages().get(parentOf[id])||[];if(!a&&!outs.length)return "";
+  let h=`<details class="acc"${outs.length?" open":""}><summary><span class="acci" aria-hidden="true">♿</span> <b>Accessibility</b>${a&&a.lvl?` <span class="accl ${a.lvl}">${ACC_LVL[a.lvl]}</span>`:""}${outs.length?` <span class="accout">⚠ Lift out of service</span>`:a&&a.f.includes("Lift")?` <span class="accn">Lift</span>`:""}</summary><div class="accb">`;
+  outs.forEach(al=>{h+=`<div class="odwarn"><p><b>${esc(al.header||"Lift notice")}</b>${al.desc?"<br>"+esc(al.desc).slice(0,500):""}${al.url?` <a href="${esc(al.url)}" target="_blank" rel="noopener">More ↗</a>`:""}</p></div>`});
+  if(a){if(a.f.length)h+=`<div class="accf">${a.f.map(f=>`<span>${esc(f)}</span>`).join("")}</div>`;
+    if(a.plat.length)h+=`<ul class="pjf">${a.plat.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`;
+    const lk=[a.map&&[a.map,"Station access map"],a.pdf&&[a.pdf,"Printable map (PDF)"],a.audio&&[a.audio,"Audio description"],["https://www.queenslandrail.com.au/forcustomers/stations-and-maps/stationfinder","Queensland Rail station finder"]].filter(Boolean);
+    h+=`<div class="accln">${lk.map(([u,t])=>`<a href="${esc(u)}" target="_blank" rel="noopener">${t} ↗</a>`).join("")}</div>`;
+    h+=`<div class="odnote">From Queensland Rail's station information${ACC.checked?", checked "+esc(ACC.checked):""}. The access level is Queensland Rail's own rating. Lift outages come from today's Translink service alerts; for help, call Queensland Rail on <a href="tel:131617">13 16 17</a>.</div>`}
+  else h+=`<div class="odnote">Lift notice from today's Translink service alerts.</div>`;
+  return h+`</div></details>`}
+// stations on a journey that aren't rated independent access, or have a lift out of service
+function accJourneyTags(o,d){const seen=new Set(),tags=[];const outs=liftOutages();
+  for(const l of o.legs){if(l.type!=="ride")continue;for(const k of [l.from,l.to]){const id=d.s[k];if(!id||seen.has(id))continue;seen.add(id);const a=accOf(id);const nm=ST[id]?shortName(ST[id][0]):id;
+    if(outs.has(id)||outs.has(parentOf[id]))tags.push(`<span class="cnt cnacc out" title="Translink has posted a lift outage for this station today">Lift out: ${esc(nm)}</span>`);
+    if(a&&a.lvl&&a.lvl!=="independent")tags.push(`<span class="cnt cnacc ${a.lvl}" title="Queensland Rail rates this station ${ACC_LVL[a.lvl].toLowerCase()}; see the station card for details">${ACC_LVL[a.lvl]}: ${esc(nm)}</span>`)}}
+  if(o.legs.some(l=>l.route&&l.route.elev))tags.push(`<span class="cnt cnacc lift" title="A walk in this journey uses a lift (from OpenStreetMap)">Uses a lift</span>`);
+  return tags.join("")}
 function locBtns(id){const seen=new Set(),out=[];[id,parentOf[id],...(KIDS[id]||[])].forEach(k=>(k&&LOC[k]||[]).forEach(([t,u])=>{if(!seen.has(u)){seen.add(u);out.push([t,u])}}));
   return out.map(([t,u])=>`<a class="btn" href="${esc(u)}" target="_blank" rel="noopener" title="Translink's locality map for ${esc(t)} (opens in a new tab)">${out.length>1?esc(t)+" map":"Locality map"} ↗</a>`).join("")}
 function alertTags(a){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;const ps=a.periods||[];
@@ -976,7 +1006,7 @@ async function planSearch(){const box=document.getElementById("cnRes");const my=
     // with Avoid steps on, a journey whose walk can't avoid steps says so; otherwise steps show as the orange "!" by Walking
     const stepsTag=o.legs.some(l=>l.route&&l.route.forced)?`<span class="cnt cnsteps" title="No step-free way was found for part of the walking">Includes steps</span>`:"";
     const tags=o.walkAll?`<span class="cnt cnwa">Walk all the way</span>${o.quick?`<span class="cnt">Quickest</span>`:""}`:o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((o===main[0]&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
-    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.walkAll?"walk":o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${o.legs.some(l=>l.type==="walk")?`<span class="cnwb"><span class="cnwarn" id="cnWarn${oi}" title="A walk in this journey has a steep stretch or steps" hidden>!</span><button class="cnwalk" data-w="${oi}">Walking ›</button></span>`:""}</div>${tags||stepsTag?`<div class="cntags">${tags}${stepsTag}</div>`:""}`+
+    return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.walkAll?"walk":o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${o.legs.some(l=>l.type==="walk")?`<span class="cnwb"><span class="cnwarn" id="cnWarn${oi}" title="A walk in this journey has a steep stretch or steps" hidden>!</span><button class="cnwalk" data-w="${oi}">Walking ›</button></span>`:""}</div>${(at=>tags||stepsTag||at?`<div class="cntags">${tags}${stepsTag}${at}</div>`:"")(accJourneyTags(o,d))}`+
       o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(epName(PLAN.from)):"from "+nm(l.from);const b=l.to==null?"to "+esc(epName(PLAN.to)):"to "+nm(l.to);return `<div class="cnl walk" data-leg="${oi},${li}">🚶 Walk ${Math.round(l.m/10)*10} m (about ${legMin(l)} min) ${a} ${b}</div>`}
         const p=d.p[l.pi];const r=R[p.r];const lab=r.t==="train"?lineAt(p.r,d.s[l.from]):r.t==="tram"?"G:link":r.n;const bd=r.t==="train"?lineBadge(lab):badge(p.r,lab);const pl=p.pl[l.bpos]>=0?(TT.cal.pl||[])[p.pl[l.bpos]]:"";
         return `<div class="cnl" data-leg="${oi},${li}">${bd}<div class="cnlt"><b>${clock(l.dep)}</b> ${nm(l.from)}${pl?` <span class="cnpl">${esc(pl)}</span>`:""} <span class="cnto">→ ${esc(cleanHead(TT.cal.hs[p.h]))}</span><br><b>${clock(l.arr)}</b> ${nm(l.to)} <span class="cnto">· ${l.apos-l.bpos} stop${l.apos-l.bpos>1?"s":""}</span>${li===o.legs.findIndex(x=>x.type==="ride")&&dayOff===0?`<span class="cnlive" id="cnLive${oi}"></span>`:""}</div></div>`}).join("")+`</div>`}).join("")+
@@ -1024,7 +1054,7 @@ function showWalking(oi){const {d,show}=PLAN.last;const o=show[oi];
     if(!pr){p.innerHTML=`<div class="sub">Elevation isn't available right now.</div>`;return}
     if(pr.rough)p.innerHTML=`<div class="odnote" style="margin-top:0">No Queensland LiDAR heights were available for this walk (it's outside the saved area and Queensland's elevation service couldn't be reached), so satellite heights were used. Those include buildings and trees, so the climb and steep stretches aren't shown. Steps are still marked.</div>`;
     else{st.innerHTML=`${r10(l.m)} m · about ${legMin(l)} min · ↗ ${Math.round(pr.up)} m · ↘ ${Math.round(pr.down)} m · <span class="wkl wkl-${pr.label.replace(" ","").toLowerCase()}">${pr.label}</span>`;p.innerHTML=profSVG(pr)}
-    f.innerHTML=(pr.forced?`<div class="odnote" style="margin-top:6px">No step-free way was found for this walk, so it uses steps.</div>`:"")+(pr.flags.some(x=>x.kind!=="indoor")?pr.flags.map(flagHTML).join(""):pr.flags.map(flagHTML).join("")+`<div class="wkok">${pr.rough?"No steps on this walk.":"No stretches steeper than an accessible ramp, and no steps."}</div>`)}))}
+    f.innerHTML=(pr.forced?`<div class="odnote" style="margin-top:6px">No step-free way was found for this walk, so it uses steps.</div>`:"")+(l.route.elev?`<div class="wklift">🛗 This walk uses a lift (mapped in OpenStreetMap). If it's out of service, the steps nearby may be the only other way.</div>`:"")+(pr.flags.some(x=>x.kind!=="indoor")?pr.flags.map(flagHTML).join(""):pr.flags.map(flagHTML).join("")+`<div class="wkok">${pr.rough?"No steps on this walk.":"No stretches steeper than an accessible ramp, and no steps."}</div>`)}))}
 var cnSnap=null;
 function cnLayers(on){if(on){if(cnSnap)return;cnSnap={};GROUPS.forEach(([g])=>{cnSnap[g]=chipState[g];if(g==="live")return;setGroup(g,false)});chipBox.classList.add("dim")}
   else if(cnSnap){GROUPS.forEach(([g])=>{if(g==="live")return;setGroup(g,cnSnap[g]!=="off")});cnSnap=null;chipBox.classList.remove("dim")}}

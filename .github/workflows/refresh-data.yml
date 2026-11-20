@@ -95,6 +95,10 @@ jobs:
         continue-on-error: true
         run: python tools/build_projects.py .
 
+      - name: Station accessibility (Queensland Rail) and lifts (OpenStreetMap) (keeps last copy if unavailable)
+        continue-on-error: true
+        run: python tools/build_access.py .
+
       - name: Queensland school holidays and public holidays, for measured travel times (keeps last list if unavailable)
         continue-on-error: true
         run: python tools/build_school_days.py .

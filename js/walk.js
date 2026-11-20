@@ -3,7 +3,7 @@
 // walkRoute([lon,lat],[lon,lat],{noSteps}) -> {m, coords, segs:[{m,name,steps}], steps} or null
 (function(){
 const Z=14,N=1<<Z,EXT=4096,W=N*EXT;
-let pm=null;const tileCache=new Map(),graphCache=new Map();
+let pm=null;const tileCache=new Map(),graphCache=new Map();let LIFTS=window.__LIFTS||[];
 const WALK_KIND={minor_road:1,major_road:1,path:1,other:1};
 const NO_DETAIL={busway:1,bus_stop:1,motorway:1,motorway_link:1,trunk_link:1,raceway:1};
 
@@ -75,6 +75,14 @@ async function graphFor(tiles){const key=tiles.map(t=>t.join("/")).sort().join("
   for(let n=0;n<X.length;n++){if(deg[n]!==1||adj[n].length!==1)continue;const own=adj[n][0][2];
     const h=near(X[n],Y[n],4,s=>s[2]!==own&&s[0]!==n&&s[1]!==n);if(!h)continue;
     for(const e of [h.s[0],h.s[1]]){const m=h.m+Math.hypot(X[e]-h.px,Y[e]-h.py)*mpg;const via=[h.px,h.py];adj[n].push([e,m,h.s[2],via]);adj[e].push([n,m,h.s[2],via])}}
+  // lifts (OpenStreetMap "highway=elevator", from data/access.json): a lift is a point, not a path, so it's joined to
+  // every walkable line within 15 m (the levels it serves), with 20 m added for waiting and riding. Walks that avoid
+  // steps can then use the lift at a footbridge or underpass; it shows as "lift" on the Walking card.
+  if(LIFTS.length){const xs=tiles.map(t=>t[0]),ys=tiles.map(t=>t[1]);const bx0=Math.min(...xs)*EXT,bx1=(Math.max(...xs)+1)*EXT,by0=Math.min(...ys)*EXT,by1=(Math.max(...ys)+1)*EXT;
+    const ie=info.length;info.push({g:[],name:"lift",steps:false,kind:"path",detail:"elevator",lift:false,elev:true});
+    for(const L of LIFTS){const [gx,gy]=toG(L);if(gx<bx0||gx>bx1||gy<by0||gy>by1)continue;
+      const hits=nearK(gx,gy,15,null,6);if(hits.length<2)continue;const n=X.length;X.push(gx);Y.push(gy);adj.push([]);deg.push(0);
+      for(const h of hits)for(const e of [h.s[0],h.s[1]]){const m=10+h.m+Math.hypot(X[e]-h.px,Y[e]-h.py)*mpg;const via=[h.px,h.py];adj[n].push([e,m,ie,via]);adj[e].push([n,m,ie,via])}}}
   const G={X,Y,adj,info,mpg,near,nearK};graphCache.set(key,G);if(graphCache.size>12)graphCache.delete(graphCache.keys().next().value);return G}
 
 // ---- A* between two points, each joined to the nearest walkable line
@@ -109,7 +117,7 @@ async function walkRoute(a,b,opt={}){
     let nm=inf.name;if(!nm&&!inf.steps){const mx=(XX(u)+XX(v))/2,my=(YY(u)+YY(v))/2,named=s=>info[s[2]].name&&info[s[2]].kind!=="path";
       const h=G.near(mx,my,15,named);if(h)nm=info[h.s[2]].name;else{const h2=G.near(mx,my,40,named);if(h2)nm="footpath near "+info[h2.s[2]].name}}
     if(!nm)nm=inf.kind==="path"?(inf.steps?"steps":inf.detail==="cycleway"?"bike path":"path"):"";const last=segs[segs.length-1];
-    if(last&&last.name===nm&&last.steps===!!inf.steps&&last.lift===!!inf.lift){last.m+=e[1];last.to=coords.length-1}else segs.push({m:e[1],name:nm,steps:!!inf.steps,lift:!!inf.lift,from:Math.max(0,coords.length-2),to:coords.length-1})}
+    if(last&&last.name===nm&&last.steps===!!inf.steps&&last.lift===!!inf.lift&&last.elev===!!inf.elev){last.m+=e[1];last.to=coords.length-1}else segs.push({m:e[1],name:nm,steps:!!inf.steps,lift:!!inf.lift,elev:!!inf.elev,from:Math.max(0,coords.length-2),to:coords.length-1})}
   if(tot>straight*4+300)return null;   // the street data doesn't join up here; better to fall back to a straight-line estimate
   // stretches through a building: the height data is bare ground, which isn't known under buildings
   const bl=(await Promise.all(tiles.map(([x,y])=>tile(x,y)))).flatMap(t=>t.bld||[]);const indoor=[];
@@ -122,8 +130,9 @@ async function walkRoute(a,b,opt={}){
         if(inside(g[0],g[1])){if(!run)run={a:cum+d,b:cum+d,gs:[]};run.b=cum+d;run.gs.push(g)}else if(run){if(run.b-run.a>=10)indoor.push(run);run=null}}cum+=L}
     if(run&&run.b-run.a>=10)indoor.push(run);
     for(const r of indoor){const mid=r.gs[r.gs.length>>1];const h=G.near(mid[0],mid[1],60,s=>info[s[2]].name&&info[s[2]].kind!=="path");r.near=h?info[h.s[2]].name:"";r.a=Math.max(0,r.a-ST/2);r.b+=ST/2;delete r.gs}}
-  return {m:tot,coords,segs,steps,forced,indoor}}
+  return {m:tot,coords,segs,steps,forced,indoor,elev:segs.some(g=>g.elev)}}
 window.walkRoute=walkRoute;
+window.walkSetLifts=l=>{LIFTS=l||[];graphCache.clear()};
 
 // ---- elevation along a walk. First choice: the Queensland Government's elevation service (QldDem: bare-earth
 // LiDAR, 1 m across urban SEQ, with buildings and trees removed). If that can't be reached: Amazon's open terrain
@@ -191,7 +200,7 @@ async function walkProfile(route){if(!route||!route.coords||route.coords.length<
   if(!e){src="qld";try{e=await qldHeights(lls)}catch(err){e=null}}
   if(!e){src="satellite";e=await srtmHeights(lls)}const rough=src==="satellite";
   // bridges, tunnels and underpasses: the terrain shows the ground or water beneath, so join their two ends in a straight line
-  for(const g of route.segs||[]){if(!g.lift)continue;const a=cum[g.from],b=cum[g.to];const ia=Math.max(0,Math.floor(a/L*(n-1))),ib=Math.min(n-1,Math.ceil(b/L*(n-1)));
+  for(const g of route.segs||[]){if(!g.lift&&!g.elev)continue;const a=cum[g.from],b=cum[g.to];const ia=Math.max(0,Math.floor(a/L*(n-1))),ib=Math.min(n-1,Math.ceil(b/L*(n-1)));
     for(let i=ia+1;i<ib;i++)e[i]=e[ia]+(e[ib]-e[ia])*(i-ia)/(ib-ia)}
   // through buildings: join the two ends in a straight line too, and don't measure a slope there
   const inBld=sv=>(route.indoor||[]).some(r=>sv>=r.a&&sv<=r.b);
