@@ -272,6 +272,7 @@ pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.s
   if(b.kind==="cn"){openPanel("Journey Search",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
   if(b.kind==="pj")return pjOverview();
   if(b.kind==="ccu")return showCatchups();
+  if(b.kind==="notes"){notesTidy();return showNotes()}
   if(b.kind==="rcard")return reopenCard(b);
   if(b.kind==="hmon"){rtaBack=null;HMF=b.f||HMF;return toggleHM(b.f)}
   if(b.kind==="rta")return showRTA();if(b.kind==="rtav")return rtaDetail(b.i);if(b.kind==="hm")return hmOverview();
@@ -1238,6 +1239,82 @@ async function showCatchups(){focusRoutes=null;backState=null;pBack.style.displa
   openPanel("Commuter Catch-Ups",`Queensland Rail · ${up.length} upcoming session${up.length===1?"":"s"}`,h,{view:"ccu"});
   pB.querySelectorAll("[data-ccu]").forEach(a=>a.onclick=e=>{e.preventDefault();openStop(a.dataset.ccu,true);setBack({kind:"ccu"})})}
 document.getElementById("ccuBtn").onclick=()=>showCatchups();
+// ---------- Notes (More ▾): kept only in this browser on this device (localStorage "seqmap_notes"); nothing is sent anywhere.
+// Export all as a .json backup (imports back exactly) or a .csv spreadsheet; copy all as text; each note can be
+// downloaded as .txt or copied. Import takes a .json backup (merged, newer edit wins) or a .txt file (one new note).
+const NOTES_KEY="seqmap_notes";
+function notesLoad(){try{const a=JSON.parse(localStorage.getItem(NOTES_KEY)||"[]");return Array.isArray(a)?a:[]}catch(e){return []}}
+function notesSave(a){try{localStorage.setItem(NOTES_KEY,JSON.stringify(a));return true}catch(e){return false}}
+const noteAuto=n=>{const w=(n.text||"").trim().split(/\s+/).filter(Boolean);return w.length?w.slice(0,6).join(" ")+(w.length>6?"…":""):"Empty note"};
+const noteTitle=n=>(n.title||"").trim()||noteAuto(n);
+const noteWhen=t=>new Date(t).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"});
+const noteId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const isApple=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+// saving a file: the share sheet on iPhone and iPad (Save to Files, AirDrop, Mail ...), a normal download elsewhere
+async function saveFile(name,mime,text){const blob=new Blob([text],{type:mime});
+  try{const f=new File([blob],name,{type:mime});if(isApple()&&navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});return}}catch(e){if(e&&e.name==="AbortError")return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand("copy")}catch(e2){}ta.remove();return ok}}
+function noteFlash(el,msg){if(!el)return;el.textContent=msg;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),2500)}
+const noteAsText=n=>((n.title||"").trim()?n.title.trim()+"\n\n":"")+(n.text||"");
+const fileSafe=s=>s.replace(/[\\/:*?"<>|…]+/g,"").replace(/\s+/g," ").trim().slice(0,60)||"note";
+let NQ="";
+function showNotes(msg){notesTidy();focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  const all=notesLoad();
+  openPanel("Notes",`${all.length} note${all.length===1?"":"s"} · saved on this device only`,
+    `<div class="ntop"><input id="nQ" class="ttf schq" placeholder="Search your notes" autocomplete="off" value="${esc(NQ)}"><button class="btn" id="nNew">+ New note</button></div><div id="nMsg" class="nmsg${msg?" show":""}">${esc(msg||"")}</div><div id="nList"></div>
+    <div class="nbar"><div class="more nexp" id="nExpWrap"><button class="btn" id="nExp" aria-haspopup="true">Export ▾</button><div class="moremenu" id="nExpMenu" role="menu"><button data-nexp="json" role="menuitem"><b>Backup file (.json)</b><span>Every note, to import back into the map later</span></button><button data-nexp="csv" role="menuitem"><b>Spreadsheet (.csv)</b><span>Every note as a row, opens in Excel or Numbers</span></button></div></div><button class="btn" id="nCopyAll">Copy all</button><button class="btn" id="nImp">Import</button><input type="file" id="nFile" accept=".json,.txt,application/json,text/plain" hidden></div>
+    <div class="odnote">Notes are saved in this browser on this device only. They aren't sent anywhere, don't sync to your other devices, and are lost if this browser's website data is cleared, so export a backup now and then. Anyone using this browser on this device can see them. Import adds a .json backup's notes to these (keeping the most recently edited copy of any note already here), or a .txt file as a new note.</div>`,{view:"notes"});
+  const q=document.getElementById("nQ");q.oninput=()=>{NQ=q.value;notesList()};
+  document.getElementById("nNew").onclick=()=>{const a=notesLoad(),n={id:noteId(),title:"",text:"",created:Date.now(),updated:Date.now()};a.push(n);notesSave(a);showNote(n.id,true)};
+  const w=document.getElementById("nExpWrap");document.getElementById("nExp").onclick=e=>{e.stopPropagation();w.classList.toggle("open")};
+  document.addEventListener("click",function cl(e){if(!document.getElementById("nExpWrap")){document.removeEventListener("click",cl);return}if(!w.contains(e.target))w.classList.remove("open")});
+  pB.querySelectorAll("[data-nexp]").forEach(b=>b.onclick=()=>{w.classList.remove("open");notesExport(b.dataset.nexp)});
+  document.getElementById("nCopyAll").onclick=async()=>{const a=notesLoad().sort((x,y)=>y.updated-x.updated);if(!a.length)return noteFlash(document.getElementById("nMsg"),"No notes to copy yet.");
+    const ok=await copyText(a.map(n=>`${noteTitle(n)}\n(last edited ${noteWhen(n.updated)})\n\n${n.text||""}`).join("\n\n————————\n\n"));noteFlash(document.getElementById("nMsg"),ok?`Copied ${a.length} note${a.length===1?"":"s"} as text.`:"Couldn't copy here; try Export instead.")};
+  const fi=document.getElementById("nFile");document.getElementById("nImp").onclick=()=>fi.click();fi.onchange=()=>{if(fi.files[0])notesImport(fi.files[0]);fi.value=""};
+  notesList()}
+function notesList(){const box=document.getElementById("nList");if(!box)return;const q=NQ.trim().toLowerCase();
+  const a=notesLoad().filter(n=>!q||(noteTitle(n)+" "+(n.text||"")).toLowerCase().includes(q)).sort((x,y)=>y.updated-x.updated);
+  box.innerHTML=a.length?a.map(n=>`<a href="#" class="nrow" data-note="${esc(n.id)}"><b>${esc(noteTitle(n))}</b><span>${esc(noteWhen(n.updated))}${(n.title||"").trim()&&n.text?" · "+esc(noteAuto(n)):""}</span></a>`).join(""):`<div class="sub">${notesLoad().length?"No notes match.":"No notes yet. Tap + New note to write one."}</div>`;
+  box.querySelectorAll("[data-note]").forEach(r=>r.onclick=e=>{e.preventDefault();showNote(r.dataset.note)})}
+function showNote(id,fresh){const n=notesLoad().find(x=>x.id===id);if(!n)return showNotes();
+  openPanel(noteTitle(n),`Last edited ${noteWhen(n.updated)}`,
+    `<div class="nrename" id="nRen" hidden><input id="nTitle" class="ttf" placeholder="${esc(noteAuto(n))}" value="${esc(n.title||"")}" autocomplete="off"><button class="btn" id="nTitleOk">Save</button><button class="btn" id="nTitleClr">Use first words</button></div>
+    <textarea id="nText" class="ntext" placeholder="Write your note…">${esc(n.text||"")}</textarea><div id="nMsg" class="nmsg"></div>
+    <div class="nbar"><button class="btn" id="nRename">Rename</button><button class="btn" id="nDl">Download</button><button class="btn" id="nCopy">Copy</button><button class="btn ndel" id="nDel">Delete</button></div>
+    <div class="ndelc" id="nDelC" hidden>Delete this note? This can't be undone. <button class="btn ndel" id="nDelYes">Delete</button><button class="btn" id="nDelNo">Cancel</button></div>
+    <div class="odnote">Saved as you type, on this device only. Download saves this note as a .txt file.</div>`,{view:"note"});
+  setBack({kind:"notes"});
+  const upd=f=>{const a=notesLoad(),x=a.find(y=>y.id===id);if(!x)return;f(x);x.updated=Date.now();notesSave(a);pT.textContent=noteTitle(x);pS.textContent="Last edited "+noteWhen(x.updated)};
+  const ta=document.getElementById("nText");let tm=null;ta.oninput=()=>upd(x=>x.text=ta.value);if(fresh)setTimeout(()=>ta.focus(),60);
+  const ren=document.getElementById("nRen"),ti=document.getElementById("nTitle");
+  document.getElementById("nRename").onclick=()=>{ren.hidden=!ren.hidden;if(!ren.hidden){ti.placeholder=noteAuto({text:ta.value});ti.focus()}};
+  document.getElementById("nTitleOk").onclick=()=>{upd(x=>x.title=ti.value.trim());ren.hidden=true};ti.onkeydown=e=>{if(e.key==="Enter")document.getElementById("nTitleOk").click()};
+  document.getElementById("nTitleClr").onclick=()=>{ti.value="";upd(x=>x.title="");ren.hidden=true};
+  const cur=()=>{clearTimeout(tm);upd(x=>x.text=ta.value);return notesLoad().find(y=>y.id===id)};
+  document.getElementById("nDl").onclick=()=>{const x=cur();saveFile(fileSafe(noteTitle(x))+".txt","text/plain;charset=utf-8",noteAsText(x))};
+  document.getElementById("nCopy").onclick=async()=>{const ok=await copyText(noteAsText(cur()));noteFlash(document.getElementById("nMsg"),ok?"Copied.":"Couldn't copy here; try Download instead.")};
+  const dc=document.getElementById("nDelC");document.getElementById("nDel").onclick=()=>{dc.hidden=false};document.getElementById("nDelNo").onclick=()=>{dc.hidden=true};
+  document.getElementById("nDelYes").onclick=()=>{clearTimeout(tm);notesSave(notesLoad().filter(x=>x.id!==id));showNotes("Note deleted.")}}
+// a note left completely empty is tidied away when you go back to the list
+function notesTidy(){const a=notesLoad();const b=a.filter(n=>(n.text||"").trim()||(n.title||"").trim());if(b.length!==a.length)notesSave(b)}
+function notesExport(kind){const a=notesLoad().sort((x,y)=>x.created-y.created);const day=new Date().toLocaleDateString("en-CA",{timeZone:"Australia/Brisbane"});
+  if(kind==="json")return saveFile(`seq-map-notes-${day}.json`,"application/json",JSON.stringify({app:"SEQ transport map notes",version:1,exported:new Date().toISOString(),notes:a},null,1));
+  const q=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`;const iso=t=>new Date(t).toLocaleString("en-AU",{timeZone:"Australia/Brisbane"});
+  saveFile(`seq-map-notes-${day}.csv`,"text/csv;charset=utf-8","﻿"+["Title,Text,Created,Last edited",...a.map(n=>[noteTitle(n),n.text||"",iso(n.created),iso(n.updated)].map(q).join(","))].join("\r\n"))}
+async function notesImport(file){let txt="";try{txt=await file.text()}catch(e){return showNotes("Couldn't read that file.")}
+  const a=notesLoad();let added=0,same=0,newer=0;
+  if(/\.json$/i.test(file.name)||/^\s*[\[{]/.test(txt)){let d;try{d=JSON.parse(txt)}catch(e){return showNotes("That file isn't a notes backup.")}
+    const list=Array.isArray(d)?d:d&&Array.isArray(d.notes)?d.notes:null;if(!list)return showNotes("That file isn't a notes backup.");
+    for(const m of list){if(!m||typeof m!=="object")continue;const n={id:String(m.id||noteId()),title:String(m.title||""),text:String(m.text||""),created:+m.created||Date.now(),updated:+m.updated||Date.now()};
+      const ex=a.find(x=>x.id===n.id);if(!ex){a.push(n);added++}else if(n.updated>ex.updated){Object.assign(ex,n);newer++}else same++}}
+  else{const stem=file.name.replace(/\.[^.]+$/,"").trim();const n={id:noteId(),title:"",text:txt.replace(/\r\n/g,"\n"),created:Date.now(),updated:Date.now()};
+    if(stem&&stem!==fileSafe(noteAuto(n))&&!/^seq-map-note/i.test(stem)){n.title=stem;const lines=n.text.split("\n");if(lines[0].trim()===stem){n.text=lines.slice(1).join("\n").replace(/^\n+/,"")}}
+    a.push(n);added++}
+  if(!notesSave(a))return showNotes("Couldn't save: this browser's storage is full or blocked.");
+  showNotes(`Added ${added} note${added===1?"":"s"}`+(newer?`, updated ${newer} with newer copies`:"")+(same?`, ${same} already here`:"")+".")}
+document.getElementById("notesBtn").onclick=()=>showNotes();
 // ---------- measured travel times (data/measured: recorded in the weekday peaks by .github/workflows/measure.yml,
 // rolling last four weeks; AM 6:30-9:30, PM 3:30-6:30, weekdays, no public holidays)
 let MI=null,MIp=null;const MC={};let mBand=null;
