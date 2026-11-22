@@ -1640,7 +1640,7 @@ function rbSetup(){if(map.getSource("rb-t"))return;const tf=[],bf=[],sf=[],nf=[]
   const lbl=(id,f,sz,ov)=>map.addLayer({id,type:"symbol",source:"rb-n",filter:f,layout:{"text-field":["get","l"],"text-font":FONT,"text-size":sz,"text-offset":[0.9,0],"text-anchor":"left","text-padding":1,"text-allow-overlap":ov,"text-ignore-placement":false},paint:{"text-color":"#374151","text-halo-color":"#ffffff","text-halo-width":2}});
   lbl("rb-stn-lbl",["==",["get","k"],0],["interpolate",["linear"],["zoom"],9,10.5,14,13],false);lbl("rb-end-lbl",["!=",["get","k"],0],["interpolate",["linear"],["zoom"],9,12,14,14],true);
   L.push("rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl");rbPaint();rbFilter();
-  map.on("mouseenter","rb-bus",()=>{map.getCanvas().style.cursor="pointer"});map.on("mouseleave","rb-bus",()=>{map.getCanvas().style.cursor=""})}
+  map.on("mouseenter","rb-bus",()=>{if(rbSel)map.getCanvas().style.cursor="pointer"});map.on("mouseleave","rb-bus",()=>{map.getCanvas().style.cursor=""})}
 function rbPaint(){if(!map.getLayer("rb-stn-lbl"))return;const d=theme!=="light";["rb-stn-lbl","rb-end-lbl"].forEach(id=>{map.setPaintProperty(id,"text-color",d?"#e5e7eb":"#374151");map.setPaintProperty(id,"text-halo-color",d?"#0b1220":"#ffffff")});map.setPaintProperty("rb-stop-lbl","text-halo-color",d?"#0b1220":"#ffffff")}
 const RB_LAYERS=["rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl"];
 function rbFilter(){if(!map.getLayer("rb-trk"))return;const f=["==",["get","c"],rbSel||"-"];
@@ -1674,15 +1674,18 @@ function rbCard(id,fit){const c=RB.closures.find(x=>x.id===id);if(!c)return rbOv
   let h=`<div class="rbtop"><span class="rbstat ${st.s}">${esc(rbWhen(c))}</span><button class="btn" id="rbClear" title="Back to all closures on the greyed-out map">✕ Clear selection</button></div>`;
   if(al.length)h+=`<details class="alerts pjal" open><summary>⚠ Translink alert${al.length>1?"s":""} about this closure</summary>`+al.slice(0,4).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information (Translink) ↗</a>`:""}</div>`).join("")+`</details>`;
   h+=`<div class="grp">When</div><ul class="rbdays">`+rbRuns(c).map(r=>`<li>${esc(r.txt)}</li>`).join("")+`</ul>`;
-  h+=`<div class="grp">Replacement buses</div><div class="badges">${c.routes.map(rbBadge).join("")}</div>`+c.routes.map(n=>{const r=RB.routes[n];if(!r)return "";const t=r.stops.filter(s=>/temporary/i.test(s[1])).length;return `<div class="odnm">${esc(n)}: ${r.stops.length} stops${t?`, ${t} temporary`:""}, ${r.trips} trips</div>`}).join("")+`<div class="pjhint">Arrows show which way the buses run. Tap a route for its timetable (‹ comes back here). Bus stops show on the map; temporary stops have a thicker ring.</div>`;
+  h+=`<div class="grp">Replacement buses</div><div class="badges">${c.routes.map(rbBadge).join("")}</div>`+c.routes.map(n=>{const r=RB.routes[n];if(!r)return "";const t=r.stops.filter(s=>/temporary/i.test(s[1])).length;return `<div class="odnm">${esc(n)}: ${r.stops.length} stops${t?`, ${t} temporary`:""}, ${r.trips} trips</div>`}).join("")+`<div class="pjhint">Arrows show which way the buses run. Tap a route here or its orange line on the map for its own card and timetable (‹ comes back here). Bus stops show on the map; temporary stops have a thicker ring.</div>`;
   h+=`<div class="grp">Stations on the closed stretch (${closed.length})</div><div class="rbst">${closed.map(s=>`<a href="#" data-rbst="${esc(s[0])}" class="${s[4]===1?"end":""}">${esc(s[1])}</a>`).join("")}</div>`;
   if(conn.length)h+=`<div class="grp">Buses also connect to</div><div class="rbst">${conn.map(s=>`<a href="#" data-rbst="${esc(s[0])}" class="conn">${esc(s[1])}</a>`).join("")}</div><div class="pjhint">Trains still run at these stations; change here between bus and train.</div>`;
   h+=`<div class="odnote">The grey dashed line is the closed stretch of track, worked out from where the replacement buses run; names in bold are where buses start and finish (trains on other lines may still stop there). From Translink's published timetable; unofficial, so check Translink's service updates before travelling. <a href="#" id="rbAll">‹ All closures</a></div>`;
   openPanel(c.title,"Rail replacement buses · "+esc(c.routes.join(", ")),h,{view:"rbv"});setBack({kind:"rb"});
   document.getElementById("rbAll").onclick=e=>{e.preventDefault();rbOverview()};document.getElementById("rbClear").onclick=()=>{rbOverview();const live=RB.closures.filter(c=>rbStatus(c).s!=="past");if(live.length)pjFit(live.flatMap(c=>c.track.flat()),12)};
-  pB.querySelectorAll("[data-rbr]").forEach(b=>b.onclick=()=>{const i=nameIdx[b.dataset.rbr];if(i==null)return;["rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl"].forEach(x=>map.setFilter(x,["==",["get","c"],"-"]));showRoute(i);setBack({kind:"rbc",id})});
+  pB.querySelectorAll("[data-rbr]").forEach(b=>b.onclick=()=>rbOpenRoute(b.dataset.rbr,id));
   pB.querySelectorAll("[data-rbst]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=c.stations.find(x=>x[0]===a.dataset.rbst);if(s){selPt([s[2],s[3]]);map.flyTo({center:[s[2],s[3]],zoom:Math.max(map.getZoom(),14),duration:600})}});
   if(fit)pjFit(rbAll(c),14)}
+// a replacement route's own card (from its badge or by tapping its line on the map); ‹ comes back to the closure
+function rbOpenRoute(n,cid){const i=nameIdx[n];if(i==null)return;rbPop.remove();["rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl"].forEach(x=>map.setFilter(x,["==",["get","c"],"-"]));showRoute(i);setBack({kind:"rbc",id:cid})}
+const rbPop=new maplibregl.Popup({closeButton:true,closeOnClick:true,offset:8,className:"rbpop"});
 async function toggleRB(keep){const btn=document.getElementById("rbBtn");
   if(rbOn){rbOn=false;rbSel=null;rbVis(false);rbLayers(false);btn.classList.remove("odon");if(view==="rb"||view==="rbv")closePanel();return}
   if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(gcOn)await toggleGC();if(hmOn)await toggleHM();
@@ -1690,6 +1693,12 @@ async function toggleRB(keep){const btn=document.getElementById("rbBtn");
   rbSetup();rbOn=true;rbVis(true);rbLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   if(keep)return;rbOverview();const live=RB.closures.filter(c=>rbStatus(c).s!=="past");if(live.length)pjFit(live.flatMap(c=>c.track.flat()),12)}
 document.getElementById("rbBtn").onclick=()=>toggleRB();
+map.on("click",e=>{if(!rbOn||!rbSel||view!=="rbv")return;const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];
+  const ns=[...new Set(map.queryRenderedFeatures(box,{layers:["rb-bus","rb-arr","rb-bus-lbl"]}).map(f=>f.properties.r))].sort();if(!ns.length)return;const cid=rbSel;
+  if(ns.length===1)return rbOpenRoute(ns[0],cid);
+  // more than one route here: pick one
+  const d=document.createElement("div");d.innerHTML=`<div class="rbpt">Which route?</div>`+ns.map(n=>`<button class="rb rbr" data-pk="${esc(n)}" style="background:${RBC};color:#fff">${esc(n)}</button>`).join("");
+  d.querySelectorAll("[data-pk]").forEach(b=>b.onclick=()=>rbOpenRoute(b.dataset.pk,cid));rbPop.setLngLat(e.lngLat).setDOMContent(d).addTo(map)});
 map.on("click",e=>{if(!rbOn||rbSel)return;const box=[[e.point.x-6,e.point.y-6],[e.point.x+6,e.point.y+6]];const f=map.queryRenderedFeatures(box,{layers:["rb-all"]});if(f.length)rbCard(f[0].properties.c,true)});
 document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
