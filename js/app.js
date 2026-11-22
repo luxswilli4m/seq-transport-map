@@ -1637,17 +1637,25 @@ function rbSetup(){if(map.getSource("rb-t"))return;const tf=[],bf=[],sf=[],nf=[]
   map.addLayer({id:"rb-stop",type:"circle",source:"rb-s",minzoom:11,paint:{"circle-radius":["interpolate",["linear"],["zoom"],11,2.5,15,5.5],"circle-color":"#ffffff","circle-stroke-color":RBC,"circle-stroke-width":["case",["==",["get","tmp"],1],2.6,1.6]}},below);
   map.addLayer({id:"rb-stop-lbl",type:"symbol",source:"rb-s",minzoom:14.5,layout:{"text-field":["case",["==",["get","tmp"],1],["concat",["get","n"]," (temporary)"],["get","n"]],"text-font":FONT,"text-size":10.5,"text-offset":[0,1],"text-anchor":"top","text-optional":true},paint:{"text-color":RBC,"text-halo-color":"#ffffff","text-halo-width":1.6}},below);
   map.addLayer({id:"rb-stn",type:"circle",source:"rb-n",paint:{"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","k"],0],3,4.5],14,["case",["==",["get","k"],0],5.5,7.5]],"circle-color":["case",["==",["get","k"],2],"#ffffff","#6b7280"],"circle-stroke-color":["case",["==",["get","k"],2],RBC,"#ffffff"],"circle-stroke-width":2}},below);
+  // overview: the stations of every closure on now or coming up (ends named at any zoom, the rest from zoom 11)
+  map.addSource("rb-na",{type:"geojson",data:FC([])});
+  map.addLayer({id:"rb-na-dot",type:"circle",source:"rb-na",paint:{"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","e"],1],3.5,2],14,["case",["==",["get","e"],1],6,4.5]],"circle-color":"#6b7280","circle-stroke-color":"#ffffff","circle-stroke-width":1.5}});
+  map.addLayer({id:"rb-na-end",type:"symbol",source:"rb-na",filter:["==",["get","e"],1],layout:{"text-field":["get","n"],"text-font":FONT,"text-size":["interpolate",["linear"],["zoom"],8,11,14,13.5],"text-offset":[0.8,0],"text-anchor":"left","text-padding":2,"symbol-sort-key":["get","o"]},paint:{"text-color":"#1f2937","text-halo-color":"#ffffff","text-halo-width":2}});
+  map.addLayer({id:"rb-na-lbl",type:"symbol",source:"rb-na",minzoom:11,filter:["==",["get","e"],0],layout:{"text-field":["get","n"],"text-font":FONT,"text-size":11.5,"text-offset":[0.8,0],"text-anchor":"left","text-padding":1},paint:{"text-color":"#374151","text-halo-color":"#ffffff","text-halo-width":2}});
   const lbl=(id,f,sz,ov)=>map.addLayer({id,type:"symbol",source:"rb-n",filter:f,layout:{"text-field":["get","l"],"text-font":FONT,"text-size":sz,"text-offset":[0.9,0],"text-anchor":"left","text-padding":1,"text-allow-overlap":ov,"text-ignore-placement":false},paint:{"text-color":"#374151","text-halo-color":"#ffffff","text-halo-width":2}});
   lbl("rb-stn-lbl",["==",["get","k"],0],["interpolate",["linear"],["zoom"],9,10.5,14,13],false);lbl("rb-end-lbl",["!=",["get","k"],0],["interpolate",["linear"],["zoom"],9,12,14,14],true);
-  L.push("rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl");rbPaint();rbFilter();
+  L.push("rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl","rb-na-dot","rb-na-end","rb-na-lbl");rbPaint();rbFilter();
   map.on("mouseenter","rb-bus",()=>{if(rbSel)map.getCanvas().style.cursor="pointer"});map.on("mouseleave","rb-bus",()=>{map.getCanvas().style.cursor=""})}
-function rbPaint(){if(!map.getLayer("rb-stn-lbl"))return;const d=theme!=="light";["rb-stn-lbl","rb-end-lbl"].forEach(id=>{map.setPaintProperty(id,"text-color",d?"#e5e7eb":"#374151");map.setPaintProperty(id,"text-halo-color",d?"#0b1220":"#ffffff")});map.setPaintProperty("rb-stop-lbl","text-halo-color",d?"#0b1220":"#ffffff")}
-const RB_LAYERS=["rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl"];
+function rbPaint(){if(!map.getLayer("rb-stn-lbl"))return;const d=theme!=="light";["rb-stn-lbl","rb-end-lbl","rb-na-end","rb-na-lbl"].forEach(id=>{map.setPaintProperty(id,"text-color",d?"#e5e7eb":"#374151");map.setPaintProperty(id,"text-halo-color",d?"#0b1220":"#ffffff")});map.setPaintProperty("rb-stop-lbl","text-halo-color",d?"#0b1220":"#ffffff")}
+const RB_LAYERS=["rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl","rb-na-dot","rb-na-end","rb-na-lbl"];
 function rbFilter(){if(!map.getLayer("rb-trk"))return;const f=["==",["get","c"],rbSel||"-"];
   ["rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn"].forEach(id=>map.setFilter(id,f));
   map.setFilter("rb-stn-lbl",["all",f,["==",["get","k"],0]]);map.setFilter("rb-end-lbl",["all",f,["!=",["get","k"],0]]);
   // overview: the closed track of closures on now or coming up, lightly
-  const live=RB.closures.filter(c=>rbStatus(c).s!=="past").map(c=>c.id);map.setFilter("rb-all",rbSel?["==",["get","c"],"-"]:["in",["get","c"],["literal",live]])}
+  const lc=RB.closures.filter(c=>rbStatus(c).s!=="past"),live=lc.map(c=>c.id);map.setFilter("rb-all",rbSel?["==",["get","c"],"-"]:["in",["get","c"],["literal",live]]);
+  const M=new Map();if(!rbSel)for(const c of lc)for(const s of c.stations){if(s[4]===2)continue;const x=M.get(s[0])||{n:s[1],ll:[s[2],s[3]],e:0};if(s[4]===1)x.e=1;M.set(s[0],x)}
+  // busy inner-city ends give way to outer ends when zoomed out (sort key: further from the city first)
+  map.getSource("rb-na").setData(FC([...M.values()].map(x=>({type:"Feature",properties:{n:x.n,e:x.e,o:-Math.hypot(x.ll[0]-153.026,x.ll[1]+27.466)},geometry:{type:"Point",coordinates:x.ll}}))))}
 function rbVis(v){RB_LAYERS.forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",v?"visible":"none"))}
 function rbLayers(on){["plat-fill","plat-line","plat-dot","plat-num"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",on?"none":"visible"));
   if(on){rbSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{rbSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
