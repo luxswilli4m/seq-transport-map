@@ -47,7 +47,18 @@ jobs:
         run: |
           rm -rf gtfs gtfs.zip
           # the "checked" time changes every run; only commit when the closures themselves changed
-          if git diff --quiet -- data/railbus-days.json && python3 -c "import json,subprocess,sys;a=json.loads(subprocess.check_output(['git','show','HEAD:data/railbus.json']));b=json.load(open('data/railbus.json'));a.pop('built');b.pop('built');a.pop('feed_from',0);b.pop('feed_from',0);sys.exit(0 if a==b else 1)"; then
+          same() { python3 - "$1" <<'PY'
+          import json, subprocess, sys
+          f = sys.argv[1]
+          try: a = json.loads(subprocess.check_output(["git", "show", "HEAD:" + f]))
+          except Exception: sys.exit(1)
+          b = json.load(open(f))
+          for x in (a, b):
+              x.pop("built", None); x.pop("feed_from", None)
+          sys.exit(0 if a == b else 1)
+          PY
+          }
+          if same data/railbus.json && same data/railbus-days.json; then
             git checkout -- data; echo "changed=no" >> "$GITHUB_OUTPUT"; echo "No changes."
           else
             git config user.name "github-actions[bot]"
