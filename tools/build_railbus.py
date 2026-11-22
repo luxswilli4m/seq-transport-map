@@ -114,7 +114,7 @@ edge_geo = {}
 def track(a, b):
     key = tuple(sorted((a, b)))
     if key in edge_geo: return edge_geo[key]
-    sq = next(iter(edges.get((a, b)) or edges.get((b, a))))
+    sq = min(edges.get((a, b)) or edges.get((b, a)))   # fixed choice, so daily runs give identical files
     cs = SH.get(pat[sq])
     g = None
     if cs and len(cs) > 1:
@@ -127,7 +127,7 @@ def track(a, b):
 
 def nearest_station(sid, limit=0.7):
     ll = (float(S.at[sid, "stop_lon"]), float(S.at[sid, "stop_lat"]))
-    best = min(stations, key=lambda x: km(SLL[x], ll))
+    best = min(sorted(stations), key=lambda x: km(SLL[x], ll))
     return best if km(SLL[best], ll) <= limit else None
 
 def hm(x):
