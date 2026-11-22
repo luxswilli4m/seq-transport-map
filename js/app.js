@@ -1602,7 +1602,7 @@ function rbWhen(c){const st=rbStatus(c);if(st.s==="now")return "On now, buses un
 async function rbIndex(){if(RBI)return RBI;try{RBI=await (await fetch(BASE+"data/railbus-days.json"+DV)).json()}catch(e){RBI={closures:[]}}return RBI}
 function rbColour(){const b=document.getElementById("rbBtn");if(!b||!RBI)return;const ss=RBI.closures.map(rbStatus);const now=ss.some(x=>x.s==="now"),soon=ss.some(x=>x.s==="soon");
   b.classList.toggle("rbnow",now);b.classList.toggle("rbsoon",!now&&soon);
-  const sp=b.querySelector("span");if(sp)sp.textContent=now?"Trains replaced by buses now":soon?"Planned train closures coming up":"Planned train closures (none listed)"}
+  const sp=b.querySelector("span");if(sp)sp.textContent=now?"Planned track closure in effect":soon?"Planned track closure coming up":"No planned track closures listed"}
 rbIndex().then(rbColour);setInterval(rbColour,6e4);
 // station cards: a note when buses replace trains there in the next 7 days
 function rbStationHTML(id){if(!RBI)return "";const ids=new Set([id,parentOf[id]].filter(Boolean));const now=Date.now(),wk=now+7*864e5;
