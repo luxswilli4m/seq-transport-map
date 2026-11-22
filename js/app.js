@@ -1409,7 +1409,7 @@ function mPaths(){const M=MM,ks=mKindsOn(),out=[];const months=Object.keys(M.mon
   else if(MF.per==="range")months.filter(m=>m>=MF.m1&&m<=MF.m2).forEach(addM);
   else if(MF.per==="days")Object.entries(M.days).forEach(([d,k])=>{if(d>=MF.d1&&d<=MF.d2&&MF.k[k])out.push("day/"+d)});
   return out}
-async function mData(){await mMeta();const paths=mPaths(),key=paths.join("|")+"#"+(MM.built||"");if(mData.c&&mData.c.key===key)return mData.c.r;
+async function mData(){await mMeta();const paths=mPaths(),key=paths.join("|")+"#"+(MM.built||"")+"#"+mPerLabel()+"#"+mKindsLabel();if(mData.c&&mData.c.key===key)return mData.c.r;
   const ps=(await Promise.all(paths.map(mGet))).filter(Boolean);const P=ps.length===1?ps[0]:mCombine(ps);const v=[];
   for(const [k,dd] of Object.entries(P))for(const [d,bb] of Object.entries(dd))for(const [band,x] of Object.entries(bb)){const segs=Object.values(x.seg);const n=segs.reduce((a,q)=>a+q[2],0)||1;const e=x.e2e[0];
     v.push([k,d,band,((MM.hs||{})[k]||{})[d]||"",x.trips,segs.reduce((a,q)=>a+(q[0]-q[1])*q[2],0)/n,e?e[2]:null,e?e[3]:null])}
@@ -1421,7 +1421,7 @@ function mFiltHTML(){const M=MM,months=Object.keys(M.months).sort().reverse(),cu
     (months.length?o("range","Range of months…"):"")+(Object.keys(M.days).length?o("days","Specific days…"):"")+`</select>`;
   if(MF.per==="range"){const mo=sel=>months.slice().reverse().map(m=>`<option value="${m}"${sel===m?" selected":""}>${esc(mMonName(m))}</option>`).join("");h+=`<span class="mfx"><select id="mM1" class="mfsel">${mo(MF.m1)}</select> to <select id="mM2" class="mfsel">${mo(MF.m2)}</select></span>`}
   if(MF.per==="days"){const ds=Object.keys(M.days).sort(),a=ds[0]||"",b=ds[ds.length-1]||"";h+=`<span class="mfx"><input type="date" id="mD1" class="mfsel" min="${a}" max="${b}" value="${MF.d1||""}"> to <input type="date" id="mD2" class="mfsel" min="${a}" max="${b}" value="${MF.d2||""}"></span>`}
-  h+=`<details class="mdd" id="mKinds"${mFiltHTML.open?" open":""}><summary>${esc(mKindsLabel())} ▾</summary><div class="mddb">${MK.map(([k,t])=>`<label><input type="checkbox" data-mk="${k}"${MF.k[k]?" checked":""}> ${t}</label>`).join("")}<div class="odnm">Weekdays (both kinds) are the usual choice; weekends and public holidays have quieter traffic and fewer services.</div></div></details></div>`;
+  h+=`<details class="mdd" id="mKinds"${mFiltHTML.open?" open":""}><summary>${esc(mKindsLabel())} ▾</summary><div class="mddb"><label class="mkall"><input type="checkbox" data-mkall${MK.every(([k])=>MF.k[k])?" checked":""}> <b>Every day</b></label>${MK.map(([k,t])=>`<label><input type="checkbox" data-mk="${k}"${MF.k[k]?" checked":""}> ${t}</label>`).join("")}<div class="odnm">Every day ticks all four; untick it to go back to weekdays. Weekdays (both kinds) are the usual choice; weekends and public holidays have quieter traffic and fewer services.</div></div></details></div>`;
   if(MF.per==="days")h+=`<div class="odnm mfcap">Up to ${MDAYCAP} days; pick months for longer periods.</div>`;
   return h}
 function mWireFilt(onChange){const go=()=>{mFiltHTML.open=!!(document.getElementById("mKinds")||{}).open;onChange()};const months=Object.keys(MM.months).sort(),ds=Object.keys(MM.days).sort();
@@ -1434,6 +1434,7 @@ function mWireFilt(onChange){const go=()=>{mFiltHTML.open=!!(document.getElement
   const d1=document.getElementById("mD1"),d2=document.getElementById("mD2");
   if(d1)d1.onchange=d2.onchange=e=>{let a=d1.value||MF.d1,b=d2.value||MF.d2;if(a>b)[a,b]=[b,a];
     if(mAddDays(a,MDAYCAP-1)<b){if(e.target===d1)b=mAddDays(a,MDAYCAP-1);else a=mAddDays(b,-(MDAYCAP-1))}MF.d1=a;MF.d2=b;go()};
+  const all=document.querySelector("#mKinds [data-mkall]");if(all)all.onchange=()=>{MK.forEach(([k])=>MF.k[k]=all.checked?1:(k==="t"||k==="s"?1:0));mFiltHTML.open=true;onChange()};
   document.querySelectorAll("#mKinds [data-mk]").forEach(c=>c.onchange=()=>{MF.k[c.dataset.mk]=c.checked?1:0;if(!mKindsOn().length){MF.k[c.dataset.mk]=1;c.checked=true;return}mFiltHTML.open=true;onChange()})}
 
 // ---------- "Real time average" tab

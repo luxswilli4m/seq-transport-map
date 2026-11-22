@@ -539,3 +539,4 @@ body.phone .ntext{min-height:40vh;font-size:16px}
 .nmsg{font-size:13px;color:#15803d;min-height:0;opacity:0;transition:opacity .2s}.nmsg.show{opacity:1;min-height:18px}body:not(.light) .nmsg{color:#86efac}
 #pTitle{overflow-wrap:anywhere;min-width:0}
 .nrow{min-width:0}
+.mddb .mkall{border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:2px}
