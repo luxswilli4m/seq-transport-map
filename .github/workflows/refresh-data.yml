@@ -44,6 +44,10 @@ jobs:
           python tools/build_timetables.py gtfs .
           python tools/build_planner.py gtfs .
 
+      - name: Rail replacement buses (planned closures; also rebuilt every morning by railbus.yml)
+        continue-on-error: true
+        run: python tools/build_railbus.py gtfs .
+
       - name: Rebuild bus zones and busways (with safety check)
         run: |
           python tools/build_zones.py gtfs . ${{ inputs.force_zones && '--force' || '' }}

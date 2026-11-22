@@ -189,7 +189,7 @@ document.getElementById("themeBtn").onclick=()=>{
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
   const keep=new Set(L); map.getStyle().layers.map(l=>l.id).filter(id=>!keep.has(id)).forEach(id=>map.removeLayer(id));
   map.setSprite(BASE+"assets/sprites/v4/"+THEME[theme].sprite);
-  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();if(typeof hmPaint==="function")hmPaint();if(typeof pjPaint==="function"){pjPaint("crr");pjPaint("wave")}
+  baseLayers(theme).forEach(l=>map.addLayer(l,FIRST_OVERLAY)); applyThemePaint(); if(typeof odPaint==="function")odPaint();if(typeof gcPaint==="function")gcPaint();if(typeof hmPaint==="function")hmPaint();if(typeof pjPaint==="function"){pjPaint("crr");pjPaint("wave")}if(typeof rbPaint==="function")rbPaint();
 };
 
 // ---------- layer toggles
@@ -235,7 +235,7 @@ function lineBadge(nm){return `<span class="rb" data-line="${esc(nm)}" style="ba
 const panel=document.getElementById("panel"),pT=document.getElementById("pTitle"),pS=document.getElementById("pSub"),pB=document.getElementById("pBody"),pBack=document.getElementById("pBack");
 let ctx=null;      // current stop context {id, web}
 let backState=null;// set when a route is opened from a stop card
-const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv","hm","hmv"]);   // map-layer cards that shrink instead of closing
+const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv","hm","hmv","rb","rbv"]);   // map-layer cards that shrink instead of closing
 const PHONE_MQ="(max-width:640px), (max-height:500px) and (pointer:coarse)";
 function isPhone(){return matchMedia(PHONE_MQ).matches}
 function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view)&&!isPhone(),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
@@ -265,12 +265,12 @@ function closePanel(){panel.classList.remove("mini");if(typeof cnLayers==="funct
 const pCloseBtn=document.getElementById("pClose"),pCloseTxt=pCloseBtn.textContent,pCloseLbl=pCloseBtn.getAttribute("aria-label")||"Close";
 function setMini(on){if(isPhone())return phMini(on);panel.classList.toggle("mini",on);pCloseBtn.textContent=on?"+":"–";pCloseBtn.setAttribute("aria-label",on?"Expand":"Minimise");pCloseBtn.title=on?"Expand":"Minimise"}
 pCloseBtn.onclick=()=>{if(isPhone()){   // phones: ✕ always closes; a map mode (On demand, projects, vendors, heat map) switches off too
-    if((view==="od"||view==="odv")&&odOn)return toggleOD();if((view==="pj"||view==="pjv")&&pjOn)return togglePJ(pjOn);if((view==="gc"||view==="gcv")&&gcOn)return toggleGC();if((view==="hm"||view==="hmv")&&hmOn)return toggleHM();return closePanel()}
+    if((view==="od"||view==="odv")&&odOn)return toggleOD();if((view==="pj"||view==="pjv")&&pjOn)return togglePJ(pjOn);if((view==="gc"||view==="gcv")&&gcOn)return toggleGC();if((view==="hm"||view==="hmv")&&hmOn)return toggleHM();if((view==="rb"||view==="rbv")&&rbOn)return toggleRB();return closePanel()}
   if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
 panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
   if(b.kind==="cn"){openPanel("Journey Search",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
-  if(b.kind==="pj")return pjOverview();
+  if(b.kind==="pj")return pjOverview();if(b.kind==="rb")return rbOverview();if(b.kind==="rbc"){if(!rbOn)return toggleRB(true).then(()=>rbCard(b.id,true));return rbCard(b.id,true)}
   if(b.kind==="ccu")return showCatchups();
   if(b.kind==="notes"){notesTidy();return showNotes()}
   if(b.kind==="rcard")return reopenCard(b);
@@ -345,12 +345,13 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
   let h="";
   if(near.length)h+=`<div class="grp" style="margin-top:2px">Nearby stations</div><div class="nearrow">`+near.slice(0,25).map(([d,oid,o])=>`<div class="nearchip" data-near="${oid}"><b>${esc(shortName(o[0]))}</b><span>${KIND[o[3]]} · ${Math.round(d/10)*10} m</span></div>`).join("")+`</div>`;
   const modeBtns=modes.length>1?`<div class="modeseg">${modes.map(m=>`<button data-mode="${m}" class="${m===mode?"on":""}">${MODE_LBL[m]}</button>`).join("")}</div>`:"";
-  const locB=locBtns(id);h+=accHTML(id);
+  const locB=locBtns(id);h+=(typeof rbStationHTML==="function"?rbStationHTML(id):"")+accHTML(id);
   if(s[5].length){h+=`<div class="webrow"><button class="btn${web?" on":""}" id="webBtn">${web?"Hide all routes":"Show all routes"}</button>${locB}${modeBtns}`+(s[5].length>8?`<input id="ttFilter" class="ttf" placeholder="Filter routes" autocomplete="off">`:"")+`</div>`;
     h+=`<div id="ttBox" class="tt"><div class="sub">Loading timetable…</div></div>`}
   else h+=(locB?`<div class="webrow">${locB}</div>`:"")+`<div class="sub">No scheduled services in this timetable.</div>`;
   let sub=KIND[s[3]];if(s[3]==="busway"&&BWS[id])sub+=" · "+BWS[id].b.map(k=>BWNAME[k]).join(" / ")+(BWS[id].road?" (on-road section)":"");if(s[4])sub+=" · "+esc(s[4]);
   openPanel(s[0],sub,h,{star:{list:"stops",key:id}});
+  if(typeof rbWireNotes==="function")rbWireNotes();
   const wb=document.getElementById("webBtn");if(wb)wb.onclick=()=>{if(!ctx.web){webCam={center:map.getCenter(),zoom:map.getZoom()};openStop(id,false,true,true)}else{const c=webCam;webCam=null;openStop(id,false,false,true);if(c)map.flyTo({...c,duration:650})}};
   const tf=document.getElementById("ttFilter");if(tf)tf.oninput=()=>renderTT(id);
   const pc=document.getElementById("pCn");pc.style.display="";pc.onclick=()=>{const b={id,web:!!ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};showConnections(id);setBack(b)};
@@ -806,7 +807,7 @@ function odCard(ai,gi,fit){const a=OD.areas[ai];let h=odNotes(a.notes)+`<div cla
   openPanel(a.name,sub,h+odLink(a)+`<div class="odnote"><a href="#" id="odAll">‹ All on-demand areas</a></div>`,{view:"odv"});setBack({kind:"od"});odWire();document.getElementById("odAll").onclick=e=>{e.preventDefault();odOverview()}}
 async function toggleOD(){const btn=document.getElementById("odBtn");
   if(odOn){odOn=false;odVis(false);odLayers(false);btn.classList.remove("odon");if(view==="od"||view==="odv")closePanel();return}
-  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof pjOn!=="undefined"&&pjOn)await togglePJ(pjOn);if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();
+  if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof pjOn!=="undefined"&&pjOn)await togglePJ(pjOn);if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();if(typeof rbOn!=="undefined"&&rbOn)await toggleRB();
   if(!OD){try{OD=await (await fetch(BASE+"data/ondemand.json"+DV)).json()}catch(e){openPanel("On-demand services","",`<div class="sub">On-demand areas unavailable.</div>`);return}}
   odSetup();odOn=true;odVis(true);odLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   odOverview();odFit(odGroups().flatMap(x=>x.g.zones))}
@@ -879,7 +880,7 @@ function pjAlertsChanged(){try{if(!pjOn||!PJ||view!=="pj")return}catch(e){return
 async function togglePJ(k){const btn=document.getElementById(PJ_BTN[k]);
   if(pjOn===k){pjOn=null;pjVis(k,false);pjLayers(false);btn.classList.remove("odon");if(view==="pj"||view==="pjv")closePanel();return}
   if(pjOn){const o=pjOn;pjOn=null;pjVis(o,false);document.getElementById(PJ_BTN[o]).classList.remove("odon");pjLayers(false)}
-  if(odOn)await toggleOD();if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();
+  if(odOn)await toggleOD();if(typeof gcOn!=="undefined"&&gcOn)await toggleGC();if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();if(typeof rbOn!=="undefined"&&rbOn)await toggleRB();
   if(!PJ){try{PJ=await (await fetch(BASE+"data/projects.json"+DV)).json()}catch(e){openPanel("Project information","",`<div class="sub">Project information is unavailable right now.</div>`);return}}
   if(!PJ[k]){openPanel("Project information","",`<div class="sub">This project's information isn't available yet.</div>`);return}
   pjSetup(k);pjOn=k;pjVis(k,true);pjLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
@@ -1197,7 +1198,7 @@ function gcCard(i,fly){const r=GC.r[i];const cs=gcCaps(r[6]);
   document.getElementById("gcAll").onclick=e=>{e.preventDefault();gcOverview()}}
 async function toggleGC(){const btn=document.getElementById("gcBtn");
   if(gcOn){gcOn=false;gcVis(false);gcLayers(false);btn.classList.remove("gcon");if(view==="gc"||view==="gcv")closePanel();return}
-  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();
+  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(typeof hmOn!=="undefined"&&hmOn)await toggleHM();if(typeof rbOn!=="undefined"&&rbOn)await toggleRB();
   if(!GC){try{GC=await (await fetch(BASE+"data/retailers.json"+DV)).json()}catch(e){openPanel("go card vendors","",`<div class="sub">Vendor locations unavailable. See translink.com.au or call 13 12 30.</div>`);return}}
   gcSetup();gcApply();gcOn=true;gcVis(true);gcLayers(true);btn.classList.add("gcon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   gcOverview()}
@@ -1571,7 +1572,7 @@ function hmCard(i,fit){const r=HM.s[i];const nm=id=>ST[id]?ST[id][0]:id;
   const c=dec(r[2]);selPt(c[Math.floor(c.length/2)]);if(fit)pjFit(c,16)}
 async function toggleHM(f){const btn=document.getElementById("hmBtn");
   if(hmOn){hmOn=false;hmVis(false);hmLayers(false);btn.classList.remove("odon");if(view==="hm"||view==="hmv")closePanel();return}
-  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(gcOn)await toggleGC();
+  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(gcOn)await toggleGC();if(typeof rbOn!=="undefined"&&rbOn)await toggleRB();
   await mMeta();if(!HMG)HMG=(await mGet("heatgeo"))||{};hmBuild(await mData());
   if(f&&HM_K[f])HMF=f;
   hmSetup();hmOn=true;hmVis(true);hmPaint();hmLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
@@ -1579,6 +1580,105 @@ async function toggleHM(f){const btn=document.getElementById("hmBtn");
 document.getElementById("hmBtn").onclick=()=>toggleHM();
 map.on("click",e=>{if(!hmOn)return;const box=[[e.point.x-5,e.point.y-5],[e.point.x+5,e.point.y+5]];
   const f=map.queryRenderedFeatures(box,{layers:["hm-line"]});if(!f.length)return;f.sort((a,b)=>(b.properties[HM_K[HMF]]||0)-(a.properties[HM_K[HMF]]||0));hmCard(+f[0].properties.i,false)});
+// ---------- Rail replacement buses (More ▾): planned train closures from Translink's timetable feed (data/railbus.json,
+// rebuilt daily by .github/workflows/railbus.yml). The menu item turns orange while a closure is on and light blue when one
+// is coming up; the card lists them, and each closure greys out the closed track, names its stations and draws the buses.
+let RBI=null,RB=null,rbOn=false,rbSel=null,rbSnap=null;const RBC="#ea580c";
+const rbYmd=d=>d.replace(/-/g,"");
+const rbWin=(d,w)=>{const t0=Date.parse(d+"T00:00:00+10:00");return [t0+w[0]*6e4,t0+w[1]*6e4]};
+// 'now' = buses running (from 15 min before the first bus to the last arrival); 'soon' = still to come
+function rbStatus(c){const now=Date.now();let soon=null;for(const [d,w] of Object.entries(c.days)){const [a,b]=rbWin(d,w);if(now>=a-9e5&&now<=b)return {s:"now",a,b};if(a>now&&(!soon||a<soon.a))soon={s:"soon",a,b}}return soon||{s:"past"}}
+const rbT=ms=>new Date(ms).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"}).replace(/\s?([ap])\.?m\.?/i,(m,x)=>" "+x.toLowerCase()+"m");
+const rbD=(d,o)=>new Date(d+"T12:00:00+10:00").toLocaleDateString("en-AU",Object.assign({weekday:"short",day:"numeric",month:"short",timeZone:"Australia/Brisbane"},o||{}));
+const rbHM=m=>{m=((m%1440)+1440)%1440;const h=Math.floor(m/60),mm=m%60;return (h%12||12)+(mm?":"+String(mm).padStart(2,"0"):"")+(h<12?" am":" pm")};
+// days in runs of consecutive dates with the same hours: "Mon 23 – Thu 26 Nov · 7:39 pm – 1:15 am"
+function rbRuns(c){const ds=Object.keys(c.days).sort(),out=[];let cur=null;
+  for(const d of ds){const w=c.days[d],k=w.join("-");if(cur&&cur.k===k&&Date.parse(d)-Date.parse(cur.to)===864e5)cur.to=d;else{cur={from:d,to:d,k,w};out.push(cur)}}
+  return out.map(r=>({...r,txt:(r.from===r.to?rbD(r.from):rbD(r.from,{month:undefined})+" – "+rbD(r.to))+" · "+rbHM(r.w[0])+" – "+rbHM(r.w[1])+(r.w[1]>=1440?" (next day)":"")}))}
+function rbWhen(c){const st=rbStatus(c);if(st.s==="now")return "On now, buses until "+rbT(st.b);if(st.s!=="soon")return "Finished";
+  const n=bneNow(),d=new Date(st.a).toLocaleDateString("en-CA",{timeZone:"Australia/Brisbane"}).replace(/-/g,""),days=Math.round((Date.parse(d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6)+"T00:00:00+10:00")-Date.parse(n.ymd.slice(0,4)+"-"+n.ymd.slice(4,6)+"-"+n.ymd.slice(6)+"T00:00:00+10:00"))/864e5);
+  const at=new Date(st.a).getUTCHours()+10>=18||new Date(st.a).getUTCHours()+10<4?"night":"day";
+  return days===0?(at==="night"?"Tonight from ":"Today from ")+rbT(st.a):days===1?(at==="night"?"Tomorrow night from ":"Tomorrow from ")+rbT(st.a):"Starts "+new Date(st.a).toLocaleDateString("en-AU",{weekday:"short",day:"numeric",month:"short",timeZone:"Australia/Brisbane"})}
+async function rbIndex(){if(RBI)return RBI;try{RBI=await (await fetch(BASE+"data/railbus-days.json"+DV)).json()}catch(e){RBI={closures:[]}}return RBI}
+function rbColour(){const b=document.getElementById("rbBtn");if(!b||!RBI)return;const ss=RBI.closures.map(rbStatus);const now=ss.some(x=>x.s==="now"),soon=ss.some(x=>x.s==="soon");
+  b.classList.toggle("rbnow",now);b.classList.toggle("rbsoon",!now&&soon);
+  const sp=b.querySelector("span");if(sp)sp.textContent=now?"Trains replaced by buses now":soon?"Planned train closures coming up":"Planned train closures (none listed)"}
+rbIndex().then(rbColour);setInterval(rbColour,6e4);
+// station cards: a note when buses replace trains there in the next 7 days
+function rbStationHTML(id){if(!RBI)return "";const ids=new Set([id,parentOf[id]].filter(Boolean));const now=Date.now(),wk=now+7*864e5;
+  const L=RBI.closures.map(c=>{const k=Object.keys(c.st).find(x=>ids.has(x));if(k==null)return null;const st=rbStatus(c);if(st.s==="past"||(st.s==="soon"&&st.a>wk))return null;return {c,k:c.st[k],st}}).filter(Boolean);
+  if(!L.length)return "";
+  return L.map(({c,k,st})=>`<a href="#" class="rbnote ${st.s==="now"?"now":""}" data-rbopen="${esc(c.id)}">🚌 <b>${k===2?"Rail buses connect here":k===1?"Rail buses run from here":"Buses replace trains here"}</b> · ${esc(rbWhen(c))} · ${esc(c.title)} (${esc(c.routes.join(", "))}) ›</a>`).join("")}
+function rbWireNotes(){pB.querySelectorAll("[data-rbopen]").forEach(a=>a.onclick=async e=>{e.preventDefault();const id=a.dataset.rbopen;if(!rbOn)await toggleRB(true);rbCard(id,true)})}
+// map layers
+function rbSetup(){if(map.getSource("rb-t"))return;const tf=[],bf=[],sf=[],nf=[];
+  for(const c of RB.closures){c.track.forEach(cs=>tf.push({type:"Feature",properties:{c:c.id},geometry:{type:"LineString",coordinates:cs}}));
+    c.stations.forEach(s=>nf.push({type:"Feature",properties:{c:c.id,n:s[1],k:s[4],l:s[4]===2?s[1]+" (buses connect)":s[1]},geometry:{type:"Point",coordinates:[s[2],s[3]]}}));
+    for(const n of c.routes){const r=RB.routes[n];if(!r)continue;r.shapes.forEach(cs=>bf.push({type:"Feature",properties:{c:c.id,r:n},geometry:{type:"LineString",coordinates:cs}}));
+      r.stops.forEach(s=>sf.push({type:"Feature",properties:{c:c.id,n:s[1].replace(/\s*\(temporary\)/i,""),tmp:/temporary/i.test(s[1])?1:0},geometry:{type:"Point",coordinates:[s[2],s[3]]}}))}}
+  map.addSource("rb-t",{type:"geojson",data:FC(tf)});map.addSource("rb-b",{type:"geojson",data:FC(bf)});map.addSource("rb-s",{type:"geojson",data:FC(sf)});map.addSource("rb-n",{type:"geojson",data:FC(nf)});
+  const below="sel";
+  map.addLayer({id:"rb-all",type:"line",source:"rb-t",layout:{"line-cap":"round"},paint:{"line-color":"#6b7280","line-width":["interpolate",["linear"],["zoom"],9,3.5,14,6],"line-opacity":.8,"line-dasharray":[2,1.2]}},below);
+  map.addLayer({id:"rb-trk-c",type:"line",source:"rb-t",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#4b5563","line-width":["interpolate",["linear"],["zoom"],9,6,14,11],"line-opacity":.35}},below);
+  map.addLayer({id:"rb-trk",type:"line",source:"rb-t",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#9ca3af","line-width":["interpolate",["linear"],["zoom"],9,3.5,14,7],"line-dasharray":[2,1.2]}},below);
+  map.addLayer({id:"rb-bus",type:"line",source:"rb-b",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":RBC,"line-width":["interpolate",["linear"],["zoom"],9,2.2,14,4.5],"line-opacity":.9}},below);
+  map.addLayer({id:"rb-bus-lbl",type:"symbol",source:"rb-b",minzoom:11,layout:{"symbol-placement":"line","symbol-spacing":260,"text-field":["get","r"],"text-font":FONT,"text-size":11,"text-keep-upright":true},paint:{"text-color":"#ffffff","text-halo-color":RBC,"text-halo-width":2.2}},below);
+  map.addLayer({id:"rb-stop",type:"circle",source:"rb-s",minzoom:11,paint:{"circle-radius":["interpolate",["linear"],["zoom"],11,2.5,15,5.5],"circle-color":"#ffffff","circle-stroke-color":RBC,"circle-stroke-width":["case",["==",["get","tmp"],1],2.6,1.6]}},below);
+  map.addLayer({id:"rb-stop-lbl",type:"symbol",source:"rb-s",minzoom:14.5,layout:{"text-field":["case",["==",["get","tmp"],1],["concat",["get","n"]," (temporary)"],["get","n"]],"text-font":FONT,"text-size":10.5,"text-offset":[0,1],"text-anchor":"top","text-optional":true},paint:{"text-color":RBC,"text-halo-color":"#ffffff","text-halo-width":1.6}},below);
+  map.addLayer({id:"rb-stn",type:"circle",source:"rb-n",paint:{"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","k"],0],3,4.5],14,["case",["==",["get","k"],0],5.5,7.5]],"circle-color":["case",["==",["get","k"],2],"#ffffff","#6b7280"],"circle-stroke-color":["case",["==",["get","k"],2],RBC,"#ffffff"],"circle-stroke-width":2}},below);
+  const lbl=(id,f,sz,ov)=>map.addLayer({id,type:"symbol",source:"rb-n",filter:f,layout:{"text-field":["get","l"],"text-font":FONT,"text-size":sz,"text-offset":[0.9,0],"text-anchor":"left","text-padding":1,"text-allow-overlap":ov,"text-ignore-placement":false},paint:{"text-color":"#374151","text-halo-color":"#ffffff","text-halo-width":2}});
+  lbl("rb-stn-lbl",["==",["get","k"],0],["interpolate",["linear"],["zoom"],9,10.5,14,13],false);lbl("rb-end-lbl",["!=",["get","k"],0],["interpolate",["linear"],["zoom"],9,12,14,14],true);
+  L.push("rb-all","rb-trk-c","rb-trk","rb-bus","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl");rbPaint();rbFilter();
+  map.on("mouseenter","rb-bus",()=>{map.getCanvas().style.cursor="pointer"});map.on("mouseleave","rb-bus",()=>{map.getCanvas().style.cursor=""})}
+function rbPaint(){if(!map.getLayer("rb-stn-lbl"))return;const d=theme!=="light";["rb-stn-lbl","rb-end-lbl"].forEach(id=>{map.setPaintProperty(id,"text-color",d?"#e5e7eb":"#374151");map.setPaintProperty(id,"text-halo-color",d?"#0b1220":"#ffffff")});map.setPaintProperty("rb-stop-lbl","text-halo-color",d?"#0b1220":"#ffffff")}
+const RB_LAYERS=["rb-all","rb-trk-c","rb-trk","rb-bus","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl"];
+function rbFilter(){if(!map.getLayer("rb-trk"))return;const f=["==",["get","c"],rbSel||"-"];
+  ["rb-trk-c","rb-trk","rb-bus","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn"].forEach(id=>map.setFilter(id,f));
+  map.setFilter("rb-stn-lbl",["all",f,["==",["get","k"],0]]);map.setFilter("rb-end-lbl",["all",f,["!=",["get","k"],0]]);
+  // overview: the closed track of closures on now or coming up, lightly
+  const live=RB.closures.filter(c=>rbStatus(c).s!=="past").map(c=>c.id);map.setFilter("rb-all",rbSel?["==",["get","c"],"-"]:["in",["get","c"],["literal",live]])}
+function rbVis(v){RB_LAYERS.forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",v?"visible":"none"))}
+function rbLayers(on){["plat-fill","plat-line","plat-dot","plat-num"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",on?"none":"visible"));
+  if(on){rbSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{rbSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
+  else if(rbSnap){Object.entries(rbSnap).forEach(([g,v])=>{const st=v==="only"?"on":v;chipState[g]=st;if(g==="live")syncVehVis();else setGroup(g,st!=="off");renderChip(g)});rbSnap=null}
+  renderAll();hint()}
+const rbAll=c=>[...c.track.flat(),...c.routes.flatMap(n=>(RB.routes[n]||{shapes:[]}).shapes.flat())];
+function rbBadge(n){const i=nameIdx[n];return `<span class="rb rbr" data-rbr="${esc(n)}" style="background:${RBC};color:#fff" title="Open ${esc(n)}'s timetable">${esc(n)}</span>`}
+// alerts today that talk about this closure (rail buses, or works between its end stations)
+function rbAlerts(c){const ends=c.stations.filter(s=>s[4]===1).map(s=>s[1]);const nm=new RegExp("\\b("+ends.map(x=>x.replace(/[^\w ]/g,"")).join("|")+")\\b","i");
+  return todaysAlerts().filter(a=>{const t=(a.header||"")+" "+(a.desc||"");return /rail (replacement )?bus|buses replace|replacement bus/i.test(t)&&nm.test(t)})}
+function rbOverview(){rbSel=null;rbFilter();const L=RB.closures.map(c=>({c,st:rbStatus(c)})).filter(x=>x.st.s!=="past");
+  const now=L.filter(x=>x.st.s==="now"),soon=L.filter(x=>x.st.s==="soon").sort((a,b)=>a.st.a-b.st.a);
+  const row=({c,st})=>`<a href="#" class="rbrow ${st.s}" data-rbc="${esc(c.id)}"><span class="rbsq"></span><span class="rbtx"><b>${esc(c.title)}</b><span>${esc(rbWhen(c))}${Object.keys(c.days).length>1?" · "+esc(rbD(Object.keys(c.days)[0],{weekday:undefined}))+" to "+esc(rbD(Object.keys(c.days).slice(-1)[0],{weekday:undefined}))+", "+Object.keys(c.days).length+" days":""}</span><span class="rbrs">${c.routes.map(esc).join(" · ")}</span></span></a>`;
+  let h=`<div class="rbleg"><span><i class="rbsq now"></i> On now</span><span><i class="rbsq soon"></i> Coming up</span></div>`;
+  h+=now.length?`<div class="grp">On now</div>`+now.map(row).join(""):"";
+  h+=soon.length?`<div class="grp">Coming up</div>`+soon.map(row).join(""):"";
+  if(!L.length)h+=`<div class="sub">No planned train closures in Translink's timetable right now.</div>`;
+  h+=`<div class="odnote">Planned rail replacement buses from Translink's published timetable, about four weeks ahead, checked every morning. Tap a closure to see the closed track (grey, with its stations named) and the buses that replace it (orange), with their stops. Unplanned disruptions are in ⚠ Alerts. Unofficial; check Translink's service updates before travelling.${RB.built?" Checked "+esc(new Date(RB.built).toLocaleString("en-AU",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"}))+".":""}</div>`;
+  openPanel("Rail replacement buses",`${now.length?now.length+" on now · ":""}${soon.length} coming up`,h,{view:"rb"});backState=null;pBack.style.display="none";
+  pB.querySelectorAll("[data-rbc]").forEach(a=>a.onclick=e=>{e.preventDefault();rbCard(a.dataset.rbc,true)})}
+function rbCard(id,fit){const c=RB.closures.find(x=>x.id===id);if(!c)return rbOverview();rbSel=id;rbFilter();const st=rbStatus(c);
+  const closed=c.stations.filter(s=>s[4]!==2),conn=c.stations.filter(s=>s[4]===2),al=st.s==="now"?rbAlerts(c):[];
+  let h=`<div class="rbstat ${st.s}">${esc(rbWhen(c))}</div>`;
+  if(al.length)h+=`<details class="alerts pjal" open><summary>⚠ Translink alert${al.length>1?"s":""} about this closure</summary>`+al.slice(0,4).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information (Translink) ↗</a>`:""}</div>`).join("")+`</details>`;
+  h+=`<div class="grp">When</div><ul class="rbdays">`+rbRuns(c).map(r=>`<li>${esc(r.txt)}</li>`).join("")+`</ul>`;
+  h+=`<div class="grp">Replacement buses</div><div class="badges">${c.routes.map(rbBadge).join("")}</div>`+c.routes.map(n=>{const r=RB.routes[n];if(!r)return "";const t=r.stops.filter(s=>/temporary/i.test(s[1])).length;return `<div class="odnm">${esc(n)}: ${r.stops.length} stops${t?`, ${t} temporary`:""}, ${r.trips} trips</div>`}).join("")+`<div class="pjhint">Tap a route for its timetable. Bus stops show on the map; temporary stops have a thicker ring.</div>`;
+  h+=`<div class="grp">Stations on the closed stretch (${closed.length})</div><div class="rbst">${closed.map(s=>`<a href="#" data-rbst="${esc(s[0])}" class="${s[4]===1?"end":""}">${esc(s[1])}</a>`).join("")}</div>`;
+  if(conn.length)h+=`<div class="grp">Buses also connect to</div><div class="rbst">${conn.map(s=>`<a href="#" data-rbst="${esc(s[0])}" class="conn">${esc(s[1])}</a>`).join("")}</div><div class="pjhint">Trains still run at these stations; change here between bus and train.</div>`;
+  h+=`<div class="odnote">The grey dashed line is the closed stretch of track, worked out from where the replacement buses run; names in bold are where buses start and finish (trains on other lines may still stop there). From Translink's published timetable; unofficial, so check Translink's service updates before travelling. <a href="#" id="rbAll">‹ All closures</a></div>`;
+  openPanel(c.title,"Rail replacement buses · "+esc(c.routes.join(", ")),h,{view:"rbv"});setBack({kind:"rb"});
+  document.getElementById("rbAll").onclick=e=>{e.preventDefault();rbOverview()};
+  pB.querySelectorAll("[data-rbr]").forEach(b=>b.onclick=()=>{const i=nameIdx[b.dataset.rbr];if(i==null)return;showRoute(i);setBack({kind:"rbc",id})});
+  pB.querySelectorAll("[data-rbst]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=c.stations.find(x=>x[0]===a.dataset.rbst);if(s){selPt([s[2],s[3]]);map.flyTo({center:[s[2],s[3]],zoom:Math.max(map.getZoom(),14),duration:600})}});
+  if(fit)pjFit(rbAll(c),14)}
+async function toggleRB(keep){const btn=document.getElementById("rbBtn");
+  if(rbOn){rbOn=false;rbSel=null;rbVis(false);rbLayers(false);btn.classList.remove("odon");if(view==="rb"||view==="rbv")closePanel();return}
+  if(odOn)await toggleOD();if(pjOn)await togglePJ(pjOn);if(gcOn)await toggleGC();if(hmOn)await toggleHM();
+  if(!RB){try{RB=await (await fetch(BASE+"data/railbus.json"+DV)).json()}catch(e){openPanel("Rail replacement buses","",`<div class="sub">Rail replacement information is unavailable right now.</div>`);return}}
+  rbSetup();rbOn=true;rbVis(true);rbLayers(true);btn.classList.add("odon");focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
+  if(keep)return;rbOverview();const live=RB.closures.filter(c=>rbStatus(c).s!=="past");if(live.length)pjFit(live.flatMap(c=>c.track.flat()),12)}
+document.getElementById("rbBtn").onclick=()=>toggleRB();
+map.on("click",e=>{if(!rbOn||rbSel)return;const box=[[e.point.x-6,e.point.y-6],[e.point.x+6,e.point.y+6]];const f=map.queryRenderedFeatures(box,{layers:["rb-all"]});if(f.length)rbCard(f[0].properties.c,true)});
 document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
@@ -1736,7 +1836,7 @@ window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAler
   document.getElementById("moreMenu").addEventListener("click",()=>set(false));
   document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)});
-  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn"),hm=document.getElementById("hmBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw,hm].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw,hm].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
+  const od=document.getElementById("odBtn"),gc=document.getElementById("gcBtn"),pc=document.getElementById("crrBtn"),pw=document.getElementById("waveBtn"),hm=document.getElementById("hmBtn"),rbb=document.getElementById("rbBtn");const mo=()=>b.classList.toggle("on",[od,gc,pc,pw,hm,rbb].some(x=>x.classList.contains("odon")||x.classList.contains("gcon")));[od,gc,pc,pw,hm,rbb].forEach(x=>new MutationObserver(mo).observe(x,{attributes:true,attributeFilter:["class"]}));
   b.title="More: Translink journey planner, on demand, go card vendors, Cross River Rail, The Wave, real time average, delay heat map, school routes, lost property, commuter catch-ups, feedback"})();
 
 

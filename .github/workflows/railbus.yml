@@ -1,0 +1,65 @@
+name: Rail replacement buses
+
+# Every morning at 4:07 am Brisbane time (18:07 UTC), and on demand from the Actions tab.
+# Rebuilds data/railbus.json and data/railbus-days.json from Translink's SEQ GTFS (planned rail replacement
+# buses, about four weeks ahead), so closures Translink adds mid-week show up the next morning.
+# The weekly "Refresh Translink data" run rebuilds them too. Keeps the previous files if the feed can't be read.
+on:
+  schedule:
+    - cron: "7 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: railbus
+  cancel-in-progress: false
+
+jobs:
+  railbus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install pandas shapely
+
+      - name: Download Translink SEQ GTFS
+        run: |
+          curl -fsSL --retry 3 -o gtfs.zip https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip
+          unzip -q gtfs.zip -d gtfs
+
+      - name: Rebuild rail replacement buses
+        run: python tools/build_railbus.py gtfs .
+
+      - name: Commit if anything changed
+        id: commit
+        run: |
+          rm -rf gtfs gtfs.zip
+          # the "checked" time changes every run; only commit when the closures themselves changed
+          if git diff --quiet -- data/railbus-days.json && python3 -c "import json,subprocess,sys;a=json.loads(subprocess.check_output(['git','show','HEAD:data/railbus.json']));b=json.load(open('data/railbus.json'));a.pop('built');b.pop('built');a.pop('feed_from',0);b.pop('feed_from',0);sys.exit(0 if a==b else 1)"; then
+            git checkout -- data; echo "changed=no" >> "$GITHUB_OUTPUT"; echo "No changes."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            python tools/stamp.py
+            git add data/railbus.json data/railbus-days.json index.html
+            git commit -m "Rail replacement buses: daily update"
+            git pull --rebase && git push
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: railbus
+    if: needs.railbus.outputs.changed == 'yes'
+    uses: ./.github/workflows/pages.yml
