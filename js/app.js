@@ -1246,7 +1246,7 @@ const NOTES_KEY="seqmap_notes";
 function notesLoad(){try{const a=JSON.parse(localStorage.getItem(NOTES_KEY)||"[]");return Array.isArray(a)?a:[]}catch(e){return []}}
 function notesSave(a){try{localStorage.setItem(NOTES_KEY,JSON.stringify(a));return true}catch(e){return false}}
 const NT_MAX=25;const ntCut=t=>{t=(t||"").replace(/\s+/g," ").trim();return t.length>NT_MAX?t.slice(0,NT_MAX).trimEnd()+"…":t};
-const noteAuto=n=>ntCut(n.text)||"Empty note";
+const noteAuto=n=>ntCut(n.text)||ntCut(((Array.isArray(n.c)?n.c:[]).find(c=>(c.name||"").trim())||{}).name)||"Empty note";
 const noteTitle=n=>ntCut(n.title)||noteAuto(n);
 const noteWhen=t=>new Date(t).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"});
 const noteId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -1257,7 +1257,12 @@ async function saveFile(name,mime,text){const blob=new Blob([text],{type:mime});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
 async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand("copy")}catch(e2){}ta.remove();return ok}}
 function noteFlash(el,msg){if(!el)return;el.textContent=msg;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),2500)}
-const noteAsText=n=>((n.title||"").trim()?n.title.trim()+"\n\n":"")+(n.text||"");
+// counters: each note starts with one (nameable, anything worth counting); more can be added
+const CT_MAX=40,CT_TOP=99999;
+const noteCtrs=n=>Array.isArray(n.c)?n.c:[{id:"c0",name:"",v:0}];
+const ctrUsed=n=>noteCtrs(n).filter(c=>(c.name||"").trim()||c.v);
+const ctrLine=c=>`${(c.name||"").trim()||"Counter"}: ${c.v||0}`;
+const noteAsText=n=>{const cs=ctrUsed(n);return ((n.title||"").trim()?n.title.trim()+"\n\n":"")+(n.text||"")+(cs.length?((n.text||"").trim()?"\n\n":"")+cs.map(ctrLine).join("\n"):"")};
 const fileSafe=s=>s.replace(/[\\/:*?"<>|…]+/g,"").replace(/\s+/g," ").trim().slice(0,60)||"note";
 let NQ="";
 // the Export ▾ menu floats over the page (so the card's edges never cut it off): below the button, or above when there's no room
@@ -1272,8 +1277,8 @@ function noteMenu(btn,items){const old=document.getElementById("nFloat");if(old)
   m.querySelectorAll("button").forEach(b=>b.onclick=()=>{close();items[+b.dataset.i][2]()})}
 const nCloseMenu=()=>{const m=document.getElementById("nFloat");if(m)m._close()};
 // the red "are you sure" box: takes the place of the buttons it belongs to until Delete or Cancel
-function noteConfirm(hideEl,afterEl,text,yes){const c=document.createElement("div");c.className="ndelc";
-  c.innerHTML=`<span>${esc(text)}</span><button class="btn ndel">Delete</button><button class="btn">Cancel</button>`;
+function noteConfirm(hideEl,afterEl,text,yes,word){const c=document.createElement("div");c.className="ndelc";
+  c.innerHTML=`<span>${esc(text)}</span><button class="btn ndel">${esc(word||"Delete")}</button><button class="btn">Cancel</button>`;
   hideEl.style.display="none";afterEl.after(c);const [d,n]=c.querySelectorAll("button");n.onclick=()=>{c.remove();hideEl.style.display=""};d.onclick=yes;n.focus()}
 function showNotes(msg){notesTidy();nCloseMenu();focusRoutes=null;backState=null;pBack.style.display="none";ctx=null;clearHL();setSel(null);webCam=null;
   const all=notesLoad();
@@ -1293,38 +1298,54 @@ function showNotes(msg){notesTidy();nCloseMenu();focusRoutes=null;backState=null
   notesList()}
 function notesList(){const box=document.getElementById("nList");if(!box)return;const q=NQ.trim().toLowerCase();
   const a=notesLoad().filter(n=>!q||(noteTitle(n)+" "+(n.text||"")).toLowerCase().includes(q)).sort((x,y)=>y.updated-x.updated);
-  box.innerHTML=a.length?a.map(n=>`<div class="nrw"><a href="#" class="nrow" data-note="${esc(n.id)}"><b>${esc(noteTitle(n))}</b><span>${esc(noteWhen(n.updated))}${(n.title||"").trim()&&n.text?" · "+esc(noteAuto(n)):""}</span></a><button class="nbin" data-bin="${esc(n.id)}" title="Delete this note" aria-label="Delete ${esc(noteTitle(n))}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button></div>`).join(""):`<div class="sub">${notesLoad().length?"No notes match.":"No notes yet. Tap + New note to write one."}</div>`;
+  box.innerHTML=a.length?a.map(n=>`<div class="nrw"><a href="#" class="nrow" data-note="${esc(n.id)}"><b>${esc(noteTitle(n))}</b><span>${esc(noteWhen(n.updated))}${(n.title||"").trim()&&n.text?" · "+esc(noteAuto(n)):""}</span>${ctrUsed(n).length?`<span class="nrc">${ctrUsed(n).map(c=>`<i>${esc((c.name||"").trim()||"Counter")} <b>${c.v||0}</b></i>`).join("")}</span>`:""}</a><button class="nbin" data-bin="${esc(n.id)}" title="Delete this note" aria-label="Delete ${esc(noteTitle(n))}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button></div>`).join(""):`<div class="sub">${notesLoad().length?"No notes match.":"No notes yet. Tap + New note to write one."}</div>`;
   box.querySelectorAll("[data-note]").forEach(r=>r.onclick=e=>{e.preventDefault();showNote(r.dataset.note)});
   box.querySelectorAll("[data-bin]").forEach(b=>b.onclick=()=>{const row=b.parentElement,id=b.dataset.bin;box.querySelectorAll(".ndelc").forEach(c=>c.querySelector("button+button").click());
     noteConfirm(row,row,`Delete “${noteTitle(notesLoad().find(x=>x.id===id)||{})}”? This can't be undone.`,()=>{notesSave(notesLoad().filter(x=>x.id!==id));showNotes("Note deleted.")})})}
 function showNote(id,fresh){nCloseMenu();const n=notesLoad().find(x=>x.id===id);if(!n)return showNotes();
   openPanel(noteTitle(n),`Last edited ${noteWhen(n.updated)}`,
     `<input id="nTitle" class="ttf ntitle" maxlength="25" placeholder="Title: ${esc(noteAuto(n))}" value="${esc(n.title||"")}" autocomplete="off" aria-label="Title (leave empty to use the first words)">
-    <textarea id="nText" class="ntext" placeholder="Write your note…">${esc(n.text||"")}</textarea><div id="nMsg" class="nmsg"></div>
+    <textarea id="nText" class="ntext" placeholder="Write your note…">${esc(n.text||"")}</textarea><div class="nctl">Counters</div><div id="nCtrs"></div><button class="btn nctadd" id="nCtAdd">+ Add counter</button><div id="nMsg" class="nmsg"></div>
     <div class="nbar" id="nBar"><button class="btn" id="nExp1" aria-haspopup="true">Export ▾</button><button class="btn" id="nCopy">Copy</button><button class="btn ndel" id="nDel">Delete</button></div>
-    <div class="odnote">Saved as you type, on this device only. The title is the note's first few words unless you type your own in the top box.</div>`,{view:"note"});
+    <div class="odnote">Saved as you type, on this device only. The title is the note's first 25 characters unless you type your own in the top box. Name a counter for anything you want to count, then use − and + or type a number in.</div>`,{view:"note"});
   setBack({kind:"notes"});
   const upd=f=>{const a=notesLoad(),x=a.find(y=>y.id===id);if(!x)return;f(x);x.updated=Date.now();notesSave(a);pT.textContent=noteTitle(x);pS.textContent="Last edited "+noteWhen(x.updated)};
   const ta=document.getElementById("nText"),ti=document.getElementById("nTitle");
   ta.oninput=()=>{upd(x=>x.text=ta.value);ti.placeholder="Title: "+noteAuto({text:ta.value})};ti.oninput=()=>upd(x=>x.title=ti.value.slice(0,NT_MAX).trim());
   ti.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();ta.focus()}};if(fresh)setTimeout(()=>ta.focus(),60);
   const cur=()=>notesLoad().find(y=>y.id===id);
+  // counters
+  const cbox=document.getElementById("nCtrs");const setC=f=>upd(x=>{const c=noteCtrs(x).map(q=>({...q}));f(c);x.c=c});
+  const ctrRender=()=>{const cs=noteCtrs(cur()||{});
+    cbox.innerHTML=cs.length?cs.map(c=>`<div class="nct" data-ct="${esc(c.id)}"><input class="ttf nctn" maxlength="${CT_MAX}" placeholder="Name it, e.g. Services running late" value="${esc(c.name||"")}" aria-label="Counter name"><div class="nctb"><button class="nctpm" data-pm="-1" aria-label="Take one off">−</button><input class="nctv" type="text" inputmode="numeric" pattern="[0-9]*" value="${c.v||0}" aria-label="Count"><button class="nctpm" data-pm="1" aria-label="Add one">+</button><button class="btn nctr" data-rs title="Reset to 0">Reset</button><button class="nbin" data-cbin title="Remove this counter" aria-label="Remove this counter"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></button></div></div>`).join(""):`<div class="sub">No counters. Tap + Add counter to start one.</div>`;
+    cbox.querySelectorAll(".nct").forEach(row=>{const cid=row.dataset.ct,nm=row.querySelector(".nctn"),vv=row.querySelector(".nctv");const lab=()=>(nm.value||"").trim()||"this counter";
+      const put=v=>{v=Math.max(0,Math.min(CT_TOP,v|0));vv.value=v;setC(c=>{const q=c.find(z=>z.id===cid);if(q)q.v=v})};
+      nm.oninput=()=>setC(c=>{const q=c.find(z=>z.id===cid);if(q)q.name=nm.value.slice(0,CT_MAX)});nm.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();nm.blur()}};
+      row.querySelectorAll("[data-pm]").forEach(b=>b.onclick=()=>put((parseInt(vv.value,10)||0)+ +b.dataset.pm));
+      vv.oninput=()=>{const d=vv.value.replace(/\D/g,"").slice(0,5);if(d!==vv.value)vv.value=d;if(d!=="")put(parseInt(d,10))};vv.onblur=()=>{if(vv.value==="")put(0)};
+      vv.onfocus=()=>vv.select();vv.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();vv.blur()}};
+      const bx=row.querySelector(".nctb");
+      row.querySelector("[data-rs]").onclick=()=>noteConfirm(bx,bx,`Reset ${lab()} to 0?`,()=>{put(0);row.querySelector(".ndelc").remove();bx.style.display=""},"Reset");
+      row.querySelector("[data-cbin]").onclick=()=>noteConfirm(bx,bx,`Remove ${lab()}? This can't be undone.`,()=>{setC(c=>c.splice(c.findIndex(z=>z.id===cid),1));ctrRender()},"Remove")});};
+  ctrRender();
+  document.getElementById("nCtAdd").onclick=()=>{const nid="c"+noteId();setC(c=>c.push({id:nid,name:"",v:0}));ctrRender();const r=cbox.querySelector(`[data-ct="${nid}"] .nctn`);if(r)r.focus()};
   const ex=document.getElementById("nExp1");ex.onclick=e=>{e.stopPropagation();
     noteMenu(ex,[["Backup file (.json)","This note, to import back into the map later",()=>notesExport("json",[cur()])],["Spreadsheet (.csv)","This note as a row, opens in Excel or Numbers",()=>notesExport("csv",[cur()])]])};
   document.getElementById("nCopy").onclick=async()=>{const ok=await copyText(noteAsText(cur()));noteFlash(document.getElementById("nMsg"),ok?"Copied.":"Couldn't copy here; try Export instead.")};
   document.getElementById("nDel").onclick=()=>{nCloseMenu();const bar=document.getElementById("nBar");noteConfirm(bar,bar,"Delete this note? This can't be undone.",()=>{notesSave(notesLoad().filter(x=>x.id!==id));showNotes("Note deleted.")})}}
 // a note left completely empty is tidied away when you go back to the list
-function notesTidy(){const a=notesLoad();const b=a.filter(n=>(n.text||"").trim()||(n.title||"").trim());if(b.length!==a.length)notesSave(b)}
+function notesTidy(){const a=notesLoad();const b=a.filter(n=>(n.text||"").trim()||(n.title||"").trim()||ctrUsed(n).length);if(b.length!==a.length)notesSave(b)}
 function notesExport(kind,list){const one=!!list;const a=(list||notesLoad()).filter(Boolean).sort((x,y)=>x.created-y.created);const day=new Date().toLocaleDateString("en-CA",{timeZone:"Australia/Brisbane"});
   const stem=one&&a[0]?fileSafe(noteTitle(a[0])):`seq-map-notes-${day}`;
   if(kind==="json")return saveFile(stem+".json","application/json",JSON.stringify({app:"SEQ transport map notes",version:1,exported:new Date().toISOString(),notes:a},null,1));
   const q=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`;const iso=t=>new Date(t).toLocaleString("en-AU",{timeZone:"Australia/Brisbane"});
-  saveFile(stem+".csv","text/csv;charset=utf-8","﻿"+["Title,Text,Created,Last edited",...a.map(n=>[noteTitle(n),n.text||"",iso(n.created),iso(n.updated)].map(q).join(","))].join("\r\n"))}
+  saveFile(stem+".csv","text/csv;charset=utf-8","﻿"+["Title,Text,Counters,Created,Last edited",...a.map(n=>[noteTitle(n),n.text||"",ctrUsed(n).map(ctrLine).join("\n"),iso(n.created),iso(n.updated)].map(q).join(","))].join("\r\n"))}
 async function notesImport(file){let txt="";try{txt=await file.text()}catch(e){return showNotes("Couldn't read that file.")}
   const a=notesLoad();let added=0,same=0,newer=0;
   if(/\.json$/i.test(file.name)||/^\s*[\[{]/.test(txt)){let d;try{d=JSON.parse(txt)}catch(e){return showNotes("That file isn't a notes backup.")}
     const list=Array.isArray(d)?d:d&&Array.isArray(d.notes)?d.notes:null;if(!list)return showNotes("That file isn't a notes backup.");
     for(const m of list){if(!m||typeof m!=="object")continue;const n={id:String(m.id||noteId()),title:String(m.title||""),text:String(m.text||""),created:+m.created||Date.now(),updated:+m.updated||Date.now()};
+      if(Array.isArray(m.c))n.c=m.c.filter(q=>q&&typeof q==="object").map(q=>({id:String(q.id||"c"+noteId()),name:String(q.name||"").slice(0,CT_MAX),v:Math.max(0,Math.min(CT_TOP,parseInt(q.v,10)||0))}));
       const ex=a.find(x=>x.id===n.id);if(!ex){a.push(n);added++}else if(n.updated>ex.updated){Object.assign(ex,n);newer++}else same++}}
   else{const stem=file.name.replace(/\.[^.]+$/,"").trim();const n={id:noteId(),title:"",text:txt.replace(/\r\n/g,"\n"),created:Date.now(),updated:Date.now()};
     if(stem&&stem!==fileSafe(noteAuto(n))&&!/^seq-map-note/i.test(stem)){n.title=stem.slice(0,NT_MAX).trim();const lines=n.text.split("\n");if(lines[0].trim()===stem){n.text=lines.slice(1).join("\n").replace(/^\n+/,"")}}
