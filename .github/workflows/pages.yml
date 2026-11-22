@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,5 +48,16 @@ jobs:
         with:
           path: .
 
+      # GitHub sometimes can't find the just-uploaded site for a moment ("No artifacts named github-pages were
+      # found"), so a failed deploy waits a minute and tries again before the run counts as failed
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Wait a minute before trying again
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+
+      - id: deployment2
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4

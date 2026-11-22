@@ -35,6 +35,8 @@ jobs:
   measure:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    outputs:
+      skip: ${{ steps.done.outputs.skip }}
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -65,18 +67,28 @@ jobs:
           gh release view measured-raw -R "$REPO" >/dev/null 2>&1 || gh release create measured-raw -R "$REPO" --prerelease --title "Measured travel times: recordings" --notes "Raw recordings of the AM and PM windows, written by the Measure travel times workflow. Kept for 12 months."
           gh release view measured-data -R "$REPO" >/dev/null 2>&1 || gh release create measured-data -R "$REPO" --prerelease --title "Measured travel times: built figures" --notes "data/measured for the website, rebuilt after every window and published by the Publish the site workflow."
 
+      # started twice (GitHub's late timetable and the waiter)? the second one finds the recording already saved
+      # and stops here: nothing is rebuilt or republished
+      - name: Already recorded?
+        id: done
+        run: |
+          skip=no
+          if [ "${{ steps.band.outputs.band }}" != rebuild ]; then
+            have=$(gh release view measured-raw -R "$REPO" --json assets --jq '.assets[].name')
+            if grep -qxF "peak-${{ steps.band.outputs.day }}-${{ steps.band.outputs.band }}.csv.gz" <<< "$have"; then skip=yes; echo "already recorded, nothing to do"; fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
       - name: Record the window
-        if: steps.band.outputs.band != 'rebuild'
+        if: steps.band.outputs.band != 'rebuild' && steps.done.outputs.skip != 'yes'
         run: |
           mkdir -p raw
           f=raw/peak-${{ steps.band.outputs.day }}-${{ steps.band.outputs.band }}.csv.gz
-          # started twice (GitHub's timetable and the waiter)? the second one finds the recording already saved
-          have=$(gh release view measured-raw -R "$REPO" --json assets --jq '.assets[].name')
-          if grep -qxF "$(basename "$f")" <<< "$have"; then echo "already recorded"; exit 0; fi
           python tools/collect_measured.py . --band ${{ steps.band.outputs.band }} --out "$f"
           if [ -e "$f" ]; then gh release upload measured-raw "$f" --clobber -R "$REPO"; fi
 
       - name: Move recordings kept as workflow artifacts (from before November 2026's switch) into the release
+        if: steps.done.outputs.skip != 'yes'
         run: |
           have=$(gh release view measured-raw -R "$REPO" --json assets --jq '.assets[].name')
           gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name | startswith("peak-")) | select(.expired | not) | [.id, .name] | @tsv' |
@@ -90,6 +102,7 @@ jobs:
           rm -rf old
 
       - name: Fetch recordings from the last 40 days, and the previous build
+        if: steps.done.outputs.skip != 'yes'
         run: |
           mkdir -p raw state
           since=$(TZ=Australia/Brisbane date -d '-40 days' +%F)
@@ -102,15 +115,18 @@ jobs:
           if gh release download measured-data -p measured.tar.gz -D /tmp -R "$REPO"; then tar -xzf /tmp/measured.tar.gz -C state; fi
 
       - name: Rebuild measured travel times
+        if: steps.done.outputs.skip != 'yes'
         run: python tools/build_measured.py raw state .
 
       - name: Save the build
+        if: steps.done.outputs.skip != 'yes'
         run: |
           tar -czf measured.tar.gz -C data/measured .
           ls -la measured.tar.gz
           gh release upload measured-data measured.tar.gz --clobber -R "$REPO"
 
       - name: Delete recordings older than 12 months
+        if: steps.done.outputs.skip != 'yes'
         run: |
           cut=$(TZ=Australia/Brisbane date -d '-366 days' +%F)
           gh release view measured-raw -R "$REPO" --json assets --jq '.assets[].name' |
@@ -121,6 +137,7 @@ jobs:
 
   publish:
     needs: measure
+    if: needs.measure.outputs.skip != 'yes'
     uses: ./.github/workflows/pages.yml
 
   # start the waiter for the next window (a backup in case GitHub's timetable is late or skips a run)
