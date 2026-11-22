@@ -564,3 +564,4 @@ body:not(.light) .rbst a{background:#374151;color:#e5e7eb}body:not(.light) .rbst
 body:not(.light) .rbnote{background:#1e3a8a55;color:#dbeafe}body:not(.light) .rbnote.now{background:#ea580c33;color:#fed7aa}
 .rbr{cursor:pointer}
 .rbtop{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:2px 0 4px}.rbtop .rbstat{margin:0}
+.rbban .rbbd{display:block;margin-top:4px;font-size:12.5px}.rbban .rbbl{display:block;margin-top:4px;font-weight:600;font-size:12.5px}

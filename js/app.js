@@ -506,7 +506,7 @@ function showRoute(i,fromStop,veh,hint){focusRoutes=new Set([i]);drawVehicles();
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   let di0=0;const hk=hint&&r.d.length>1?dirByHead(i,hint,backState&&backState.id):-1;if(veh){const k=vehDir(i,veh,hint);if(k>=0)di0=k;if(hk>=0&&k!==hk){di0=hk;veh=null}}else if(hk>=0)di0=hk;else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
-  rcState={key:r.n,i,di:di0,line:false};wireFullTT();tvKey=r.n;drawVariants(i,di0);applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
+  rcState={key:r.n,i,di:di0,line:false};if(/^rail replacement bus$/i.test(r.l||"")&&typeof rbRouteBanner==="function"){pB.insertAdjacentHTML("afterbegin",rbRouteBanner(r.n));rbWireNotes();requestAnimationFrame(()=>{pB.scrollTop=0})}wireFullTT();tvKey=r.n;drawVariants(i,di0);applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
 // on a train line, the route and direction that runs towards the tapped row's destination from the station the card was opened from
 function lineDirFor(nm,hint,sid){if(!hint||!sid||!ST[sid])return null;const all=lineRoutes[nm]||[];const base=x=>ST[x]?ST[x][0].toLowerCase().replace(/,.*$/,"").replace(/ (busway |bus )?station$/,"").trim():"";const b0=base(sid);
   const ids=new Set([sid,...(KIDS[sid]||[])]);let best=null;
@@ -698,6 +698,10 @@ async function openRouteTable(key,st,back){const file=key.replace(/[^A-Za-z0-9_-
   try{await ensureCal();if(!RTC[key])RTC[key]=await (await fetch(BASE+"data/rt/"+file+".json"+DV)).json()}catch(e){openPanel(keyName(key),"Timetable",`<div class="sub">Timetable unavailable.</div>`);return}
   const data=RTC[key];const dirs=Object.keys(data).sort();const now=bneNow();
   st=Object.assign({dir:dirs[0],day:0,start:null},st||{});if(!data[st.dir])st.dir=dirs[0];
+  // rail replacement buses: the day menu lists only the days the route runs (up to ~4 months ahead), starting at the next one
+  const isRB=!TNAME[key]&&nameIdx[key]!=null&&/^rail replacement bus$/i.test(R[nameIdx[key]].l||"");let runK=null;
+  if(isRB){runK=[];for(let k=0;k<130;k++){const dd=shiftDay(now.ymd,now.dow,k);if(dirs.some(dk=>data[dk].t.some(t=>t[1].some(si=>svcOn(si,dd)))))runK.push(k)}
+    if(runK.length&&!runK.includes(st.day)){st.day=runK.find(k=>k>=st.day)??runK[runK.length-1];st.start=null}}
   const day=shiftDay(now.ymd,now.dow,st.day);const D=data[st.dir];
   const trips=D.t.filter(t=>t[1].some(si=>svcOn(si,day)));
   if(st.start===null){st.start=0;if(st.day===0){const k=trips.findIndex(t=>{let mx=0;for(let j=3;j<t.length;j++)if(t[j]>mx)mx=t[j];return t[2]+mx>=now.min});st.start=k<0?Math.max(0,trips.length-COLS):k}}
@@ -705,9 +709,9 @@ async function openRouteTable(key,st,back){const file=key.replace(/[^A-Za-z0-9_-
   const cols=trips.slice(st.start,st.start+COLS);
   const ids=keyIds(key);focusRoutes=new Set(ids);rtFocus=true;syncVehVis();drawPaths(ids,TNAME[key]?TCOL[key]:undefined);ctx=null;setSel(null);
   rtState={key,st,cols,dir:st.dir,order:D.o};
-  const dayOpts=Array.from({length:14},(_,k)=>{const dd=shiftDay(now.ymd,now.dow,k);const lab=k===0?"Today":k===1?"Tomorrow":fmtDayOpt.format(new Date(Date.UTC(+dd.ymd.slice(0,4),+dd.ymd.slice(4,6)-1,+dd.ymd.slice(6,8))));return `<option value="${k}"${k===st.day?" selected":""}>${lab}</option>`}).join("");
+  const dayOpts=(runK&&runK.length?runK:Array.from({length:14},(_,k)=>k)).map(k=>{const dd=shiftDay(now.ymd,now.dow,k);const lab=k===0?"Today":k===1?"Tomorrow":fmtDayOpt.format(new Date(Date.UTC(+dd.ymd.slice(0,4),+dd.ymd.slice(4,6)-1,+dd.ymd.slice(6,8))));return `<option value="${k}"${k===st.day?" selected":""}>${lab}</option>`}).join("");
   const dirLab=dk=>"Towards "+data[dk].top.map(h=>cleanHead(TT.cal.hs[h])).filter((x,i,a)=>a.indexOf(x)===i).join(", ");
-  let h=`<div class="rtc"><select id="rtDay">${dayOpts}</select><button class="btn" id="rtNow">Now</button></div>`+
+  let h=(isRB?rbRouteBanner(key):"")+`<div class="rtc"><select id="rtDay" aria-label="Day">${dayOpts}</select><button class="btn" id="rtNow">${isRB?"Next":"Now"}</button></div>`+
     `<div class="rtdirs">${dirs.map(dk=>`<button data-dir="${dk}" class="${dk===st.dir?"on":""}">${esc(dirLab(dk))}</button>`).join("")}</div>`+
     `<div class="rtnav"><button id="rtEarlier"${st.start<=0?" disabled":""}>← Earlier</button><span>${trips.length?`Trips ${st.start+1}–${st.start+cols.length} of ${trips.length}`:""}</span><button id="rtLater"${st.start+COLS>=trips.length?" disabled":""}>Later →</button></div>`;
   if(!cols.length)h+=`<div class="sub">No services this day in this direction.</div>`;
@@ -719,7 +723,7 @@ async function openRouteTable(key,st,back){const file=key.replace(/[^A-Za-z0-9_-
   if(back)setBack(back);
   const go=o=>openRouteTable(key,Object.assign({},st,o),backState);
   document.getElementById("rtDay").onchange=e=>go({day:+e.target.value,start:null});
-  document.getElementById("rtNow").onclick=()=>go({day:0,start:null});
+  document.getElementById("rtNow").onclick=()=>go({day:0,start:null});if(isRB&&typeof rbWireNotes==="function"){rbWireNotes();requestAnimationFrame(()=>{pB.scrollTop=0})}
   pB.querySelectorAll("[data-dir]").forEach(b=>b.onclick=()=>go({dir:b.dataset.dir,start:null}));
   const E=document.getElementById("rtEarlier"),Lt=document.getElementById("rtLater");if(E)E.onclick=()=>go({start:st.start-COLS});if(Lt)Lt.onclick=()=>go({start:st.start+COLS});
   pB.querySelectorAll("[data-s2]").forEach(a=>a.onclick=()=>{const b={kind:"rt",key,st:Object.assign({},st),cam:{center:map.getCenter(),zoom:map.getZoom()}};openStop(a.dataset.s2,true);setBack(b)});
@@ -1611,6 +1615,10 @@ function rbStationHTML(id){if(!RBI)return "";const ids=new Set([id,parentOf[id]]
   const L=RBI.closures.map(c=>{const k=Object.keys(c.st).find(x=>ids.has(x));if(k==null)return null;const st=rbStatus(c);if(st.s==="past"||(st.s==="soon"&&st.a>wk))return null;return {c,k:c.st[k],st}}).filter(Boolean);
   if(!L.length)return "";
   return L.map(({c,k,st})=>`<a href="#" class="rbnote ${st.s==="now"?"now":""}" data-rbopen="${esc(c.id)}">🚌 <b>${k===2?"Rail buses connect here":k===1?"Rail buses run from here":"Buses replace trains here"}</b> · ${esc(rbWhen(c))} · ${esc(c.title)} (${esc(c.routes.join(", "))}) ›</a>`).join("")}
+// top of a rail replacement route's card and timetable: when it runs and what it replaces
+function rbRouteBanner(n){const c=RBI&&RBI.closures.find(x=>x.routes.includes(n));if(!c)return `<div class="rbnote">🚌 <b>Rail replacement bus</b> · runs only on the dates in the day menu</div>`;
+  const st=rbStatus(c),runs=rbRuns(c);
+  return `<a href="#" class="rbnote rbban ${st.s==="now"?"now":""}" data-rbopen="${esc(c.id)}">🚌 <b>Replaces trains ${esc(c.title)}</b> · ${esc(rbWhen(c))}<span class="rbbd">${runs.slice(0,4).map(r=>esc(r.txt)).join("<br>")}${runs.length>4?`<br>+ ${runs.length-4} more`:""}</span><span class="rbbl">Show the closure on the map ›</span></a>`}
 function rbWireNotes(){pB.querySelectorAll("[data-rbopen]").forEach(a=>a.onclick=async e=>{e.preventDefault();const id=a.dataset.rbopen;if(!rbOn)await toggleRB(true);rbCard(id,true)})}
 // map layers
 function rbSetup(){if(map.getSource("rb-t"))return;const tf=[],bf=[],sf=[],nf=[];
