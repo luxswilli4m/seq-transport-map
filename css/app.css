@@ -563,3 +563,4 @@ body:not(.light) .rbst a{background:#374151;color:#e5e7eb}body:not(.light) .rbst
 .rbnote{display:block;margin:4px 0 8px;padding:8px 10px;border-radius:9px;background:#dbeafe;color:#1e3a8a;font-size:13px;text-decoration:none}.rbnote.now{background:#ffedd5;color:#9a3412;border:1px solid #fdba74}
 body:not(.light) .rbnote{background:#1e3a8a55;color:#dbeafe}body:not(.light) .rbnote.now{background:#ea580c33;color:#fed7aa}
 .rbr{cursor:pointer}
+.rbtop{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:2px 0 4px}.rbtop .rbstat{margin:0}

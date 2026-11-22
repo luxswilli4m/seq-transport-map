@@ -33,7 +33,7 @@ const TNAME=Object.fromEntries(TLINES.map(([t,n])=>[t,n])), TCOL={T1:"#2E9C69",T
 const lineOf={}, lineRoutes={};
 // colours as shown on Translink's network map legend (the feed's route colours are only used to tell the lines apart)
 // Brisbane Metro colours as on Translink's network map (the feed gives them the standard bus pink)
-const MDISP={M1:["#7EC241","#0b1a05"],M2:["#5DBEB6","#06201e"]};R.forEach(r=>{if(MDISP[r.n]){r.c=MDISP[r.n][0];r.tc=MDISP[r.n][1]}});
+const MDISP={M1:["#7EC241","#0b1a05"],M2:["#5DBEB6","#06201e"]};R.forEach(r=>{if(MDISP[r.n]){r.c=MDISP[r.n][0];r.tc=MDISP[r.n][1]}if(/^rail replacement bus$/i.test(r.l||"")){r.c="#ea580c";r.tc="#ffffff"}});   // rail replacement buses: orange everywhere, as in the Rail replacement buses view
 const TDISP={T1:"#2E9C69",T2:"#6DC7E9",T3:"#A769AB",T4:"#4E85C5",T5:"#FFC628",T6:"#EF474F"};
 R.forEach((r,i)=>{if(r.t!=="train")return;const hit=TLINES.find(x=>("#"+x[2]).toLowerCase()===r.c.toLowerCase());const t=hit?hit[0]:"T1";lineOf[i]=[t];(lineRoutes[t]=lineRoutes[t]||[]).push(i);r.c=TDISP[t]});
 const TKW={T1:/Ipswich|Rosewood|Caboolture|Nambour|Gympie|Brisbane City|Roma Street/,T2:/Springfield|Redcliffe|Kippa|Brisbane City|Roma Street/,T3:/Doomben|Brisbane City|Roma Street/,T4:/Cleveland|Shorncliffe|Brisbane City|Roma Street/,T5:/Varsity|Airport|Gold Coast|Brisbane City|Roma Street/,T6:/Beenleigh|Ferny Grove|Brisbane City|Roma Street/};
@@ -74,6 +74,8 @@ function ringIcon(cols,road){const id="ring:"+cols.join("-")+(road?":r":"");addC
   g.fillStyle="#0b0f17";g.beginPath();g.arc(12,12,10.5,0,7);g.fill();
   const n=cols.length;cols.forEach((c,k)=>{g.strokeStyle=c;g.lineWidth=4.5;if(road)g.setLineDash([3.2,2.4]);g.beginPath();g.arc(12,12,7.6,-Math.PI/2+k*2*Math.PI/n,-Math.PI/2+(k+1)*2*Math.PI/n);g.stroke()});
   g.setLineDash([]);g.fillStyle="#ffffff";g.beginPath();g.arc(12,12,road?4.2:5,0,7);g.fill()},3);return id}
+addCanvasImage("dirArrow",22,22,g=>{g.fillStyle="#ffffff";g.strokeStyle="#0b0f17";g.lineWidth=1.6;g.beginPath();g.arc(11,11,9.2,0,7);g.fill();g.stroke();g.strokeStyle="#0b0f17";g.lineWidth=2.6;g.lineCap="round";g.lineJoin="round";g.beginPath();g.moveTo(8.5,6.5);g.lineTo(13.5,11);g.lineTo(8.5,15.5);g.stroke()},3);
+addCanvasImage("rbArrow",22,22,g=>{g.fillStyle="#ffffff";g.strokeStyle="#ea580c";g.lineWidth=2;g.beginPath();g.arc(11,11,9,0,7);g.fill();g.stroke();g.strokeStyle="#ea580c";g.lineWidth=2.8;g.lineCap="round";g.lineJoin="round";g.beginPath();g.moveTo(8.5,6.5);g.lineTo(13.5,11);g.lineTo(8.5,15.5);g.stroke()},3);
 addCanvasImage("loopArrow",14,14,g=>{g.strokeStyle="#0b0f17";g.lineWidth=4;g.lineCap="round";g.beginPath();g.moveTo(4,3);g.lineTo(10,7);g.lineTo(4,11);g.stroke();g.strokeStyle="#ffffff";g.lineWidth=2.2;g.beginPath();g.moveTo(4,3);g.lineTo(10,7);g.lineTo(4,11);g.stroke()});
 
 // ---------- sources
@@ -159,7 +161,7 @@ add({id:"hlvar-case",type:"line",source:"hlvar",layout:{"line-cap":"round","line
 add({id:"hlvar-line",type:"line",source:"hlvar",layout:{"line-cap":"butt","line-join":"round"},paint:{"line-color":["get","c"],"line-width":4,"line-dasharray":[1.6,1.1]}});
 add({id:"hl-case",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":["case",["==",["get","mode"],"web"],6,10],"line-opacity":.95}});
 add({id:"hl-line",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["case",["==",["get","mode"],"web"],3.4,6]}});
-add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"loopArrow","icon-size":["interpolate",["linear"],["zoom"],9,1,15,1.2],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
+add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"dirArrow","icon-size":["interpolate",["linear"],["zoom"],9,0.85,15,1.05],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
 add({id:"veh-dot",type:"circle",source:"veh",paint:{"circle-color":["get","c"],"circle-radius":["interpolate",["linear"],["zoom"],9,2.6,12,4.5,13.3,8,16,10],"circle-stroke-color":"#0b0f17","circle-stroke-width":["interpolate",["linear"],["zoom"],9,1.2,14,2.2],"circle-opacity":["case",["get","dim"],.25,1],"circle-stroke-opacity":["case",["get","dim"],.25,1]}});
 add({id:"veh-lbl",type:"symbol",source:"veh",minzoom:13.3,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":10.5,"text-allow-overlap":true,"text-ignore-placement":true},paint:{"text-color":["get","tc"],"text-opacity":["case",["get","dim"],.3,1]}});
 // stops & stations
@@ -366,7 +368,7 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
 function nearestIdx(p,x,y){let bi=0,bd=1e9;for(let k=0;k<p.length;k++){const dx=(p[k][0]-x)*0.886,dy=p[k][1]-y,d=dx*dx+dy*dy;if(d<bd){bd=d;bi=k}}return bi}
 let webLegs=[];let webCam=null;
 function placeArrows(){if(!webLegs.length){map.getSource("arrows").setData(FC([]));return}
-  const SP=innerWidth<=640?42:48,CELL=20,taken=new Set(),pts=[];
+  const SP=innerWidth<=640?70:80,CELL=26,taken=new Set(),pts=[];
   for(const leg of webLegs){let prev=map.project(leg[0]),acc=SP*0.6;
     for(let k=1;k<leg.length;k++){const cur=map.project(leg[k]);const dx=cur.x-prev.x,dy=cur.y-prev.y,seg=Math.hypot(dx,dy);
       while(seg>0&&acc<=seg){const t=acc/seg,x=prev.x+dx*t,y=prev.y+dy*t;const b=Math.atan2(dy,dx)*180/Math.PI;
@@ -1623,17 +1625,18 @@ function rbSetup(){if(map.getSource("rb-t"))return;const tf=[],bf=[],sf=[],nf=[]
   map.addLayer({id:"rb-trk",type:"line",source:"rb-t",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#9ca3af","line-width":["interpolate",["linear"],["zoom"],9,3.5,14,7],"line-dasharray":[2,1.2]}},below);
   map.addLayer({id:"rb-bus",type:"line",source:"rb-b",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":RBC,"line-width":["interpolate",["linear"],["zoom"],9,2.2,14,4.5],"line-opacity":.9}},below);
   map.addLayer({id:"rb-bus-lbl",type:"symbol",source:"rb-b",minzoom:11,layout:{"symbol-placement":"line","symbol-spacing":260,"text-field":["get","r"],"text-font":FONT,"text-size":11,"text-keep-upright":true},paint:{"text-color":"#ffffff","text-halo-color":RBC,"text-halo-width":2.2}},below);
+  map.addLayer({id:"rb-arr",type:"symbol",source:"rb-b",layout:{"symbol-placement":"line","symbol-spacing":110,"icon-image":"rbArrow","icon-size":["interpolate",["linear"],["zoom"],9,0.8,15,1.05],"icon-rotation-alignment":"map","icon-allow-overlap":false,"icon-padding":2}},below);
   map.addLayer({id:"rb-stop",type:"circle",source:"rb-s",minzoom:11,paint:{"circle-radius":["interpolate",["linear"],["zoom"],11,2.5,15,5.5],"circle-color":"#ffffff","circle-stroke-color":RBC,"circle-stroke-width":["case",["==",["get","tmp"],1],2.6,1.6]}},below);
   map.addLayer({id:"rb-stop-lbl",type:"symbol",source:"rb-s",minzoom:14.5,layout:{"text-field":["case",["==",["get","tmp"],1],["concat",["get","n"]," (temporary)"],["get","n"]],"text-font":FONT,"text-size":10.5,"text-offset":[0,1],"text-anchor":"top","text-optional":true},paint:{"text-color":RBC,"text-halo-color":"#ffffff","text-halo-width":1.6}},below);
   map.addLayer({id:"rb-stn",type:"circle",source:"rb-n",paint:{"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","k"],0],3,4.5],14,["case",["==",["get","k"],0],5.5,7.5]],"circle-color":["case",["==",["get","k"],2],"#ffffff","#6b7280"],"circle-stroke-color":["case",["==",["get","k"],2],RBC,"#ffffff"],"circle-stroke-width":2}},below);
   const lbl=(id,f,sz,ov)=>map.addLayer({id,type:"symbol",source:"rb-n",filter:f,layout:{"text-field":["get","l"],"text-font":FONT,"text-size":sz,"text-offset":[0.9,0],"text-anchor":"left","text-padding":1,"text-allow-overlap":ov,"text-ignore-placement":false},paint:{"text-color":"#374151","text-halo-color":"#ffffff","text-halo-width":2}});
   lbl("rb-stn-lbl",["==",["get","k"],0],["interpolate",["linear"],["zoom"],9,10.5,14,13],false);lbl("rb-end-lbl",["!=",["get","k"],0],["interpolate",["linear"],["zoom"],9,12,14,14],true);
-  L.push("rb-all","rb-trk-c","rb-trk","rb-bus","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl");rbPaint();rbFilter();
+  L.push("rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl");rbPaint();rbFilter();
   map.on("mouseenter","rb-bus",()=>{map.getCanvas().style.cursor="pointer"});map.on("mouseleave","rb-bus",()=>{map.getCanvas().style.cursor=""})}
 function rbPaint(){if(!map.getLayer("rb-stn-lbl"))return;const d=theme!=="light";["rb-stn-lbl","rb-end-lbl"].forEach(id=>{map.setPaintProperty(id,"text-color",d?"#e5e7eb":"#374151");map.setPaintProperty(id,"text-halo-color",d?"#0b1220":"#ffffff")});map.setPaintProperty("rb-stop-lbl","text-halo-color",d?"#0b1220":"#ffffff")}
-const RB_LAYERS=["rb-all","rb-trk-c","rb-trk","rb-bus","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl"];
+const RB_LAYERS=["rb-all","rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn","rb-stn-lbl","rb-end-lbl"];
 function rbFilter(){if(!map.getLayer("rb-trk"))return;const f=["==",["get","c"],rbSel||"-"];
-  ["rb-trk-c","rb-trk","rb-bus","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn"].forEach(id=>map.setFilter(id,f));
+  ["rb-trk-c","rb-trk","rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl","rb-stn"].forEach(id=>map.setFilter(id,f));
   map.setFilter("rb-stn-lbl",["all",f,["==",["get","k"],0]]);map.setFilter("rb-end-lbl",["all",f,["!=",["get","k"],0]]);
   // overview: the closed track of closures on now or coming up, lightly
   const live=RB.closures.filter(c=>rbStatus(c).s!=="past").map(c=>c.id);map.setFilter("rb-all",rbSel?["==",["get","c"],"-"]:["in",["get","c"],["literal",live]])}
@@ -1647,7 +1650,8 @@ function rbBadge(n){const i=nameIdx[n];return `<span class="rb rbr" data-rbr="${
 // alerts today that talk about this closure (rail buses, or works between its end stations)
 function rbAlerts(c){const ends=c.stations.filter(s=>s[4]===1).map(s=>s[1]);const nm=new RegExp("\\b("+ends.map(x=>x.replace(/[^\w ]/g,"")).join("|")+")\\b","i");
   return todaysAlerts().filter(a=>{const t=(a.header||"")+" "+(a.desc||"");return /rail (replacement )?bus|buses replace|replacement bus/i.test(t)&&nm.test(t)})}
-function rbOverview(){rbSel=null;rbFilter();const L=RB.closures.map(c=>({c,st:rbStatus(c)})).filter(x=>x.st.s!=="past");
+function rbClearRoute(){focusRoutes=null;clearHL();setSel(null);drawVehicles()}
+function rbOverview(){rbSel=null;rbFilter();rbClearRoute();const L=RB.closures.map(c=>({c,st:rbStatus(c)})).filter(x=>x.st.s!=="past");
   const now=L.filter(x=>x.st.s==="now"),soon=L.filter(x=>x.st.s==="soon").sort((a,b)=>a.st.a-b.st.a);
   const row=({c,st})=>`<a href="#" class="rbrow ${st.s}" data-rbc="${esc(c.id)}"><span class="rbsq"></span><span class="rbtx"><b>${esc(c.title)}</b><span>${esc(rbWhen(c))}${Object.keys(c.days).length>1?" · "+esc(rbD(Object.keys(c.days)[0],{weekday:undefined}))+" to "+esc(rbD(Object.keys(c.days).slice(-1)[0],{weekday:undefined}))+", "+Object.keys(c.days).length+" days":""}</span><span class="rbrs">${c.routes.map(esc).join(" · ")}</span></span></a>`;
   let h=`<div class="rbleg"><span><i class="rbsq now"></i> On now</span><span><i class="rbsq soon"></i> Coming up</span></div>`;
@@ -1657,18 +1661,18 @@ function rbOverview(){rbSel=null;rbFilter();const L=RB.closures.map(c=>({c,st:rb
   h+=`<div class="odnote">Planned rail replacement buses from Translink's published timetable, about four weeks ahead, checked every morning. Tap a closure to see the closed track (grey, with its stations named) and the buses that replace it (orange), with their stops. Unplanned disruptions are in ⚠ Alerts. Unofficial; check Translink's service updates before travelling.${RB.built?" Last changed "+esc(new Date(RB.built).toLocaleString("en-AU",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"}))+".":""}</div>`;
   openPanel("Rail replacement buses",`${now.length?now.length+" on now · ":""}${soon.length} coming up`,h,{view:"rb"});backState=null;pBack.style.display="none";
   pB.querySelectorAll("[data-rbc]").forEach(a=>a.onclick=e=>{e.preventDefault();rbCard(a.dataset.rbc,true)})}
-function rbCard(id,fit){const c=RB.closures.find(x=>x.id===id);if(!c)return rbOverview();rbSel=id;rbFilter();const st=rbStatus(c);
+function rbCard(id,fit){const c=RB.closures.find(x=>x.id===id);if(!c)return rbOverview();rbSel=id;rbFilter();rbClearRoute();const st=rbStatus(c);
   const closed=c.stations.filter(s=>s[4]!==2),conn=c.stations.filter(s=>s[4]===2),al=st.s==="now"?rbAlerts(c):[];
-  let h=`<div class="rbstat ${st.s}">${esc(rbWhen(c))}</div>`;
+  let h=`<div class="rbtop"><span class="rbstat ${st.s}">${esc(rbWhen(c))}</span><button class="btn" id="rbClear" title="Back to all closures on the greyed-out map">✕ Clear selection</button></div>`;
   if(al.length)h+=`<details class="alerts pjal" open><summary>⚠ Translink alert${al.length>1?"s":""} about this closure</summary>`+al.slice(0,4).map(a=>`<div class="al"><b>${esc(a.header)}</b>${a.desc?`<p>${esc(a.desc).slice(0,600)}</p>`:""}${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">More information (Translink) ↗</a>`:""}</div>`).join("")+`</details>`;
   h+=`<div class="grp">When</div><ul class="rbdays">`+rbRuns(c).map(r=>`<li>${esc(r.txt)}</li>`).join("")+`</ul>`;
-  h+=`<div class="grp">Replacement buses</div><div class="badges">${c.routes.map(rbBadge).join("")}</div>`+c.routes.map(n=>{const r=RB.routes[n];if(!r)return "";const t=r.stops.filter(s=>/temporary/i.test(s[1])).length;return `<div class="odnm">${esc(n)}: ${r.stops.length} stops${t?`, ${t} temporary`:""}, ${r.trips} trips</div>`}).join("")+`<div class="pjhint">Tap a route for its timetable. Bus stops show on the map; temporary stops have a thicker ring.</div>`;
+  h+=`<div class="grp">Replacement buses</div><div class="badges">${c.routes.map(rbBadge).join("")}</div>`+c.routes.map(n=>{const r=RB.routes[n];if(!r)return "";const t=r.stops.filter(s=>/temporary/i.test(s[1])).length;return `<div class="odnm">${esc(n)}: ${r.stops.length} stops${t?`, ${t} temporary`:""}, ${r.trips} trips</div>`}).join("")+`<div class="pjhint">Arrows show which way the buses run. Tap a route for its timetable (‹ comes back here). Bus stops show on the map; temporary stops have a thicker ring.</div>`;
   h+=`<div class="grp">Stations on the closed stretch (${closed.length})</div><div class="rbst">${closed.map(s=>`<a href="#" data-rbst="${esc(s[0])}" class="${s[4]===1?"end":""}">${esc(s[1])}</a>`).join("")}</div>`;
   if(conn.length)h+=`<div class="grp">Buses also connect to</div><div class="rbst">${conn.map(s=>`<a href="#" data-rbst="${esc(s[0])}" class="conn">${esc(s[1])}</a>`).join("")}</div><div class="pjhint">Trains still run at these stations; change here between bus and train.</div>`;
   h+=`<div class="odnote">The grey dashed line is the closed stretch of track, worked out from where the replacement buses run; names in bold are where buses start and finish (trains on other lines may still stop there). From Translink's published timetable; unofficial, so check Translink's service updates before travelling. <a href="#" id="rbAll">‹ All closures</a></div>`;
   openPanel(c.title,"Rail replacement buses · "+esc(c.routes.join(", ")),h,{view:"rbv"});setBack({kind:"rb"});
-  document.getElementById("rbAll").onclick=e=>{e.preventDefault();rbOverview()};
-  pB.querySelectorAll("[data-rbr]").forEach(b=>b.onclick=()=>{const i=nameIdx[b.dataset.rbr];if(i==null)return;showRoute(i);setBack({kind:"rbc",id})});
+  document.getElementById("rbAll").onclick=e=>{e.preventDefault();rbOverview()};document.getElementById("rbClear").onclick=()=>{rbOverview();const live=RB.closures.filter(c=>rbStatus(c).s!=="past");if(live.length)pjFit(live.flatMap(c=>c.track.flat()),12)};
+  pB.querySelectorAll("[data-rbr]").forEach(b=>b.onclick=()=>{const i=nameIdx[b.dataset.rbr];if(i==null)return;["rb-bus","rb-arr","rb-bus-lbl","rb-stop","rb-stop-lbl"].forEach(x=>map.setFilter(x,["==",["get","c"],"-"]));showRoute(i);setBack({kind:"rbc",id})});
   pB.querySelectorAll("[data-rbst]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=c.stations.find(x=>x[0]===a.dataset.rbst);if(s){selPt([s[2],s[3]]);map.flyTo({center:[s[2],s[3]],zoom:Math.max(map.getZoom(),14),duration:600})}});
   if(fit)pjFit(rbAll(c),14)}
 async function toggleRB(keep){const btn=document.getElementById("rbBtn");
