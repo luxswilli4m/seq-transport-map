@@ -186,6 +186,15 @@ function applyThemePaint(){const T=THEME[theme];
   map.setPaintProperty("zones-fill","fill-opacity",["interpolate",["linear"],["zoom"],12,T.zoneFill,13,.16,15,.07]);
   [["dots","line-color",T.dots],["loop","line-color",T.dots],["chev-line","line-color",T.chevLine],["tram-case","line-color",T.casing],["train-case","line-color",T.casing],["bw-case","line-color",T.casing],
    ["zlabels","text-color",T.zoneText],["zlabels","text-halo-color",T.zoneHalo],["stops","circle-stroke-color",T.stopStroke],["ferry-pt","circle-stroke-color",T.stopStroke],["busway-lbl","text-color",T.lblText],["busway-lbl","text-halo-color",T.lblHalo],["train-lbl","text-color",T.lblText],["train-lbl","text-halo-color",T.lblHalo],["busstn-lbl","text-color",T.lblText],["busstn-lbl","text-halo-color",T.lblHalo]].forEach(([l,p,v])=>map.setPaintProperty(l,p,v))}
+// UI ▾: light / dark and card transparency (saved on this device)
+(()=>{const w=document.getElementById("uiWrap"),b=document.getElementById("uiBtn"),sl=document.getElementById("uiTa"),lv=document.getElementById("uiTaV");
+  const setTa=v=>{v=Math.max(0,Math.min(80,+v||0));document.documentElement.style.setProperty("--ta",(v/100).toFixed(2));document.documentElement.classList.toggle("see",v>0);sl.value=v;lv.textContent=v+"%";try{localStorage.setItem("seqmap_ta",v)}catch(e){}};
+  let v0=0;try{v0=+localStorage.getItem("seqmap_ta")||0}catch(e){}setTa(v0);sl.oninput=()=>setTa(sl.value);
+  const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
+  const seg=()=>w.querySelectorAll("[data-th]").forEach(x=>x.classList.toggle("on",x.dataset.th===theme));seg();
+  w.querySelectorAll("[data-th]").forEach(x=>x.onclick=e=>{e.stopPropagation();if(x.dataset.th!==theme)document.getElementById("themeBtn").click();seg();set(true)});
+  b.onclick=e=>{e.stopPropagation();["moreWrap","bauWrap"].forEach(id=>{const z=document.getElementById(id);if(z)z.classList.remove("open")});set(!w.classList.contains("open"))};
+  w.querySelector(".uimenu").addEventListener("click",e=>e.stopPropagation());document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)})})();
 document.getElementById("themeBtn").onclick=()=>{
   theme = theme==="light"?"dark":"light"; document.body.classList.toggle("light",theme==="light");
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
