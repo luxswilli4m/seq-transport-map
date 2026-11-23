@@ -528,7 +528,8 @@ function drawVariants(i,di){const d=R[i].d[di];map.getSource("hlvar").setData(FC
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
   return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)+variantHTML(i,di)}
 function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;if(typeof TRK!=="undefined"&&TRK)trkStop();const keepWeb=pB.querySelector(".webrow"),keepTop=pB.querySelector(".badges.svc"),keepG=keepTop&&keepTop.previousElementSibling&&keepTop.previousElementSibling.classList.contains("grp")?keepTop.previousElementSibling:null;
-    pB.innerHTML=(keepWeb?keepWeb.outerHTML:"")+(keepG?keepG.outerHTML:"")+(keepTop?keepTop.outerHTML:"")+routeBody(i,di);if(rcState){rcState.i=i;rcState.di=di}wireFullTT();wire();wireDirs(i);routeArrows(i,di);drawVariants(i,di);applyTravel();applyVehStatus()})}
+    const keepAl=pB.querySelector(".alerts"),keepRb=pB.querySelector(".rbban"),keepTb=document.getElementById("trkBox");
+    pB.innerHTML=(keepAl?keepAl.outerHTML:"")+(keepRb?keepRb.outerHTML:"")+(keepWeb?keepWeb.outerHTML:"")+(keepTb?'<div id="trkBox"></div>':"")+(keepG?keepG.outerHTML:"")+(keepTop?keepTop.outerHTML:"")+routeBody(i,di);if(keepRb&&typeof rbWireNotes==="function")rbWireNotes();if(rcState){rcState.i=i;rcState.di=di}wireFullTT();wire();wireDirs(i);routeArrows(i,di);drawVariants(i,di);applyTravel();applyVehStatus()})}
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
   webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC(f));map.getSource("arrows").setData(FC([]));map.getSource("ends").setData(FC([]));if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:15})}
@@ -591,7 +592,7 @@ function livePlat(box,k,v){const el=box.querySelector(`[data-plat="${k}"]`);if(!
   if(v.lpl!==el.dataset.sch){el.textContent="Now "+v.lpl.charAt(0).toLowerCase()+v.lpl.slice(1);el.classList.add("chg");el.title="Changed from "+el.dataset.sch}else{el.textContent=v.lpl;el.classList.remove("chg");el.title=""}}
 // alerts
 async function pollAlerts(){try{const d=await getFeed("alerts");const now=Date.now()/1000;
-  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn();pjAlertsChanged();if(typeof applyFavStatus==="function")applyFavStatus()}catch(e){console.warn(e)}}
+  LIVE.alerts=d.entity.filter(e=>e.al&&e.al.header).map(e=>e.al);LIVE.alertsAt=Date.now();updateAlertBtn();pjAlertsChanged();if(typeof pollCancellations==="function")pollCancellations();else if(typeof applyFavStatus==="function")applyFavStatus()}catch(e){console.warn(e)}}
 const fmtDay=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Brisbane",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});
 function todaysAlerts(){const now=Date.now()/1000;const bneMid=Math.floor((now+36000)/86400)*86400-36000,end=bneMid+86400;
   return LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<end&&(!p.end||p.end>bneMid)))}
@@ -1835,13 +1836,17 @@ document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
 function startMin(tu){const t=tu.trip.start;if(!t)return null;const [h,m]=t.split(":").map(Number);return h*60+m}
-async function pollCancellations(){if(!FAV.stops.length&&!FAV.routes.length){applyFavStatus();return}let d;try{d=await getTrips()}catch(e){return}
+async function pollCancellations(){if(!FAV.stops.length&&!FAV.routes.length){applyFavStatus();return}let d;try{d=await getTrips()}catch(e){d={entity:[]}}
   const now=bneNow();const nowMin=now.min;const today=now.ymd;const rset={},sset={};
   const favStops=new Set(FAV.stops);const kidToStop={};FAV.stops.forEach(id=>{kidToStop[id]=id;(KIDS[id]||[]).forEach(k=>kidToStop[k]=id)});
   for(const e of d.entity){const tu=e.tu;if(!tu||!tu.trip)continue;const ri=riOfRoute(tu.trip.route);if(ri<0)continue;
     const tripCx=tu.trip.sr===3;const sm=startMin(tu);if(tu.trip.date&&tu.trip.date!==today&&!(sm!==null&&sm>=1440))continue;
     if(tripCx&&(sm===null||sm>nowMin)){const key=R[ri].t==="train"?(lineOf[ri]||[])[0]:R[ri].n;(rset[key]=rset[key]||[]).push(sm)}
     for(const u of tu.stu||[]){if(!(tripCx||u.sr===1))continue;const sid=kidToStop[u.stop];if(!sid)continue;const ev=u.dep||u.arr;const when=ev&&ev.time?bneMin(ev.time):sm;if(when===null||when>nowMin)(sset[sid]=sset[sid]||[]).push(when)}}
+  // cancellations Translink only posts as an alert ("7:15pm route 700 to Stockland Burleigh Heads cancelled"): red until that time
+  for(const a of todaysAlerts()){const hd=a.header||"";if(!/cancel/i.test(hd))continue;const m=hd.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*([ap])\.?m\b/i);if(!m)continue;
+    let h=+m[1]%12;if(/p/i.test(m[3]))h+=12;const t=h*60+(+m[2]||0);if(t<=nowMin)continue;
+    for(const x of a.sel||[]){if(!x.route)continue;const ri=riOfRoute(x.route);if(ri<0)continue;const key=R[ri].t==="train"?(lineOf[ri]||[])[0]:R[ri].n;if(!(rset[key]||[]).includes(t))(rset[key]=rset[key]||[]).push(t)}}
   CX.routes=rset;CX.stops=sset;applyFavStatus()}
 function favAlertState(){const nowS=Date.now()/1000,mid=Math.floor((nowS+36000)/86400)*86400-36000,eod=mid+86400;
   const live=LIVE.alerts.filter(a=>!a.periods||!a.periods.length||a.periods.some(p=>(p.start||0)<eod&&(!p.end||p.end>=nowS)));
@@ -2045,7 +2050,7 @@ document.addEventListener("focusin",e=>{if(e.target.matches&&e.target.matches("i
 (()=>{let t=null;const fix=()=>{clearTimeout(t);t=setTimeout(()=>{if(kbLift())return;if(window.scrollY||window.scrollX||document.documentElement.scrollTop||document.body.scrollTop){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0}map.resize()},120)};
   if(window.visualViewport){visualViewport.addEventListener("resize",fix);visualViewport.addEventListener("scroll",fix)}
   addEventListener("orientationchange",fix);document.addEventListener("focusout",e=>{if(e.target.matches&&e.target.matches("input,textarea,select"))fix()});addEventListener("pageshow",fix)})();
-window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};window.__setVeh=l=>{LIVE.veh=l.map(v=>{const i=nameIdx[v.r];const d=R[i].d[v.di||0];const sid=d.s[v.k??3],st=ST[sid];return {ri:i,trip:v.trip,dir:v.di||0,stop:sid,fleet:v.fleet||"",start:"",lat:st[1]-0.001,lon:st[2],ts:Date.now()/1000}});LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles()};   // for tests
+window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged();pollCancellations()};window.__setVeh=l=>{LIVE.veh=l.map(v=>{const i=nameIdx[v.r];const d=R[i].d[v.di||0];const sid=d.s[v.k??3],st=ST[sid];return {ri:i,trip:v.trip,dir:v.di||0,stop:sid,fleet:v.fleet||"",start:"",lat:st[1]-0.001,lon:st[2],ts:Date.now()/1000}});LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
 // ---------- "More" menu (School routes, On demand, future extras)
