@@ -571,5 +571,5 @@ body:not(.light) .rbnote{background:#1e3a8a55;color:#dbeafe}body:not(.light) .rb
 /* iPad and desktop: a – on every card (map-mode cards already use their close button for it) and a grip to drag down */
 body:not(.phone) #panel.minix #pMin{display:block}
 body:not(.phone) #pGrab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line);margin:7px auto -3px;cursor:grab;touch-action:none}
-body:not(.phone) #panel .ph{touch-action:none}
+body:not(.phone) #panel .ph{touch-action:none;user-select:none;-webkit-user-select:none}
 body:not(.phone) #panel.mini .pht{cursor:pointer}

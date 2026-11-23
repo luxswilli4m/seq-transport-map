@@ -1894,14 +1894,24 @@ function phPad(){const top=(parseInt(getComputedStyle(document.documentElement).
   const off=o=>{if(!isPhone()||!o||!o.center||o.offset)return o;const p=phPad();return {...o,offset:[(p.left-p.right)/2,(p.top-p.bottom)/2]}};
   map.flyTo=(o,e)=>fly(off(o),e);map.easeTo=(o,e)=>ease(off(o),e)})();
 // iPad and desktop: every card can shrink to its title bar — the – button, or drag the title bar down (up, or tap the title, to open it again)
-function cardMini(on){if(isPhone())return phMini(on);if(MINI_VIEWS.has(view))return setMini(on);panel.classList.toggle("mini",on);pMinBtn.textContent=on?"+":"–";pMinBtn.title=on?"Expand":"Minimise";pMinBtn.setAttribute("aria-label",pMinBtn.title)}
+function cardMini(on){if(isPhone())return phMini(on);if(on&&!panel.classList.contains("dragging")){panel.style.height="";panel.style.maxHeight=""}if(MINI_VIEWS.has(view))return setMini(on);panel.classList.toggle("mini",on);pMinBtn.textContent=on?"+":"–";pMinBtn.title=on?"Expand":"Minimise";pMinBtn.setAttribute("aria-label",pMinBtn.title)}
 pMinBtn.onclick=e=>{e.stopPropagation();cardMini(!panel.classList.contains("mini"))};
-(()=>{let y0=null,moved=false;const ok=e=>!isPhone()&&!e.target.closest("button,a,input,select,summary,label");
+// dragging the title bar resizes the card smoothly to any height; let go within ~12 px of the title bar and it minimises
+(()=>{let y0=null,h0=0,moved=false;const ok=e=>!isPhone()&&!e.target.closest("button,a,input,select,summary,label");
+  const hd=()=>document.getElementById("pGrab").offsetHeight+panel.querySelector(".ph").offsetHeight+6;   // the minimised height
+  const maxH=()=>Math.max(200,panel.getBoundingClientRect().bottom-(document.getElementById("top")||{getBoundingClientRect:()=>({bottom:150})}).getBoundingClientRect().bottom-12);
+  const setH=h=>{panel.style.height=Math.round(h)+"px";panel.style.maxHeight="none"};
   [document.getElementById("pGrab"),panel.querySelector(".ph")].forEach(el=>{
-    el.addEventListener("pointerdown",e=>{if(!ok(e))return;y0=e.clientY;moved=false;try{el.setPointerCapture(e.pointerId)}catch(x){}});
-    el.addEventListener("pointermove",e=>{if(y0==null||isPhone())return;const dy=e.clientY-y0;if(Math.abs(dy)>6)moved=true;if(moved)panel.style.transform=dy>0&&!panel.classList.contains("mini")?`translateY(${Math.min(dy,120)}px)`:""});
-    const end=e=>{if(y0==null||isPhone())return;const dy=e.clientY-y0;y0=null;panel.style.transform="";if(!moved){if(panel.classList.contains("mini"))cardMini(false);return}if(dy>40)cardMini(true);else if(dy<-25)cardMini(false)};
-    el.addEventListener("pointerup",end);el.addEventListener("pointercancel",end)})})();
+    el.addEventListener("pointerdown",e=>{if(!ok(e))return;y0=e.clientY;moved=false;h0=panel.getBoundingClientRect().height;try{el.setPointerCapture(e.pointerId)}catch(x){}});
+    el.addEventListener("pointermove",e=>{if(y0==null||isPhone())return;const dy=e.clientY-y0;if(!moved&&Math.abs(dy)<4)return;
+      if(!moved){moved=true;panel.classList.add("dragging");if(panel.classList.contains("mini")){cardMini(false);h0=hd()}}
+      setH(Math.max(hd(),Math.min(maxH(),h0-dy)))});
+    const end=e=>{if(y0==null||isPhone())return;y0=null;panel.classList.remove("dragging");
+      if(!moved){if(panel.classList.contains("mini"))cardMini(false);return}
+      if(panel.getBoundingClientRect().height<=hd()+12){panel.style.height="";panel.style.maxHeight="";cardMini(true)}};
+    el.addEventListener("pointerup",end);el.addEventListener("pointercancel",end)})
+  // a card opened afresh (after closing) starts at its usual size
+  new MutationObserver(m=>{if(isPhone())return;for(const r of m)if(panel.style.display==="none"){panel.style.height="";panel.style.maxHeight=""}}).observe(panel,{attributes:true,attributeFilter:["style"]})})();
 window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
