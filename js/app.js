@@ -258,9 +258,11 @@ function vehForTrip(p){if(!LIVE.byTrip)return null;if(LIVE.byTrip.has(p.trip))re
 const rowVeh=b=>{const tr=b.closest(".tr");const c=tr&&tr.querySelector("[data-trip]");return c&&LIVE.byTrip?LIVE.byTrip.get(c.dataset.trip)||null:null};
 // nearest live service still heading towards this stop on the row's route (or train line) and headsign
 function upstreamVeh(b){const tr=b.closest(".tr[data-k]");if(!tr||!ctx||!ctx.rows)return null;return upstreamRow(ctx.rows[+tr.dataset.k])}
-function upstreamRow(row){if(!row||!ctx||!LIVE.veh)return null;
+function upstreamRow(row){if(!row||!ctx||!LIVE.veh)return null;const H=LIVE.here,t0=row.up&&row.up.length?row.up[0]%1440:null;
   const here=new Set((ctx.liveIds||[ctx.id,...(KIDS[ctx.id]||[])]).map(stopKey));const head=norm(cleanHead(TT.cal.hs[row.hi]||""));let best=null;
-  for(const v of LIVE.veh){if(row.kind==="train"?lineAt(v.ri,ctx.id)!==row.line:v.ri!==row.ri)continue;const ns=v.stop&&stopKey(v.stop);if(!ns)continue;
+  for(const v of LIVE.veh){if(row.kind==="train"?lineAt(v.ri,ctx.id)!==row.line:v.ri!==row.ri)continue;
+    // a bus already running a later departure from here (e.g. the 5:35) isn't the bus for this one (the 5:05)
+    if(H&&H.has(v.trip)&&t0!=null&&H.get(v.trip)!==t0)continue;const ns=v.stop&&stopKey(v.stop);if(!ns)continue;
     R[v.ri].d.forEach(d=>{const a=d.s.indexOf(ns);if(a<0)return;const z=d.s.findIndex((x,j)=>j>=a&&here.has(x));if(z<0)return;
       const hm=head&&d.h&&(norm(d.h).includes(head)||head.includes(norm(d.h)))?0:1;if(hm&&head&&R[v.ri].d.some(x=>x.h&&(norm(x.h).includes(head)||head.includes(norm(x.h)))))return;const sc=hm*1000+(z-a);if(!best||sc<best.sc)best={sc,v}})}
   return best?best.v:null}
@@ -559,6 +561,7 @@ const bneMin=sec=>Math.floor(((sec+36000)%86400)/60);
 function computeLive(id,rows,d){const ids=new Set(ctx&&ctx.id===id&&ctx.liveIds?ctx.liveIds:[id,...(KIDS[id]||[])]);const preds=[];const nowS=Date.now()/1000;
   for(const e of d.entity){const tu=e.tu;if(!tu||!tu.stu)continue;const ri=riOfRoute(tu.trip&&tu.trip.route);if(ri<0)continue;const tripCx=tu.trip.sr===3;
     for(const u of tu.stu){if(!ids.has(u.stop))continue;const ev=u.dep||u.arr;if(!ev||!ev.time)continue;const delay=ev.delay||0;preds.push({ri,trip:tu.trip.trip,st:tu.trip.start||"",dir:tu.trip.dir,lpl:(TT.cal.plid||{})[u.stop],pred:ev.time,sched:bneMin(ev.time-delay),delay,cx:tripCx||u.sr===1})}}
+  LIVE.here=new Map();preds.forEach(x=>{if(!LIVE.here.has(x.trip))LIVE.here.set(x.trip,x.sched)});
   return rows.map(row=>{if(!row.up.length)return null;const same=p=>row.kind==="train"?lineAt(p.ri,id)===row.line:p.ri===row.ri;
     const t0=row.up[0]%1440;const p=preds.find(x=>same(x)&&x.sched===t0);if(!p)return null;
     if(p.cx)return {cls:"nx cx",html:"Cancelled",title:"Cancelled"};
