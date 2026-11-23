@@ -1915,6 +1915,33 @@ document.getElementById("lgZones").innerHTML=Object.keys(ZCOL).map(k=>`<div clas
  `<div class="sw" style="background:linear-gradient(90deg,${BWCOL.N} 0 33%,${BWCOL.SE} 33% 66%,${BWCOL.E} 66%);height:7px;margin:5px 0"></div><div>Busways — Northern, South East, Eastern. Ringed markers are busway stations (split ring = interchange; dashed = on-road section)</div>`;
 document.getElementById("feedDate").textContent=DATA.feed;
 const info=document.getElementById("info");
+// ---------- Legend/information: travel information from Translink (data/travelinfo.json, weekly) and a search over it all
+let TI=null;
+async function tiLoad(){if(TI)return TI;try{TI=await (await fetch(BASE+"data/travelinfo.json"+DV)).json()}catch(e){TI={topics:[]}}tiRender();return TI}
+function tiRender(){const box=document.getElementById("travelInfo");if(!box||!TI)return;
+  box.innerHTML=`<h4>Travel information</h4><div class="tin">From Translink's website${TI.built?", checked "+esc(new Date(TI.built+"T12:00:00+10:00").toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"})):""} (updated weekly). Unofficial copy: check the Translink page for the latest.</div>`+
+    TI.topics.map((t,k)=>`<details data-ti="${k}"><summary>${esc(t.t)}</summary>`+t.pages.map((p,j)=>`<div class="tip"><div class="tiph">${esc(p.title)} <a href="${esc(p.url)}" target="_blank" rel="noopener">Translink page ↗</a></div>`+
+      p.s.map((x,i)=>`<div class="tis" id="tis-${k}-${j}-${i}">${x.h?`<b>${esc(x.h)}</b>`:""}${x.t.map(y=>`<p>${esc(y)}</p>`).join("")}</div>`).join("")+`</div>`).join("")+`</details>`).join("")}
+function tiShow(id){const q=document.getElementById("infoQ");q.value="";infoSearch();const el=document.getElementById(id);if(!el)return;const d=el.closest("details");if(d)d.open=true;
+  setTimeout(()=>{el.scrollIntoView({block:"center"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1800)},30)}
+function infoSearch(){const q=document.getElementById("infoQ").value.trim(),boxEl=info.querySelector(".box"),res=document.getElementById("infoRes");
+  const ws=q.toLowerCase().split(/\s+/).filter(w=>w.length>1);boxEl.classList.toggle("searching",ws.length>0);if(!ws.length){res.innerHTML="";return}
+  const has=t=>{t=t.toLowerCase();return ws.every(w=>t.includes(w))};const re=new RegExp("("+ws.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")","gi");
+  const hi=t=>esc(t).replace(re,"<mark>$1</mark>");const cut=t=>{if(t.length<=220)return t;const i=Math.max(0,t.toLowerCase().indexOf(ws[0])-80);return (i?"…":"")+t.slice(i,i+220)+"…"};
+  const topics=[],lines=[];
+  (TI?TI.topics:[]).forEach((t,k)=>{if(has(t.t+" "+t.k+" "+t.pages.map(p=>p.title).join(" ")))topics.push({lab:t.t,id:"tis-"+k+"-0-0"});
+    t.pages.forEach((p,j)=>p.s.forEach((x,i)=>{const crumb=t.t+(p.title!==t.t?" › "+p.title:"")+(x.h?" › "+x.h:"");
+      if(x.h&&has(x.h))topics.push({lab:t.t+" › "+x.h,id:`tis-${k}-${j}-${i}`});
+      x.t.forEach(y=>{if(has(y))lines.push({crumb,txt:y,id:`tis-${k}-${j}-${i}`})})}))});
+  // the legend itself
+  boxEl.querySelectorAll(":scope > p, :scope > .warn, :scope .lg > div:not(.sw), :scope .lgst > div").forEach((el,n)=>{const y=el.textContent.trim();if(y&&has(y)){if(!el.id)el.id="lgx-"+n;lines.push({crumb:"Legend",txt:y,id:el.id})}});
+  const seenT=new Set(),T=topics.filter(x=>!seenT.has(x.lab)&&seenT.add(x.lab)).slice(0,12);
+  res.innerHTML=(T.length?`<div class="irg">Topics</div>`+T.map(x=>`<a href="#" class="irt" data-go="${x.id}">${hi(x.lab)}</a>`).join(""):"")+
+    (lines.length?`<div class="irg">Matching text (${lines.length})</div>`+lines.slice(0,60).map(x=>`<a href="#" class="irm" data-go="${x.id}"><span class="irb">${esc(x.crumb)}</span>${hi(cut(x.txt))}</a>`).join(""):"")+
+    (!T.length&&!lines.length?`<div class="sub">Nothing matches “${esc(q)}”.</div>`:"");
+  res.querySelectorAll("[data-go]").forEach(a=>a.onclick=e=>{e.preventDefault();tiShow(a.dataset.go)})}
+document.getElementById("infoQ").addEventListener("input",infoSearch);
+new MutationObserver(()=>{if(info.style.display!=="none")tiLoad()}).observe(info,{attributes:true,attributeFilter:["style"]});
 document.getElementById("infoBtn").onclick=()=>info.style.display="flex";document.getElementById("legendBtn").onclick=()=>info.style.display="flex";document.getElementById("uiSetBtn").onclick=()=>showUISettings();
 document.getElementById("infoClose").onclick=()=>info.style.display="none";
 info.onclick=e=>{if(e.target===info)info.style.display="none"};

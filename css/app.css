@@ -607,3 +607,19 @@ html.see #panel,html.see .moremenu,html.see .alertbtn,html.see .roundbtn,html.se
 .mls{display:inline-flex;gap:3px;margin:0 8px 0 auto;flex:none}.mls:empty{display:none}.mls+.ty{margin-left:0}
 .ml{font-style:normal;font-size:11px;font-weight:800;line-height:18px;width:18px;text-align:center;border-radius:4px;color:#fff}
 .ml-B{background:#E463A4}.ml-F{background:#0e7490}.ml-L{background:#e5b700;color:#111}.ml-T{background:#1e40af}
+/* Legend/information: search and travel information */
+.isch{position:sticky;top:-18px;z-index:2;background:var(--panel-s,var(--panel));margin:0 -18px 8px;padding:8px 18px}
+#infoQ{width:100%;box-sizing:border-box;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 12px;font:inherit;font-size:15px}
+#info .box.searching>:not(h3):not(.isch):not(#infoRes):not(#infoClose){display:none}
+#infoRes .irg{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:10px 0 4px}
+#infoRes a.irt{display:block;padding:8px 10px;margin:4px 0;border-radius:9px;background:var(--hover);color:var(--ink);text-decoration:none;font-weight:600}
+#infoRes a.irm{display:block;padding:8px 4px;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;font-size:13.5px}
+#infoRes .irb{display:block;font-size:11.5px;color:var(--accent);font-weight:600;margin-bottom:2px}
+#infoRes mark,#travelInfo mark{background:#fde68a;color:#111;border-radius:3px;padding:0 1px}
+#travelInfo h4{margin:18px 0 6px;font-size:15px}#travelInfo .tin{font-size:12.5px;color:var(--muted);margin:0 0 6px}
+#travelInfo details{border:1px solid var(--line);border-radius:10px;margin:6px 0;padding:0 10px}
+#travelInfo summary{cursor:pointer;font-weight:700;padding:9px 0}
+#travelInfo .tip{margin:6px 0 10px}#travelInfo .tiph{font-weight:700;font-size:13.5px;margin:8px 0 4px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+#travelInfo .tiph a{font-weight:600;font-size:12.5px;color:var(--accent)}#travelInfo .tiph span{font-weight:400;font-size:11.5px;color:var(--muted)}
+#travelInfo .tis{margin:6px 0;padding:4px 0 4px 10px;border-left:3px solid var(--line);font-size:13.5px}#travelInfo .tis b{display:block}
+#travelInfo .tis p{margin:3px 0}#travelInfo .tis.flash{border-left-color:#f59e0b;background:#f59e0b18;transition:background 1.5s}

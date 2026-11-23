@@ -107,6 +107,12 @@ jobs:
         continue-on-error: true
         run: python tools/build_school_days.py .
 
+      - name: Travel information from Translink's website, for the Legend/information box (keeps last copy if unavailable)
+        continue-on-error: true
+        run: |
+          pip install beautifulsoup4
+          python tools/build_travelinfo.py .
+
       - name: Queensland Rail Commuter Catch-Ups (keeps last list if the page can't be read)
         continue-on-error: true
         run: python tools/build_catchups.py .
