@@ -161,8 +161,8 @@ add({id:"hlvar-case",type:"line",source:"hlvar",layout:{"line-cap":"round","line
 add({id:"hlvar-line",type:"line",source:"hlvar",layout:{"line-cap":"butt","line-join":"round"},paint:{"line-color":["get","c"],"line-width":4,"line-dasharray":[1.6,1.1]}});
 add({id:"hl-case",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":["case",["==",["get","mode"],"web"],6,10],"line-opacity":.95}});
 add({id:"hl-line",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["case",["==",["get","mode"],"web"],3.4,6]}});
-add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"dirArrow","icon-size":["interpolate",["linear"],["zoom"],9,0.85,15,1.05],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
-add({id:"veh-dot",type:"circle",source:"veh",paint:{"circle-color":["get","c"],"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","trk"],1],7,2.6],12,["case",["==",["get","trk"],1],9,4.5],13.3,["case",["==",["get","trk"],1],12,8],16,["case",["==",["get","trk"],1],14,10]],"circle-stroke-color":["case",["==",["get","trk"],1],"#16a34a","#0b0f17"],"circle-stroke-width":["interpolate",["linear"],["zoom"],9,["case",["==",["get","trk"],1],3,1.2],14,["case",["==",["get","trk"],1],4,2.2]],"circle-opacity":["case",["get","dim"],.25,1],"circle-stroke-opacity":["case",["get","dim"],.25,1]}});
+add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"dirArrow","icon-size":["interpolate",["linear"],["zoom"],9,0.65,15,0.8],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
+add({id:"veh-dot",type:"circle",source:"veh",paint:{"circle-color":["get","c"],"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","trk"],1],7,["==",["get","lv"],1],5.5,2.6],12,["case",["==",["get","trk"],1],9,["==",["get","lv"],1],7.5,4.5],13.3,["case",["==",["get","trk"],1],12,8],16,["case",["==",["get","trk"],1],14,10]],"circle-stroke-color":["case",["==",["get","trk"],1],"#16a34a",["==",["get","lv"],1],"#22c55e","#0b0f17"],"circle-stroke-width":["interpolate",["linear"],["zoom"],9,["case",["==",["get","trk"],1],3,["==",["get","lv"],1],2.5,1.2],14,["case",["==",["get","trk"],1],4,["==",["get","lv"],1],3.5,2.2]],"circle-opacity":["case",["get","dim"],.25,1],"circle-stroke-opacity":["case",["get","dim"],.25,1]}});
 add({id:"veh-lbl",type:"symbol",source:"veh",minzoom:13.3,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":10.5,"text-allow-overlap":true,"text-ignore-placement":true},paint:{"text-color":["get","tc"],"text-opacity":["case",["get","dim"],.3,1]}});
 // stops & stations
 add({id:"stops",type:"circle",source:"pt_bus",minzoom:13.5,paint:{"circle-color":"#E463A4","circle-radius":["interpolate",["linear"],["zoom"],14,3.6,17,6.5],"circle-stroke-color":THEME[theme].stopStroke,"circle-stroke-width":1.4}});
@@ -370,7 +370,7 @@ function openStop(id,fly,web,keepCam,noFit,mode){const s=ST[id];if(!s)return;foc
 function nearestIdx(p,x,y){let bi=0,bd=1e9;for(let k=0;k<p.length;k++){const dx=(p[k][0]-x)*0.886,dy=p[k][1]-y,d=dx*dx+dy*dy;if(d<bd){bd=d;bi=k}}return bi}
 let webLegs=[];let webCam=null;
 function placeArrows(){if(!webLegs.length){map.getSource("arrows").setData(FC([]));return}
-  const SP=innerWidth<=640?70:80,CELL=26,taken=new Set(),pts=[];
+  const SP=innerWidth<=640?110:130,CELL=34,taken=new Set(),pts=[];
   for(const leg of webLegs){let prev=map.project(leg[0]),acc=SP*0.6;
     for(let k=1;k<leg.length;k++){const cur=map.project(leg[k]);const dx=cur.x-prev.x,dy=cur.y-prev.y,seg=Math.hypot(dx,dy);
       while(seg>0&&acc<=seg){const t=acc/seg,x=prev.x+dx*t,y=prev.y+dy*t;const b=Math.atan2(dy,dx)*180/Math.PI;
@@ -538,8 +538,8 @@ const LIVE={veh:[],vehAt:0,trips:null,tripsAt:0,alerts:[],alertsAt:0};
 async function getFeed(name){const r=await fetch(RELAY+"/"+name,{cache:"no-store"});if(!r.ok)throw new Error(name+" "+r.status);return decodeGTFSRT(await r.arrayBuffer())}
 function drawVehicles(){if(!map.getSource("veh"))return;const f=[];const now=Date.now()/1000;
   const liveOn=chipState.live==="on";
-  for(const v of LIVE.veh){if(TRK){if(v.trip!==TRK.trip&&!(v.ri===TRK.ri&&vehDir(v.ri,v)===TRK.di))continue}else if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=TRK?false:!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
-    f.push({type:"Feature",properties:{trip:v.trip,trk:TRK&&v.trip===TRK.trip?1:0,c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
+  for(const v of LIVE.veh){if(TRK){if(v.ri!==TRK.ri||(v.trip!==TRK.trip&&vehDir(v.ri,v)!==TRK.di))continue}else if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=TRK?false:!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
+    f.push({type:"Feature",properties:{trip:v.trip,trk:TRK&&v.trip===TRK.trip?1:0,lv:TRK?1:0,c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
   if(focusRoutes)f.sort((a,b)=>a.properties.dim-b.properties.dim).reverse();
   map.getSource("veh").setData(FC(f))}
 async function pollVehicles(force){if(!force&&document.hidden||!force&&(map.getLayoutProperty("veh-dot","visibility")==="none"&&!(panel.style.display!=="none"&&(view==="rt"||view==="favs"||vehFocus||ctx))))return;
@@ -1759,10 +1759,10 @@ function trkLayers(on){if(on){if(trkSnap)return;trkSnap={};soloSnap=null;soloKey
   renderAll();hint()}
 // a soft pulse around every bus on the route while tracking (the tracked one in green)
 let trkRaf=null;
-function trkPulse(on){if(!map.getLayer("veh-pulse"))map.addLayer({id:"veh-pulse",type:"circle",source:"veh",layout:{visibility:"none"},paint:{"circle-color":["case",["==",["get","trk"],1],"#16a34a",["get","c"]],"circle-radius":10,"circle-opacity":0,"circle-pitch-alignment":"map"}},"veh-dot");
+function trkPulse(on){if(!map.getLayer("veh-pulse"))map.addLayer({id:"veh-pulse",type:"circle",source:"veh",layout:{visibility:"none"},paint:{"circle-color":["case",["==",["get","lv"],1],"#22c55e",["get","c"]],"circle-radius":10,"circle-opacity":0,"circle-pitch-alignment":"map"}},"veh-dot");
   cancelAnimationFrame(trkRaf);map.setLayoutProperty("veh-pulse","visibility",on?"visible":"none");if(!on)return;
   const t0=performance.now();const tick=now=>{if(!TRK){map.setLayoutProperty("veh-pulse","visibility","none");return}const p=((now-t0)%1600)/1600;const z=map.getZoom(),b=z>=13.3?11:z>=12?7:5;
-    map.setPaintProperty("veh-pulse","circle-radius",["case",["==",["get","trk"],1],b+4+p*16,b+p*12]);map.setPaintProperty("veh-pulse","circle-opacity",0.45*(1-p));trkRaf=requestAnimationFrame(tick)};trkRaf=requestAnimationFrame(tick)}
+    map.setPaintProperty("veh-pulse","circle-radius",["case",["==",["get","trk"],1],b+4+p*16,b+p*12]);map.setPaintProperty("veh-pulse","circle-opacity",0.6*(1-p));trkRaf=requestAnimationFrame(tick)};trkRaf=requestAnimationFrame(tick)}
 function trkStop(keepCard){if(!TRK)return;TRK=null;trkPulse(false);clearInterval(trkTimer);trkTimer=null;trkLayers(false);rtFocus=false;syncVehVis();const b=document.getElementById("trkBar");if(b&&keepCard)b.remove()}
 function trkVehs(i,di){return (LIVE.veh||[]).filter(v=>v.ri===i&&vehDir(i,v)===di)}
 // a vehicle still at its first stop (or whose trip hasn't reached its start time) hasn't started its run yet
@@ -1781,20 +1781,31 @@ function trkPick(i){const di=rcState&&rcState.i===i?rcState.di:0;let box=documen
   if(!LIVE.vehAt||Date.now()-LIVE.vehAt>30000){box.innerHTML=`<div class="sub">Finding live positions…</div>`;pollVehicles(true).then(go)}else go()}
 function trkStart(i,v){const back=backState;trkStop();showRoute(i,false,v);if(back)setBack(back);TRK={trip:v.trip,ri:i,di:vehDir(i,v),follow:true};rtFocus=true;trkLayers(true);syncVehVis();trkPulse(true);
   map.easeTo({center:[v.lon,v.lat],zoom:Math.max(map.getZoom(),14.5),duration:700});trkBar();clearInterval(trkTimer);trkTimer=setInterval(()=>pollVehicles(true),10000)}
-function trkBar(){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);let b=document.getElementById("trkBar");
+// Track live: straight away shows every vehicle on the route in this direction, in bright green; tap one to follow it
+function trkAll(i){const di=rcState&&rcState.i===i?rcState.di:0;const go=()=>{trkStop();TRK={trip:null,ri:i,di,follow:false};rtFocus=true;trkLayers(true);syncVehVis();trkPulse(true);trkBar();
+    const vs=trkVehs(i,di);if(vs.length)pjFit(vs.map(v=>[v.lon,v.lat]).concat(vs.length===1?[[vs[0].lon+0.01,vs[0].lat+0.01],[vs[0].lon-0.01,vs[0].lat-0.01]]:[]),14);
+    clearInterval(trkTimer);trkTimer=setInterval(()=>pollVehicles(true),10000)};
+  if(!LIVE.vehAt||Date.now()-LIVE.vehAt>30000)pollVehicles(true).then(go);else go()}
+function trkChip(x){return `<button class="btn trkv${trkSoon(x)?" soon":""}" data-trks="${esc(x.trip)}">${x.fleet?esc(x.fleet):"Service"}${trkWhere(x)?` · ${esc(trkWhere(x).replace(/^next: /,""))}`:""}</button>`}
+function trkBar(){if(!TRK)return;
+  if(TRK.trip===null){let b=document.getElementById("trkBar");if(!b){b=document.createElement("div");b.id="trkBar";b.className="trk";pB.insertAdjacentElement("afterbegin",b)}
+    const w=trkWord(TRK.ri),pl=w==="bus"?"buses":w==="ferry"?"ferries":w+"s",vs=trkVehs(TRK.ri,TRK.di),d=R[TRK.ri].d[TRK.di];
+    b.innerHTML=`<span class="trkdot"></span><div class="trkt"><b>Live: ${vs.length} ${vs.length===1?w:pl} on this route${d&&d.h?" to "+esc(cleanHead(d.h)):""}</b><span>${vs.length?"Positions update every 10 seconds. Tap a "+w+" here or on the map to follow it.":"None are reporting their position in this direction right now."}</span></div><button class="btn" id="trkEnd">Stop</button>${vs.length?`<div class="trko">${vs.map(trkChip).join("")}</div>`:""}`;
+    b.querySelectorAll("[data-trks]").forEach(x=>x.onclick=()=>{const nv=LIVE.byTrip&&LIVE.byTrip.get(x.dataset.trks);if(nv)trkStart(TRK.ri,nv)});document.getElementById("trkEnd").onclick=()=>trkStop(true);return}const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);let b=document.getElementById("trkBar");
   if(!b){b=document.createElement("div");b.id="trkBar";b.className="trk";pB.insertAdjacentElement("afterbegin",b)}
   const w=trkWord(TRK.ri);const ns=v&&v.stop&&ST[stopKey(v.stop)];
   const others=TRK?trkVehs(TRK.ri,TRK.di).filter(x=>x.trip!==TRK.trip):[],otherDir=TRK?(LIVE.veh||[]).filter(x=>x.ri===TRK.ri&&x.trip!==TRK.trip&&vehDir(x.ri,x)!==TRK.di):[];
   const chips=others.length?`<div class="trko"><span>Other ${w==="bus"?"buses":w==="ferry"?"ferries":w+"s"} on this route, this direction:</span>${others.map(x=>{const n=x.stop&&ST[stopKey(x.stop)];return `<button class="btn trkv${trkSoon(x)?" soon":""}" data-trks="${esc(x.trip)}">${x.fleet?esc(x.fleet):"Service"}${trkWhere(x)?` · ${esc(trkWhere(x).replace(/^next: /,""))}`:""}</button>`}).join("")}</div>`:"";
   const od=R[TRK.ri].d.find((d,k)=>k!==TRK.di);const chips2=otherDir.length?`<div class="trko"><span>Going the other way${od&&od.h?" (to "+esc(cleanHead(od.h))+")":""}:</span>${otherDir.map(x=>`<button class="btn trkv${trkSoon(x)?" soon":""}" data-trks="${esc(x.trip)}">${x.fleet?esc(x.fleet):"Service"}${trkWhere(x)?` · ${esc(trkWhere(x).replace(/^next: /,""))}`:""}</button>`).join("")}</div>`:"";
-  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${trkSoon(v)?(so=>"Starting soon: waiting at "+esc(so.where)+(so.at!=null?", departs "+clock(so.at):"")+" · ")(trkSoon(v)):ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkEnd">Stop</button>${chips}`
-    :`<div class="trkt"><b>This ${w} has stopped reporting its position</b><span>It may have finished its trip.</span></div><button class="btn" id="trkEnd">Stop</button>${chips}`;
+  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${trkSoon(v)?(so=>"Starting soon: waiting at "+esc(so.where)+(so.at!=null?", departs "+clock(so.at):"")+" · ")(trkSoon(v)):ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkAllB">All ${w==="bus"?"buses":w+"s"}</button><button class="btn" id="trkEnd">Stop</button>${chips}`
+    :`<div class="trkt"><b>This ${w} has stopped reporting its position</b><span>It may have finished its trip.</span></div><button class="btn" id="trkAllB">All ${w==="bus"?"buses":w+"s"}</button><button class="btn" id="trkEnd">Stop</button>${chips}`;
   b.querySelectorAll("[data-trks]").forEach(x=>x.onclick=()=>{const nv=LIVE.byTrip&&LIVE.byTrip.get(x.dataset.trks);if(nv)trkStart(TRK.ri,nv)});
+  const ab=document.getElementById("trkAllB");if(ab)ab.onclick=()=>{const i=TRK.ri,b0=backState;const di=TRK.di;rcState&&(rcState.di=di);trkAll(i)};
   const c=document.getElementById("trkCtr");if(c)c.onclick=()=>{TRK.follow=true;trkFollow(true)};document.getElementById("trkEnd").onclick=()=>trkStop(true)}
-function trkFollow(now){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);if(v&&TRK.follow)map.easeTo({center:[v.lon,v.lat],duration:now?600:1200});trkBar()}
+function trkFollow(now){if(!TRK)return;if(TRK.trip===null)return trkBar();const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);if(v&&TRK.follow)map.easeTo({center:[v.lon,v.lat],duration:now?600:1200});trkBar()}
 map.on("dragstart",()=>{if(TRK&&TRK.follow){TRK.follow=false;trkBar()}});
 // the button lives on every route card (also after switching direction, which redraws the card)
-pB.addEventListener("click",e=>{const b=e.target.closest("#trkBtn");if(!b)return;e.stopPropagation();trkPick(+b.dataset.ri)},true);
+pB.addEventListener("click",e=>{const b=e.target.closest("#trkBtn");if(!b)return;e.stopPropagation();trkAll(+b.dataset.ri)},true);
 document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
