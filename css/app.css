@@ -582,3 +582,5 @@ body:not(.light) .trk{background:#14532d55;color:#dcfce7;border-color:#166534}
 .trkv{margin:3px 6px 3px 0}#trkBox:empty{display:none}#trkBox{margin:2px 0 8px}
 .trko{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}.trko>span{width:100%;font-size:12px;font-weight:600;opacity:.8}.trko .trkv{margin:0;padding:6px 10px;font-size:13px}
 .trkv.soon{border-style:dashed;opacity:.85}
+.tvh .tm{white-space:nowrap}
+.tvh .mbs{float:none;display:block;margin:0 0 4px}.tvh .tm{min-width:84px}ol.stops li .tm{min-width:84px}ol.stops li .tv{min-width:46px;text-align:right}

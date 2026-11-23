@@ -408,7 +408,7 @@ function routeArrows(i,di){const r=R[i],d=r.d[di];if(!d){webLegs=[];placeArrows(
   if(backState){const s=ST[backState.id];if(s&&d.s.includes(backState.id)){const j=nearestIdx(p,s[2],s[1]);leg=[[s[2],s[1]],...p.slice(j+1)]}}
   webLegs=leg.length>1?[leg]:[];placeArrows()}
 function routeStops(i,di){const r=R[i],d=r.d[di];map.getSource("hlstops").setData(FC(d.s.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
-  return `<div class="tvnote" id="tvNote"></div>${mHeadHTML()}<ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tv"></span><span class="tf"></span><span class="tc"></span><span class="snm">${esc(s[0])}</span>${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
+  return `<div class="tvnote" id="tvNote"></div>${mHeadHTML()}<ol class="stops" style="--rc:${r.c}" data-ri="${i}" data-di="${di}">`+d.s.map(id=>{const s=ST[id];return s?`<li data-s="${id}"><span class="tf"></span><span class="tv"></span><span class="tc"></span><span class="snm">${esc(s[0])}</span>${s[4]?`<span class="s2">${esc(s[4])}</span>`:""}</li>`:""}).join("")+"</ol>"}
 // tapped dotted line / variant: which route, which trips, today's times
 async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const r=R[i];const d=r.d[di];
   if(!d||vi<0||!d.v||!d.v[vi]){showRoute(i,false);return}
@@ -1438,9 +1438,9 @@ async function applyMeasured(ol,key,best,dkey){const head=document.getElementByI
     el.textContent=(approx?"≈":"")+mMin(cum)+" min";if(diff>=120)el.classList.add("slow");else if(diff<=-90)el.classList.add("fast");
     el.title=`Measured in the ${mBandName(band)}: ${mMin(cum)} min from the first stop`+(tt!=null?` (timetabled ${mMin(tt)} min)`:"")+(sg?`, ${sg[2]} trip${sg[2]>1?"s":""} on this stretch`:"")+(approx?". ≈: a stretch before this stop has no recordings yet, so its timetabled time is used":"")});
   const note=document.getElementById("tvNote");if(note){let m=note.querySelector(".mnote");if(!m){m=document.createElement("span");m.className="mnote";note.appendChild(m)}
-    m.textContent=x?` Measured: the median time from the first stop in the ${mBandName(band)}, ${mSince(ix)} (${x.trips} trips). Orange is 2 min or more slower than timetabled.`+(have<lis.length-1?" ≈ marks stops after a stretch with no recordings yet.":"")
-      :` Measured: ${ix.meta&&ix.meta.from?"not enough recordings yet for this route in "+(band==="all"?"the AM or PM windows":"the "+(band==="am"?"AM":"PM")+" window")+".":"recordings start with the next weekday peak."}`}}
-function mHeadHTML(){return `<div class="tvh" id="tvHead" style="display:none"><span class="mbs">Measured <button data-mb="all">All</button><button data-mb="am">AM</button><button data-mb="pm">PM</button></span><span class="tm">Measured</span><span class="tv">From start</span><span class="tf">Here</span><span class="tc">Timetable</span></div>`}
+    m.textContent=x?` Real-time data: the median time from the first stop in the ${mBandName(band)}, ${mSince(ix)} (${x.trips} trips). Orange is 2 min or more slower than timetabled.`+(have<lis.length-1?" ≈ marks stops after a stretch with no recordings yet.":"")
+      :` Real-time data: ${ix.meta&&ix.meta.from?"not enough recordings yet for this route in "+(band==="all"?"the AM or PM windows":"the "+(band==="am"?"AM":"PM")+" window")+".":"recordings start with the next weekday peak."}`}}
+function mHeadHTML(){return `<div class="tvh" id="tvHead" style="display:none"><span class="mbs">Real-time data <button data-mb="all">All</button><button data-mb="am">AM</button><button data-mb="pm">PM</button></span><span class="tm">Real-time data</span><span class="tf">Here</span><span class="tv">From start</span><span class="tc">Timetable</span></div>`}
 function mWireHead(){const h=document.getElementById("tvHead");if(!h)return;h.querySelectorAll("[data-mb]").forEach(b=>b.onclick=e=>{e.stopPropagation();mBand=b.dataset.mb;applyTravel()})}
 
 // ---------- period and kind-of-day filters, shared by Real time average and the delay heat map
