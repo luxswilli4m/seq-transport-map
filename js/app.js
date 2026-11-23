@@ -578,6 +578,19 @@ function liftOutages(){const out=new Map();let al=[];try{al=todaysAlerts()}catch
     if(!ids.size)for(const [sid,v] of Object.entries(ACC.st))if(new RegExp("\\b"+v.n.replace(/[^\w ]/g,"").trim()+"( railway)? station\\b","i").test(txt))ids.add(sid);
     ids.forEach(i=>{if(!out.has(i))out.set(i,[]);out.get(i).push(a)})}
   return out}
+// Lift outages that cut off platforms, for Journey Search with Avoid steps on. An alert naming platforms ("platform 3",
+// "platforms 5/6") blocks just those; one about a car park, entrance, footbridge or street-to-concourse lift blocks
+// nothing (another way in usually stays step-free); any other lift outage at a station blocks the whole station.
+const LIFT_PART=/car ?park|entr(y|ance)|footbridge|overpass|concourse|street level|\b(st|street|rd|road)\b to /i;
+function liftBlocks(){const out=new Map();
+  for(const [sid,als] of liftOutages())for(const a of als){const hd=a.header||"",txt=hd+" "+(a.desc||"");
+    const m=txt.match(/platforms?\s+(\d+[a-z]?(?:\s*(?:\/|,|&|and)\s*\d+[a-z]?)*)/i);
+    const b=out.get(sid)||{all:false,plats:new Set(),nm:ST[sid]?shortName(ST[sid][0]):sid};
+    if(m)m[1].split(/\s*(?:\/|,|&|and)\s*/i).forEach(x=>x&&b.plats.add(x.toLowerCase()));else if(!LIFT_PART.test(hd))b.all=true;else continue;
+    out.set(sid,b)}
+  return out}
+const plCode=lab=>String(lab||"").replace(/^(platform|stop|bay)\s*/i,"").trim().toLowerCase();
+const liftHits=(b,lab)=>!!b&&(b.all||[...b.plats].some(x=>{const c=plCode(lab);return c===x||(c.startsWith(x)&&/^[a-z]$/.test(c.slice(x.length)))}));
 // Brisbane City Council's bus stop accessibility audit: [stop type, boarding point, road gradient, cross fall, tactile, audited]
 const BS_R={E:["Easy","independent"],M:["Medium","assisted"],H:["Hard","limited"]};
 function busAccHTML(id){const b=(ACC.bs||{})[id];if(!b)return "";const [typ,bp,gr,cf,tac,aud]=b;const r=x=>BS_R[x]?BS_R[x][0]:"not rated";
@@ -596,9 +609,11 @@ function accHTML(id){const a=accOf(id),outs=liftOutages().get(id)||liftOutages()
   else h+=`<div class="odnote">Lift notice from today's Translink service alerts.</div>`;
   return h+`</div></details>`}
 // stations on a journey that aren't rated independent access, or have a lift out of service
-function accJourneyTags(o,d){const seen=new Set(),tags=[];const outs=liftOutages();
-  for(const l of o.legs){if(l.type!=="ride")continue;for(const k of [l.from,l.to]){const id=d.s[k];if(!id||seen.has(id))continue;seen.add(id);const a=accOf(id);const nm=ST[id]?shortName(ST[id][0]):id;
-    if(outs.has(id)||outs.has(parentOf[id]))tags.push(`<span class="cnt cnacc out" title="Translink has posted a lift outage for this station today">Lift out: ${esc(nm)}</span>`);
+function accJourneyTags(o,d){const seen=new Set(),tags=[];const outs=liftOutages(),LB=liftBlocks();
+  for(const l of o.legs){if(l.type!=="ride")continue;const p=d.p[l.pi];for(const [k,pos] of [[l.from,l.bpos],[l.to,l.apos]]){const id=d.s[k];if(!id||seen.has(id))continue;const a=accOf(id);const nm=ST[id]?shortName(ST[id][0]):id;
+    // an outage on another platform of this station doesn't affect this journey
+    const b=LB.get(id);const lab=p&&p.pl[pos]>=0?(TT.cal.pl||[])[p.pl[pos]]:"";const other=b&&!b.all&&b.plats.size&&!liftHits(b,lab);seen.add(id);
+    if(!other&&!o.notSF&&(outs.has(id)||outs.has(parentOf[id])))tags.push(`<span class="cnt cnacc out" title="Translink has posted a lift outage for this station today">Lift out: ${esc(nm)}</span>`);
     const bb=(ACC.bs||{})[id];if(bb&&bb[1]==="H")tags.push(`<span class="cnt cnacc limited" title="Brisbane City Council rates the boarding point at this stop hard; see the stop card for details">Hard boarding: ${esc(nm)}</span>`);
     if(a&&a.lvl&&a.lvl!=="independent")tags.push(`<span class="cnt cnacc ${a.lvl}" title="Queensland Rail rates this station ${ACC_LVL[a.lvl].toLowerCase()}; see the station card for details">${ACC_LVL[a.lvl]}: ${esc(nm)}</span>`)}}
   if(o.legs.some(l=>l.route&&l.route.elev))tags.push(`<span class="cnt cnacc lift" title="A walk in this journey uses a lift (from OpenStreetMap)">Uses a lift</span>`);
@@ -935,7 +950,8 @@ const routeMin=m=>Math.max(1,Math.ceil(m/80));        // 80 m a minute along a r
 const legMin=l=>l.route?routeMin(l.m):walkMin(l.m);
 function nearIdx(d,xy,maxM){const out=[];const gx=Math.floor(xy[0]*98.7),gy=Math.floor(xy[1]*110.6);const r=Math.ceil(maxM/1000);
   for(let i=-r;i<=r;i++)for(let j=-r;j<=r;j++){const a=d.grid.get((gx+i)+","+(gy+j));if(a)for(const s of a){const m=mDist(xy,d.xy[s]);if(m<=maxM)out.push([s,m])}}return out}
-function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,INF=1e9;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
+let RAP_BLK=null;   // Set of "pattern:position" a step-free journey can't board or alight at (lift outages), or null
+function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,INF=1e9;const BL=RAP_BLK;const best=new Float64Array(n).fill(INF);const arr=[],par=[];
   const fromXY=fromKeys.map(epXY),toXY=toKeys.map(epXY);if(startM<=0&&!fromKeys.every(epIsStop))startM=maxM;
   const start=new Map();if(startM<=0)fromKeys.forEach(k=>{if(d.idx.has(k))start.set(d.idx.get(k),{t:t0,m:0})});else fromXY.forEach(xy=>nearIdx(d,xy,startM).forEach(([s,m])=>{const t=t0+(m<30?0:walkMin(m));if(!start.has(s)||start.get(s).t>t)start.set(s,{t,m})}));
   const end=new Map();toXY.forEach(xy=>nearIdx(d,xy,maxM).forEach(([s,m])=>{const w=m<30?0:walkMin(m);if(!end.has(s)||end.get(s).w>w)end.set(s,{w,m})}));
@@ -947,8 +963,9 @@ function raptor(d,fromKeys,toKeys,t0,maxM,K=5,startM=maxM){const n=d.s.length,IN
     const newly=new Set();
     for(const [pi,pos0] of Q){const p=d.p[pi];let trip=-1,bpos=-1,bstop=-1;
       for(let i=pos0;i<p.s.length;i++){const s=p.s[i];
-        if(trip>=0){const t=p.tt[trip][i];if(t<best[s]&&t<bestT){arr[k][s]=t;best[s]=t;par[k][s]={type:"ride",pi,trip,from:bstop,bpos,apos:i};newly.add(s)}}
-        const prev=arr[k-1][s];if(prev<INF){const ready=prev+(par[k-1][s]&&par[k-1][s].type==="start"?0:1);
+        const blk=BL&&BL.has(pi+":"+i);
+        if(trip>=0&&!blk){const t=p.tt[trip][i];if(t<best[s]&&t<bestT){arr[k][s]=t;best[s]=t;par[k][s]={type:"ride",pi,trip,from:bstop,bpos,apos:i};newly.add(s)}}
+        const prev=blk?INF:arr[k-1][s];if(prev<INF){const ready=prev+(par[k-1][s]&&par[k-1][s].type==="start"?0:1);
           if(trip<0||ready<p.tt[trip][i]){let found=-1;for(let j=0;j<p.tt.length;j++){const tj=p.tt[j][i];if(tj>=ready&&(found<0||tj<p.tt[found][i]))found=j}
             if(found>=0&&(trip<0||p.tt[found][i]<p.tt[trip][i])){trip=found;bpos=i;bstop=s}}}}}
     // walking transfers from stops reached by a vehicle this round
@@ -977,6 +994,10 @@ async function planSearch(){const box=document.getElementById("cnRes");const my=
   const day={ymd:pickDay};const maxM=+document.getElementById("cnRad").value;
   let d;try{d=await planData(day.ymd)}catch(e){box.innerHTML=`<div class="sub">Connection data for that day isn't available yet.</div>`;return}
   const fk=[PLAN.from],tk=[PLAN.to];
+  // Avoid steps: platforms cut off by a lift outage today aren't used; the quickest journey that needs one is shown last, marked
+  const LB=PLAN.noSteps&&dayOff===0?liftBlocks():new Map();let blkSet=null;
+  if(LB.size){blkSet=new Set();for(const [sid,b] of LB){const si=d.idx.get(sid);if(si==null)continue;for(const [pi,pos] of d.sp[si]){const p=d.p[pi];if(liftHits(b,p.pl[pos]>=0?(TT.cal.pl||[])[p.pl[pos]]:""))blkSet.add(pi+":"+pos)}}if(!blkSet.size)blkSet=null}
+  RAP_BLK=blkSet;   // set for the searches below, cleared after
   // services leaving from the chosen stop or station itself come first; nearby stops are only used if nothing leaves from there
   const run=startM=>{const o=[];let t=t0;
       // leave at: the next few departures. arrive by: step through the departures before the deadline, keeping those that make it
@@ -996,7 +1017,13 @@ async function planSearch(){const box=document.getElementById("cnRes");const my=
     opts=dir}
   else if(fromStop){const w=run(maxM).filter(x=>x.legs[0]&&x.legs[0].type==="walk").sort((a,b)=>a.arr-b.arr)[0];if(w&&w.arr<=Math.min(...opts.map(x=>x.arr))-15)extra=w}
   if(arriveBy)extra=null;
-  opts.sort(arriveBy?((a,b)=>b.leave-a.leave||a.changes-b.changes):((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave));const pick=opts.slice(0,4);const show=pick.sort(arriveBy?((a,b)=>a.changes-b.changes||b.leave-a.leave):((a,b)=>a.changes-b.changes||a.arr-b.arr)).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}
+  RAP_BLK=null;
+  let notSF=null;
+  if(blkSet){const uses=o=>o.legs.some(l=>l.type==="ride"&&(blkSet.has(l.pi+":"+l.bpos)||blkSet.has(l.pi+":"+l.apos)));
+    const r=raptor(d,fk,tk,t0,maxM,5,fromStop?0:maxM).filter(uses).sort((a,b)=>a.arr-b.arr||a.changes-b.changes)[0];
+    if(r&&!opts.some(x=>x.arr===r.arr&&x.leave===r.leave&&x.changes===r.changes))notSF=r;
+    if(notSF&&chNote&&notSF.changes===0)chNote="The direct service needs a platform whose lift is out of service today, so these step-free options include a change. It's shown last."}
+  opts.sort(arriveBy?((a,b)=>b.leave-a.leave||a.changes-b.changes):((a,b)=>a.arr-b.arr||a.changes-b.changes||b.leave-a.leave));const pick=opts.slice(0,4);const show=pick.sort(arriveBy?((a,b)=>a.changes-b.changes||b.leave-a.leave):((a,b)=>a.changes-b.changes||a.arr-b.arr)).slice(0,3);if(extra){extra.walkFirst=true;show.push(extra)}if(notSF){notSF.notSF=true;show.push(notSF)}
   // every walk follows real streets and paths (js/walk.js); times are then worked out from the real distance
   const noSteps=!!PLAN.noSteps;box.innerHTML=`<div class="sub">Finding walking routes…</div>`;
   const xyA=l=>l.from==null?epXY(PLAN.from):d.xy[l.from],xyB=l=>l.to==null?epXY(PLAN.to):d.xy[l.to];
@@ -1016,11 +1043,12 @@ async function planSearch(){const box=document.getElementById("cnRes");const my=
   if(walkAll){if(walkAll.quick)show.unshift(walkAll);else show.push(walkAll)}
   if(!show.length){box.innerHTML=`<div class="sub">No connection found${arriveBy?` that arrives by ${clock(byT)}`:""}${maxM<2000?" — try a larger walking distance":""}. ${arriveBy?"Try a later time, or":"Services may have finished for the day; try a later day or"} check Translink's journey planner.</div>`;return}
   PLAN.last={d,show};const nm=k=>esc(shortName(ST[d.s[k]]?ST[d.s[k]][0]:d.s[k]));const wideNote=(wide?`<div class="odnote" style="margin-top:0">No services from ${esc(epName(PLAN.from))} itself get there, so these start from stops within ${maxM} m.</div>`:"")+(chNote?`<div class="odnote" style="margin-top:0">${chNote}</div>`:"");
-  const main=show.filter(x=>!x.walkFirst&&!x.walkAll);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&!x.walkAll&&x.arr===minArr),minCh=main.length?main[0].changes:0;
+  const main=show.filter(x=>!x.walkFirst&&!x.walkAll&&!x.notSF);const minArr=Math.min(...main.map(x=>x.arr)),fastI=show.findIndex(x=>!x.walkFirst&&!x.walkAll&&!x.notSF&&x.arr===minArr),minCh=main.length?main[0].changes:0;
   const byNote=arriveBy?`<div class="odnote" style="margin-top:0">Latest ways to arrive by ${clock(byT)}${dayOff?" on "+esc(document.getElementById("cnDay").selectedOptions[0].textContent):""}.</div>`:"";
   box.innerHTML=byNote+wideNote+show.map((o,oi)=>{const dur=o.arr-o.leave;
     // with Avoid steps on, a journey whose walk can't avoid steps says so; otherwise steps show as the orange "!" by Walking
-    const stepsTag=o.legs.some(l=>l.route&&l.route.forced)?`<span class="cnt cnsteps" title="No step-free way was found for part of the walking">Includes steps</span>`:"";
+    const sfTag=o.notSF?`<span class="cnt cnacc out" title="This journey needs a platform whose lift is out of service today (Translink alert)">Not step-free today: lift out at ${esc([...new Set(o.legs.filter(l=>l.type==="ride").flatMap(l=>[l.from,l.to]).map(k=>d.s[k]).filter(id=>LB.has(id)).map(id=>LB.get(id).nm))].join(", "))}</span>`:"";
+    const stepsTag=sfTag+(o.legs.some(l=>l.route&&l.route.forced)?`<span class="cnt cnsteps" title="No step-free way was found for part of the walking">Includes steps</span>`:"");
     const tags=o.walkAll?`<span class="cnt cnwa">Walk all the way</span>${o.quick?`<span class="cnt">Quickest</span>`:""}`:o.walkFirst?`<span class="cnt cnw">${Math.min(...main.map(x=>x.arr))-o.arr} min sooner if you walk to a nearby stop</span>`:((o===main[0]&&main.some(x=>x.changes>minCh)?`<span class="cnt">Fewest changes</span>`:"")+(oi===fastI&&main.some(x=>x.changes!==main[0].changes)?`<span class="cnt">Fastest</span>`:""));
     return `<div class="cno" data-o="${oi}"><div class="cnh"><b>${clock(o.leave)} → ${clock(o.arr)}</b><span>${dur} min · ${o.walkAll?"walk":o.changes?o.changes+" change"+(o.changes>1?"s":""):"direct"}</span>${o.legs.some(l=>l.type==="walk")?`<span class="cnwb"><span class="cnwarn" id="cnWarn${oi}" title="A walk in this journey has a steep stretch or steps" hidden>!</span><button class="cnwalk" data-w="${oi}">Walking ›</button></span>`:""}</div>${(at=>tags||stepsTag||at?`<div class="cntags">${tags}${stepsTag}${at}</div>`:"")(accJourneyTags(o,d))}`+
       o.legs.map((l,li)=>{if(l.type==="walk"){const a=l.from==null?"from "+esc(epName(PLAN.from)):"from "+nm(l.from);const b=l.to==null?"to "+esc(epName(PLAN.to)):"to "+nm(l.to);return `<div class="cnl walk" data-leg="${oi},${li}">🚶 Walk ${Math.round(l.m/10)*10} m (about ${legMin(l)} min) ${a} ${b}</div>`}
