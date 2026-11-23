@@ -508,7 +508,7 @@ function variantHTML(i,di){const d=R[i].d[di];if(!d||!d.v||!d.v.length)return ""
 function drawVariants(i,di){const d=R[i].d[di];map.getSource("hlvar").setData(FC(d&&d.v?d.v.map(v=>({type:"Feature",properties:{c:R[i].c},geometry:{type:"LineString",coordinates:dec(v.p)}})):[]))}
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
   return dirs+`<div class="grp">${r.d[di]?r.d[di].s.length:0} stops</div>`+routeStops(i,di)+variantHTML(i,di)}
-function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;const keepWeb=pB.querySelector(".webrow"),keepTop=pB.querySelector(".badges.svc"),keepG=keepTop&&keepTop.previousElementSibling&&keepTop.previousElementSibling.classList.contains("grp")?keepTop.previousElementSibling:null;
+function wireDirs(i){pB.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{const di=+b.dataset.d;if(typeof TRK!=="undefined"&&TRK)trkStop();const keepWeb=pB.querySelector(".webrow"),keepTop=pB.querySelector(".badges.svc"),keepG=keepTop&&keepTop.previousElementSibling&&keepTop.previousElementSibling.classList.contains("grp")?keepTop.previousElementSibling:null;
     pB.innerHTML=(keepWeb?keepWeb.outerHTML:"")+(keepG?keepG.outerHTML:"")+(keepTop?keepTop.outerHTML:"")+routeBody(i,di);if(rcState){rcState.i=i;rcState.di=di}wireFullTT();wire();wireDirs(i);routeArrows(i,di);drawVariants(i,di);applyTravel();applyVehStatus()})}
 function rememberStop(fromStop){if(fromStop&&ctx){backState={id:ctx.id,web:ctx.web,cam:{center:map.getCenter(),zoom:map.getZoom()}};pBack.style.display="block"}else{backState=null;pBack.style.display="none"}}
 function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach((d,di)=>{const p=path(i,di);f.push({type:"Feature",properties:{c:col||R[i].c,ri:i,mode:"route"},geometry:{type:"LineString",coordinates:p}});p.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]})}));
@@ -1759,12 +1759,18 @@ function trkLayers(on){if(on){if(trkSnap)return;trkSnap={};soloSnap=null;soloKey
   renderAll();hint()}
 function trkStop(keepCard){if(!TRK)return;TRK=null;clearInterval(trkTimer);trkTimer=null;trkLayers(false);rtFocus=false;syncVehVis();const b=document.getElementById("trkBar");if(b&&keepCard)b.remove()}
 function trkVehs(i,di){return (LIVE.veh||[]).filter(v=>v.ri===i&&vehDir(i,v)===di)}
+// a vehicle still at its first stop (or whose trip hasn't reached its start time) hasn't started its run yet
+function trkSoon(v){const r=R[v.ri],d=r&&r.d[vehDir(v.ri,v)];const at0=d&&v.stop&&stopKey(v.stop)===d.s[0];
+  let sm=null;if(v.start){const [h,m]=v.start.split(":").map(Number);sm=h*60+m}const late=sm!=null&&sm>bneNow().min+1;
+  return at0||late?{at:sm,where:d&&ST[d.s[0]]?shortName(ST[d.s[0]][0]):""}:null}
+const trkWhere=v=>{const so=trkSoon(v);if(so)return "starting soon"+(so.at!=null?" ("+clock(so.at)+")":"");const n=v.stop&&ST[stopKey(v.stop)];return n?"next: "+shortName(n[0]):""};
 const trkWord=i=>R[i].t==="ferry"?"ferry":R[i].t==="tram"?"tram":R[i].t==="train"?"train":"bus";
-function trkPick(i){const di=rcState&&rcState.i===i?rcState.di:0;const box=document.getElementById("trkBox");if(!box)return;
+function trkPick(i){const di=rcState&&rcState.i===i?rcState.di:0;let box=document.getElementById("trkBox");
+  if(!box){const wr=document.getElementById("trkBtn");if(!wr)return;box=document.createElement("div");box.id="trkBox";wr.closest(".webrow").insertAdjacentElement("afterend",box)}
   const go=()=>{const vs=trkVehs(i,di),w=trkWord(i),r=R[i];
     if(!vs.length){box.innerHTML=`<div class="sub">No ${w}es${w==="bus"?"":""} on route ${esc(r.n)} are reporting their position in this direction right now. Try the other direction, or again in a minute.</div>`.replace("buses","buses").replace("ferryes","ferries").replace("trames","trams");return}
     if(vs.length===1)return trkStart(i,vs[0]);
-    box.innerHTML=`<div class="grp">Which ${w}?</div>`+vs.map((v,k)=>{const ns=v.stop&&ST[stopKey(v.stop)];return `<button class="btn trkv" data-trk="${k}">${v.fleet?esc((w==="bus"?"Bus ":w==="ferry"?"Vessel ":"")+v.fleet):"Service "+(k+1)}${ns?` · next: ${esc(shortName(ns[0]))}`:""}</button>`}).join("");
+    box.innerHTML=`<div class="grp">Which ${w}?</div>`+vs.map((v,k)=>{const ns=v.stop&&ST[stopKey(v.stop)];return `<button class="btn trkv${trkSoon(v)?" soon":""}" data-trk="${k}">${v.fleet?esc((w==="bus"?"Bus ":w==="ferry"?"Vessel ":"")+v.fleet):"Service "+(k+1)}${trkWhere(v)?` · ${esc(trkWhere(v))}`:""}</button>`}).join("");
     box.querySelectorAll("[data-trk]").forEach(b=>b.onclick=()=>trkStart(i,vs[+b.dataset.trk]))};
   if(!LIVE.vehAt||Date.now()-LIVE.vehAt>30000){box.innerHTML=`<div class="sub">Finding live positions…</div>`;pollVehicles(true).then(go)}else go()}
 function trkStart(i,v){const back=backState;trkStop();showRoute(i,false,v);if(back)setBack(back);TRK={trip:v.trip,ri:i,di:vehDir(i,v),follow:true};rtFocus=true;trkLayers(true);syncVehVis();
@@ -1773,8 +1779,8 @@ function trkBar(){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);
   if(!b){b=document.createElement("div");b.id="trkBar";b.className="trk";pB.insertAdjacentElement("afterbegin",b)}
   const w=trkWord(TRK.ri);const ns=v&&v.stop&&ST[stopKey(v.stop)];
   const others=TRK?trkVehs(TRK.ri,TRK.di).filter(x=>x.trip!==TRK.trip):[];
-  const chips=others.length?`<div class="trko"><span>Other ${w==="bus"?"buses":w==="ferry"?"ferries":w+"s"} on this route, this direction:</span>${others.map(x=>{const n=x.stop&&ST[stopKey(x.stop)];return `<button class="btn trkv" data-trks="${esc(x.trip)}">${x.fleet?esc(x.fleet):"Service"}${n?` · ${esc(shortName(n[0]))}`:""}</button>`}).join("")}</div>`:"";
-  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkEnd">Stop</button>${chips}`
+  const chips=others.length?`<div class="trko"><span>Other ${w==="bus"?"buses":w==="ferry"?"ferries":w+"s"} on this route, this direction:</span>${others.map(x=>{const n=x.stop&&ST[stopKey(x.stop)];return `<button class="btn trkv${trkSoon(x)?" soon":""}" data-trks="${esc(x.trip)}">${x.fleet?esc(x.fleet):"Service"}${trkWhere(x)?` · ${esc(trkWhere(x).replace(/^next: /,""))}`:""}</button>`}).join("")}</div>`:"";
+  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${trkSoon(v)?(so=>"Starting soon: waiting at "+esc(so.where)+(so.at!=null?", departs "+clock(so.at):"")+" · ")(trkSoon(v)):ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkEnd">Stop</button>${chips}`
     :`<div class="trkt"><b>This ${w} has stopped reporting its position</b><span>It may have finished its trip.</span></div><button class="btn" id="trkEnd">Stop</button>${chips}`;
   b.querySelectorAll("[data-trks]").forEach(x=>x.onclick=()=>{const nv=LIVE.byTrip&&LIVE.byTrip.get(x.dataset.trks);if(nv)trkStart(TRK.ri,nv)});
   const c=document.getElementById("trkCtr");if(c)c.onclick=()=>{TRK.follow=true;trkFollow(true)};document.getElementById("trkEnd").onclick=()=>trkStop(true)}
@@ -1950,10 +1956,18 @@ pMinBtn.onclick=e=>{e.stopPropagation();cardMini(!panel.classList.contains("mini
   new MutationObserver(m=>{if(isPhone())return;for(const r of m)if(panel.style.display==="none"){panel.style.height="";panel.style.maxHeight=""}}).observe(panel,{attributes:true,attributeFilter:["style"]})})();
 // iPad / iPhone: after the on-screen keyboard closes (or the browser's toolbar shows or hides), Safari and Chrome can leave the
 // page pushed up with a blank strip at the bottom. Put the page back and refit the map whenever the visible area changes.
-(()=>{let t=null;const fix=()=>{clearTimeout(t);t=setTimeout(()=>{if(window.scrollY||window.scrollX||document.documentElement.scrollTop||document.body.scrollTop){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0}map.resize()},120)};
+function kbLift(){const vv=window.visualViewport;if(!vv)return false;const kb=innerHeight-(vv.offsetTop+vv.height);const ae=document.activeElement;
+  const typing=kb>80&&ae&&ae.matches&&ae.matches("input,textarea,select")&&panel.contains(ae)&&panel.style.display!=="none";
+  if(!typing){if(panel.dataset.kb){panel.style.bottom="";panel.style.maxHeight=panel.dataset.kbmh||"";delete panel.dataset.kb;delete panel.dataset.kbmh}return false}
+  if(!panel.dataset.kb){panel.dataset.kb="1";panel.dataset.kbmh=panel.style.maxHeight||""}
+  const topB=Math.max(vv.offsetTop,(document.getElementById("top")||panel).getBoundingClientRect().bottom)+8;let mh=vv.offsetTop+vv.height-12-topB;if(mh<220)mh=vv.height-24;
+  panel.style.bottom=(kb+12)+"px";panel.style.maxHeight=Math.round(mh)+"px";if(panel.style.height&&parseInt(panel.style.height)>mh)panel.style.height=Math.round(mh)+"px";
+  setTimeout(()=>{try{ae.scrollIntoView({block:"nearest"})}catch(e){}},50);return true}
+document.addEventListener("focusin",e=>{if(e.target.matches&&e.target.matches("input,textarea")&&panel.contains(e.target))setTimeout(kbLift,350)});
+(()=>{let t=null;const fix=()=>{clearTimeout(t);t=setTimeout(()=>{if(kbLift())return;if(window.scrollY||window.scrollX||document.documentElement.scrollTop||document.body.scrollTop){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0}map.resize()},120)};
   if(window.visualViewport){visualViewport.addEventListener("resize",fix);visualViewport.addEventListener("scroll",fix)}
   addEventListener("orientationchange",fix);document.addEventListener("focusout",e=>{if(e.target.matches&&e.target.matches("input,textarea,select"))fix()});addEventListener("pageshow",fix)})();
-window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};window.__setVeh=l=>{LIVE.veh=l.map(v=>{const i=nameIdx[v.r];const d=R[i].d[v.di||0];const sid=d.s[v.k||3],st=ST[sid];return {ri:i,trip:v.trip,dir:v.di||0,stop:sid,fleet:v.fleet||"",start:"",lat:st[1]-0.001,lon:st[2],ts:Date.now()/1000}});LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles()};   // for tests
+window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};window.__setVeh=l=>{LIVE.veh=l.map(v=>{const i=nameIdx[v.r];const d=R[i].d[v.di||0];const sid=d.s[v.k??3],st=ST[sid];return {ri:i,trip:v.trip,dir:v.di||0,stop:sid,fleet:v.fleet||"",start:"",lat:st[1]-0.001,lon:st[2],ts:Date.now()/1000}});LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
 // ---------- "More" menu (School routes, On demand, future extras)
