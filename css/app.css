@@ -603,3 +603,4 @@ html.see #panel,html.see .moremenu,html.see .alertbtn,html.see .roundbtn,html.se
   body:not(.phone) #titlebar .roundbtn{width:32px;height:32px}
   body:not(.phone) #chips{flex-wrap:wrap;overflow:visible;row-gap:6px}
 }
+#infoBtn[hidden]{display:none!important}

@@ -186,15 +186,16 @@ function applyThemePaint(){const T=THEME[theme];
   map.setPaintProperty("zones-fill","fill-opacity",["interpolate",["linear"],["zoom"],12,T.zoneFill,13,.16,15,.07]);
   [["dots","line-color",T.dots],["loop","line-color",T.dots],["chev-line","line-color",T.chevLine],["tram-case","line-color",T.casing],["train-case","line-color",T.casing],["bw-case","line-color",T.casing],
    ["zlabels","text-color",T.zoneText],["zlabels","text-halo-color",T.zoneHalo],["stops","circle-stroke-color",T.stopStroke],["ferry-pt","circle-stroke-color",T.stopStroke],["busway-lbl","text-color",T.lblText],["busway-lbl","text-halo-color",T.lblHalo],["train-lbl","text-color",T.lblText],["train-lbl","text-halo-color",T.lblHalo],["busstn-lbl","text-color",T.lblText],["busstn-lbl","text-halo-color",T.lblHalo]].forEach(([l,p,v])=>map.setPaintProperty(l,p,v))}
-// UI ▾: light / dark and card transparency (saved on this device)
-(()=>{const w=document.getElementById("uiWrap"),b=document.getElementById("uiBtn"),sl=document.getElementById("uiTa"),lv=document.getElementById("uiTaV");
-  const setTa=v=>{v=Math.max(0,Math.min(80,+v||0));document.documentElement.style.setProperty("--ta",(v/100).toFixed(2));document.documentElement.classList.toggle("see",v>0);sl.value=v;lv.textContent=v+"%";try{localStorage.setItem("seqmap_ta",v)}catch(e){}};
-  let v0=0;try{v0=+localStorage.getItem("seqmap_ta")||0}catch(e){}setTa(v0);sl.oninput=()=>setTa(sl.value);
-  const set=o=>{w.classList.toggle("open",o);b.setAttribute("aria-expanded",o)};
-  const seg=()=>w.querySelectorAll("[data-th]").forEach(x=>x.classList.toggle("on",x.dataset.th===theme));seg();
-  w.querySelectorAll("[data-th]").forEach(x=>x.onclick=e=>{e.stopPropagation();if(x.dataset.th!==theme)document.getElementById("themeBtn").click();seg();set(true)});
-  b.onclick=e=>{e.stopPropagation();["moreWrap","bauWrap"].forEach(id=>{const z=document.getElementById(id);if(z)z.classList.remove("open")});set(!w.classList.contains("open"))};
-  w.querySelector(".uimenu").addEventListener("click",e=>e.stopPropagation());document.addEventListener("click",e=>{if(!w.contains(e.target))set(false)})})();
+// More ▾ → UI and settings: light / dark and card transparency (saved on this device); Legend/information opens the info box
+const setTa=v=>{v=Math.max(0,Math.min(80,+v||0));document.documentElement.style.setProperty("--ta",(v/100).toFixed(2));document.documentElement.classList.toggle("see",v>0);try{localStorage.setItem("seqmap_ta",v)}catch(e){}return v};
+try{setTa(+localStorage.getItem("seqmap_ta")||0)}catch(e){}
+function showUISettings(){const v=Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ta")||0)*100)||0;
+  openPanel("UI and settings","Saved on this device",`<div class="uil">Mode</div><div class="uiseg"><button data-th="light">☀︎ Light</button><button data-th="dark">☾ Dark</button></div>
+    <div class="uil">Transparency <span id="uiTaV">${v}%</span></div><input type="range" id="uiTa" min="0" max="80" step="5" value="${v}" aria-label="Card transparency">
+    <div class="uin">Makes the cards, buttons and top bar see-through so more of the map shows.</div>`,{view:"uiset"});
+  const seg=()=>pB.querySelectorAll("[data-th]").forEach(x=>x.classList.toggle("on",x.dataset.th===theme));seg();
+  pB.querySelectorAll("[data-th]").forEach(x=>x.onclick=()=>{if(x.dataset.th!==theme)document.getElementById("themeBtn").click();seg()});
+  const sl=document.getElementById("uiTa");sl.oninput=()=>{document.getElementById("uiTaV").textContent=setTa(sl.value)+"%"}}
 document.getElementById("themeBtn").onclick=()=>{
   theme = theme==="light"?"dark":"light"; document.body.classList.toggle("light",theme==="light");
   try{localStorage.setItem("seqmap_theme",theme)}catch(e){}
@@ -1908,7 +1909,7 @@ document.getElementById("lgZones").innerHTML=Object.keys(ZCOL).map(k=>`<div clas
  `<div class="sw" style="background:linear-gradient(90deg,${BWCOL.N} 0 33%,${BWCOL.SE} 33% 66%,${BWCOL.E} 66%);height:7px;margin:5px 0"></div><div>Busways — Northern, South East, Eastern. Ringed markers are busway stations (split ring = interchange; dashed = on-road section)</div>`;
 document.getElementById("feedDate").textContent=DATA.feed;
 const info=document.getElementById("info");
-document.getElementById("infoBtn").onclick=()=>info.style.display="flex";
+document.getElementById("infoBtn").onclick=()=>info.style.display="flex";document.getElementById("legendBtn").onclick=()=>info.style.display="flex";document.getElementById("uiSetBtn").onclick=()=>showUISettings();
 document.getElementById("infoClose").onclick=()=>info.style.display="none";
 info.onclick=e=>{if(e.target===info)info.style.display="none"};
 try{if(!localStorage.getItem("seqmap_seen")){info.style.display="flex";localStorage.setItem("seqmap_seen","1")}}catch(e){info.style.display="flex"}
