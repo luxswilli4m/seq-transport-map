@@ -240,7 +240,7 @@ let backState=null;// set when a route is opened from a stop card
 const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv","hm","hmv","rb","rbv"]);   // map-layer cards that shrink instead of closing
 const PHONE_MQ="(max-width:640px), (max-height:500px) and (pointer:coarse)";
 function isPhone(){return matchMedia(PHONE_MQ).matches}
-function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view)&&!isPhone(),xb=document.getElementById("pClose");panel.classList.remove("mini");xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view)&&!isPhone(),xb=document.getElementById("pClose");panel.classList.remove("mini");panel.classList.toggle("minix",!g);{const mb=document.getElementById("pMin");mb.textContent="–";mb.title="Minimise";mb.setAttribute("aria-label","Minimise")}xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
@@ -271,7 +271,7 @@ function setMini(on){if(isPhone())return phMini(on);panel.classList.toggle("mini
 pCloseBtn.onclick=()=>{if(isPhone()){   // phones: ✕ always closes; a map mode (On demand, projects, vendors, heat map) switches off too
     if((view==="od"||view==="odv")&&odOn)return toggleOD();if((view==="pj"||view==="pjv")&&pjOn)return togglePJ(pjOn);if((view==="gc"||view==="gcv")&&gcOn)return toggleGC();if((view==="hm"||view==="hmv")&&hmOn)return toggleHM();if((view==="rb"||view==="rbv")&&rbOn)return toggleRB();return closePanel()}
   if(MINI_VIEWS.has(view))return setMini(!panel.classList.contains("mini"));closePanel()};
-panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))setMini(false)});
+panel.querySelector(".pht").addEventListener("click",()=>{if(panel.classList.contains("mini"))cardMini(false)});
 pBack.onclick=()=>{if(!backState)return;const b=backState;backState=null;pBack.style.display="none";if(b.cam)map.jumpTo(b.cam);
   if(b.kind==="cn"){openPanel("Journey Search",b.sub,"",{view:"cn"});pB.replaceChildren(...b.nodes);pB.scrollTop=b.scroll;if(b.prev)setBack(b.prev);drawOption(b.oi);return}
   if(b.kind==="pj")return pjOverview();if(b.kind==="rb")return rbOverview();if(b.kind==="rbc"){if(!rbOn)return toggleRB(true).then(()=>rbCard(b.id,true));return rbCard(b.id,true)}
@@ -1864,7 +1864,6 @@ const pMinBtn=document.getElementById("pMin");
 const phSnaps=()=>{const top=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--barh"))||60;const H=innerHeight;return [H-top-6,Math.round(H*.72),Math.round(H*.36)]};
 function phSetH(h){panel.style.setProperty("--ph",Math.round(h)+"px")}
 function phMini(on){panel.classList.toggle("mini",on);pMinBtn.textContent=on?"+":"–";pMinBtn.title=on?"Expand":"Minimise";pMinBtn.setAttribute("aria-label",pMinBtn.title)}
-pMinBtn.onclick=e=>{e.stopPropagation();phMini(!panel.classList.contains("mini"))};
 // opening a new card (panel was hidden) starts at 72%, expanded
 new MutationObserver(m=>{if(!isPhone())return;for(const r of m){if(r.attributeName==="style"&&panel.style.display!=="none"&&r.oldValue&&/display:\s*none/.test(r.oldValue)){phSetH(innerHeight*.72);phMini(false)}}}).observe(panel,{attributes:true,attributeFilter:["style"],attributeOldValue:true});
 (()=>{let y0=null,h0=0,moved=false;const land=()=>document.body.classList.contains("land");
@@ -1894,6 +1893,15 @@ function phPad(){const top=(parseInt(getComputedStyle(document.documentElement).
   map.fitBounds=(b,o)=>fb(b,isPhone()?{...(o||{}),padding:phPad()}:o);
   const off=o=>{if(!isPhone()||!o||!o.center||o.offset)return o;const p=phPad();return {...o,offset:[(p.left-p.right)/2,(p.top-p.bottom)/2]}};
   map.flyTo=(o,e)=>fly(off(o),e);map.easeTo=(o,e)=>ease(off(o),e)})();
+// iPad and desktop: every card can shrink to its title bar — the – button, or drag the title bar down (up, or tap the title, to open it again)
+function cardMini(on){if(isPhone())return phMini(on);if(MINI_VIEWS.has(view))return setMini(on);panel.classList.toggle("mini",on);pMinBtn.textContent=on?"+":"–";pMinBtn.title=on?"Expand":"Minimise";pMinBtn.setAttribute("aria-label",pMinBtn.title)}
+pMinBtn.onclick=e=>{e.stopPropagation();cardMini(!panel.classList.contains("mini"))};
+(()=>{let y0=null,moved=false;const ok=e=>!isPhone()&&!e.target.closest("button,a,input,select,summary,label");
+  [document.getElementById("pGrab"),panel.querySelector(".ph")].forEach(el=>{
+    el.addEventListener("pointerdown",e=>{if(!ok(e))return;y0=e.clientY;moved=false;try{el.setPointerCapture(e.pointerId)}catch(x){}});
+    el.addEventListener("pointermove",e=>{if(y0==null||isPhone())return;const dy=e.clientY-y0;if(Math.abs(dy)>6)moved=true;if(moved)panel.style.transform=dy>0&&!panel.classList.contains("mini")?`translateY(${Math.min(dy,120)}px)`:""});
+    const end=e=>{if(y0==null||isPhone())return;const dy=e.clientY-y0;y0=null;panel.style.transform="";if(!moved){if(panel.classList.contains("mini"))cardMini(false);return}if(dy>40)cardMini(true);else if(dy<-25)cardMini(false)};
+    el.addEventListener("pointerup",end);el.addEventListener("pointercancel",end)})})();
 window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 

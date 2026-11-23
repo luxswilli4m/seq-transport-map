@@ -568,3 +568,8 @@ body:not(.light) .rbnote{background:#1e3a8a55;color:#dbeafe}body:not(.light) .rb
 .rbpop .maplibregl-popup-content{padding:8px 26px 8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.rbpt{width:100%;font-size:12px;font-weight:700;color:#374151}.rbpop .rbr{border:0;cursor:pointer;font:inherit;font-weight:700}
 /* rail replacement item stays orange / light blue while its view is open; a ring shows it's switched on */
 .moremenu button.odon.rbnow,.moremenu button.odon.rbsoon{box-shadow:inset 0 0 0 2px #1e3a8a}body:not(.light) .moremenu button.odon.rbnow,body:not(.light) .moremenu button.odon.rbsoon{box-shadow:inset 0 0 0 2px #93c5fd}
+/* iPad and desktop: a – on every card (map-mode cards already use their close button for it) and a grip to drag down */
+body:not(.phone) #panel.minix #pMin{display:block}
+body:not(.phone) #pGrab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line);margin:7px auto -3px;cursor:grab;touch-action:none}
+body:not(.phone) #panel .ph{touch-action:none}
+body:not(.phone) #panel.mini .pht{cursor:pointer}
