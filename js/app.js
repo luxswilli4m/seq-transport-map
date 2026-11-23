@@ -1912,6 +1912,11 @@ pMinBtn.onclick=e=>{e.stopPropagation();cardMini(!panel.classList.contains("mini
     el.addEventListener("pointerup",end);el.addEventListener("pointercancel",end)})
   // a card opened afresh (after closing) starts at its usual size
   new MutationObserver(m=>{if(isPhone())return;for(const r of m)if(panel.style.display==="none"){panel.style.height="";panel.style.maxHeight=""}}).observe(panel,{attributes:true,attributeFilter:["style"]})})();
+// iPad / iPhone: after the on-screen keyboard closes (or the browser's toolbar shows or hides), Safari and Chrome can leave the
+// page pushed up with a blank strip at the bottom. Put the page back and refit the map whenever the visible area changes.
+(()=>{let t=null;const fix=()=>{clearTimeout(t);t=setTimeout(()=>{if(window.scrollY||window.scrollX||document.documentElement.scrollTop||document.body.scrollTop){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0}map.resize()},120)};
+  if(window.visualViewport){visualViewport.addEventListener("resize",fix);visualViewport.addEventListener("scroll",fix)}
+  addEventListener("orientationchange",fix);document.addEventListener("focusout",e=>{if(e.target.matches&&e.target.matches("input,textarea,select"))fix()});addEventListener("pageshow",fix)})();
 window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 

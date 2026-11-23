@@ -221,6 +221,7 @@ ol.stops li:first-child .tv{color:var(--ink)}
 .tvnote:empty{display:none}
 /* keep scrolling inside cards on touch screens (stops Safari scrolling the whole page) */
 html,body{overflow:hidden;overscroll-behavior:none;position:fixed;inset:0;width:100%}
+@supports (height:100dvh){html,body{height:100dvh}}
 #panel .pb,.results,#info .box{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 a.alertbtn{text-decoration:none;display:inline-flex;align-items:center;box-sizing:border-box}
 .alertbtn.odon{background:#1e3a8a;border-color:#1e3a8a;color:#fff}
