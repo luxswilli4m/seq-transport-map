@@ -1934,7 +1934,9 @@ function infoSearch(){const q=document.getElementById("infoQ").value.trim(),boxE
       if(x.h&&has(x.h))topics.push({lab:t.t+" › "+x.h,id:`tis-${k}-${j}-${i}`});
       x.t.forEach(y=>{if(has(y))lines.push({crumb,txt:y,id:`tis-${k}-${j}-${i}`})})}))});
   // the legend itself
-  boxEl.querySelectorAll(":scope > p, :scope > .warn, :scope .lg > div:not(.sw), :scope .lgst > div").forEach((el,n)=>{const y=el.textContent.trim();if(y&&has(y)){if(!el.id)el.id="lgx-"+n;lines.push({crumb:"Legend",txt:y,id:el.id})}});
+  boxEl.querySelectorAll(".isec").forEach((d,k)=>{const sec=d.querySelector("summary").textContent;if(!d.id)d.id="isec-"+k;if(has(sec))topics.unshift({lab:"Map guide › "+sec,id:d.id});
+    d.querySelectorAll(".isb > p, .isb > .warn, .isb .lg > div:not(.sw), .isb .lgst > div").forEach((el,n)=>{const y=el.textContent.trim();if(y&&has(y)){if(!el.id)el.id="lgx-"+k+"-"+n;lines.push({crumb:"Map guide › "+sec,txt:y,id:el.id})}})});
+  lines.sort((a,b)=>(b.crumb.startsWith("Map guide"))-(a.crumb.startsWith("Map guide")));
   const seenT=new Set(),T=topics.filter(x=>!seenT.has(x.lab)&&seenT.add(x.lab)).slice(0,12);
   res.innerHTML=(T.length?`<div class="irg">Topics</div>`+T.map(x=>`<a href="#" class="irt" data-go="${x.id}">${hi(x.lab)}</a>`).join(""):"")+
     (lines.length?`<div class="irg">Matching text (${lines.length})</div>`+lines.slice(0,60).map(x=>`<a href="#" class="irm" data-go="${x.id}"><span class="irb">${esc(x.crumb)}</span>${hi(cut(x.txt))}</a>`).join(""):"")+
