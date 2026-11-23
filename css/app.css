@@ -592,5 +592,5 @@ body:not(.light) .trk{background:#14532d55;color:#dcfce7;border-color:#166534}
 #uiTa{width:100%;accent-color:var(--accent)}.uin{font-size:12px;color:var(--muted);margin-top:6px}
 html.see #panel,html.see .moremenu,html.see .alertbtn,html.see .roundbtn,html.see #searches input,html.see .chip,html.see .results{backdrop-filter:blur(10px) saturate(1.2);-webkit-backdrop-filter:blur(10px) saturate(1.2)}
 #themeBtn[hidden]{display:none!important}
-.tt .nx.est{color:var(--muted)}.tt .nx.est .ld{animation:none;opacity:.6}
+.tt .nx.est{color:var(--muted)}.tt .nx.est.late{color:#d97706}.tt .nx.est .ld{animation:none;opacity:.6}
 #titlebar h1{background:#E463A4;color:#fff;padding:5px 11px;border-radius:9px;letter-spacing:.06em;font-weight:800;font-size:14px;flex:none}

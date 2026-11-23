@@ -578,8 +578,9 @@ function computeLive(id,rows,d){const ids=new Set(ctx&&ctx.id===id&&ctx.liveIds?
     const lp=p.lpl!=null?(TT.cal.pl||[])[p.lpl]:null;
     let vt=vehForTrip(p);if(!vt&&mins<=30){const u=upstreamRow(row);if(u&&!preds.some(x=>x.trip===u.trip&&x!==p))vt=u.trip}   // a bus already predicted for another departure here isn't this one
     // no vehicle running this trip yet: Translink's figure is an estimate from the timetable, not a tracked bus
-    if(LIVE.byTrip&&!(vt&&LIVE.byTrip.get(vt)))return {trip:p.trip,lpl:lp,cls:"nx est",title:`Not assigned yet: no ${fleetWord(p.ri).toLowerCase()} is running this trip yet, so this is Translink's estimate (scheduled ${clock(row.up[0])}). It turns green once one is.`,
-      html:`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}<small class="fln">Not assigned yet</small>`};
+    // no vehicle on this trip yet: show Translink's prediction, grey (orange when it predicts 2+ min late), marked Not assigned
+    if(LIVE.byTrip&&!(vt&&LIVE.byTrip.get(vt)))return {trip:p.trip,lpl:lp,cls:"nx est"+(late?" late":""),title:`Not assigned: no ${fleetWord(p.ri).toLowerCase()} is running this trip yet; this is Translink's prediction${late?`, ${Math.round(p.delay/60)} min late`:""} (scheduled ${clock(row.up[0])}). Turns green once one is.`,
+      html:`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")+`<small class="fln">Not assigned</small>`};
     return {trip:vt||p.trip,lpl:lp,cls:"nx "+(late?"late":"live"),title:late?`${Math.round(p.delay/60)} min late (scheduled ${clock(row.up[0])})`:early?`${Math.round(-p.delay/60)} min early`:"On time (live)",
       html:`<i class="ld"></i>${mins<=0?"Now":mins<60?mins+" min":clock(bneMin(p.pred))}`+(late?`<small>+${Math.round(p.delay/60)}</small>`:"")+((fl=>fl&&R[p.ri].t!=="train"?`<small class="fln">${fleetWord(p.ri)} ${esc(fl)}</small>`:"")(fleetOf(vt||p.trip)))}})}
 async function applyLive(id){const box=document.getElementById("ttBox");if(!box||!ctx||ctx.id!==id||!ctx.rows)return;let d;if(!LIVE.vehAt&&!applyLive.p){applyLive.p=1;pollVehicles()}
