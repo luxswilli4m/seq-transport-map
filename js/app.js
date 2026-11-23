@@ -162,7 +162,7 @@ add({id:"hlvar-line",type:"line",source:"hlvar",layout:{"line-cap":"butt","line-
 add({id:"hl-case",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#ffffff","line-width":["case",["==",["get","mode"],"web"],6,10],"line-opacity":.95}});
 add({id:"hl-line",type:"line",source:"hl",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["get","c"],"line-width":["case",["==",["get","mode"],"web"],3.4,6]}});
 add({id:"web-arrows",type:"symbol",source:"arrows",layout:{"icon-image":"dirArrow","icon-size":["interpolate",["linear"],["zoom"],9,0.85,15,1.05],"icon-rotate":["get","b"],"icon-rotation-alignment":"map","icon-allow-overlap":true,"icon-ignore-placement":true}});
-add({id:"veh-dot",type:"circle",source:"veh",paint:{"circle-color":["get","c"],"circle-radius":["interpolate",["linear"],["zoom"],9,2.6,12,4.5,13.3,8,16,10],"circle-stroke-color":"#0b0f17","circle-stroke-width":["interpolate",["linear"],["zoom"],9,1.2,14,2.2],"circle-opacity":["case",["get","dim"],.25,1],"circle-stroke-opacity":["case",["get","dim"],.25,1]}});
+add({id:"veh-dot",type:"circle",source:"veh",paint:{"circle-color":["get","c"],"circle-radius":["interpolate",["linear"],["zoom"],9,["case",["==",["get","trk"],1],7,2.6],12,["case",["==",["get","trk"],1],9,4.5],13.3,["case",["==",["get","trk"],1],12,8],16,["case",["==",["get","trk"],1],14,10]],"circle-stroke-color":["case",["==",["get","trk"],1],"#16a34a","#0b0f17"],"circle-stroke-width":["interpolate",["linear"],["zoom"],9,["case",["==",["get","trk"],1],3,1.2],14,["case",["==",["get","trk"],1],4,2.2]],"circle-opacity":["case",["get","dim"],.25,1],"circle-stroke-opacity":["case",["get","dim"],.25,1]}});
 add({id:"veh-lbl",type:"symbol",source:"veh",minzoom:13.3,layout:{"text-field":["get","n"],"text-font":FONT,"text-size":10.5,"text-allow-overlap":true,"text-ignore-placement":true},paint:{"text-color":["get","tc"],"text-opacity":["case",["get","dim"],.3,1]}});
 // stops & stations
 add({id:"stops",type:"circle",source:"pt_bus",minzoom:13.5,paint:{"circle-color":"#E463A4","circle-radius":["interpolate",["linear"],["zoom"],14,3.6,17,6.5],"circle-stroke-color":THEME[theme].stopStroke,"circle-stroke-width":1.4}});
@@ -240,7 +240,7 @@ let backState=null;// set when a route is opened from a stop card
 const MINI_VIEWS=new Set(["gc","gcv","od","odv","pj","pjv","hm","hmv","rb","rbv"]);   // map-layer cards that shrink instead of closing
 const PHONE_MQ="(max-width:640px), (max-height:500px) and (pointer:coarse)";
 function isPhone(){return matchMedia(PHONE_MQ).matches}
-function openPanel(t,s,html,opt){opt=opt||{};{const g=MINI_VIEWS.has(opt.view)&&!isPhone(),xb=document.getElementById("pClose");panel.classList.remove("mini");panel.classList.toggle("minix",!g);{const mb=document.getElementById("pMin");mb.textContent="–";mb.title="Minimise";mb.setAttribute("aria-label","Minimise")}xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
+function openPanel(t,s,html,opt){opt=opt||{};if(typeof TRK!=="undefined"&&TRK&&!(opt.veh&&opt.veh.trip===TRK.trip))trkStop();{const g=MINI_VIEWS.has(opt.view)&&!isPhone(),xb=document.getElementById("pClose");panel.classList.remove("mini");panel.classList.toggle("minix",!g);{const mb=document.getElementById("pMin");mb.textContent="–";mb.title="Minimise";mb.setAttribute("aria-label","Minimise")}xb.textContent=g?"–":"×";xb.title=g?"Minimise":"Close";xb.setAttribute("aria-label",xb.title)}if(opt.view!=="cn"&&typeof cnLayers==="function")cnLayers(false);{const pc=document.getElementById("pCn");if(pc)pc.style.display="none"}vehFocus=opt.veh||null;view=opt.view||"";panel.classList.toggle("wide",!!opt.wide);pT.textContent=t;pS.innerHTML=s;pB.innerHTML=html;panel.style.display="flex";setStar(opt.star||null);
   if(view!=="rt"&&rtFocus){rtFocus=false;syncVehVis()}wire()}
 // ---------- favourites (saved on this device only)
 const FAV={stops:[],routes:[]};try{const f=JSON.parse(localStorage.getItem("seqmap_favs")||"{}");FAV.stops=f.stops||[];FAV.routes=f.routes||[]}catch(e){}
@@ -265,7 +265,7 @@ function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
-function closePanel(){panel.classList.remove("mini");if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
+function closePanel(){if(typeof TRK!=="undefined"&&TRK)trkStop();panel.classList.remove("mini");if(typeof cnLayers==="function")cnLayers(false);vehFocus=null;focusRoutes=null;rtFocus=false;view="";rtState=null;syncVehVis();const c=webCam||(backState&&backState.cam);webCam=null;panel.style.display="none";clearHL();setSel(null);ctx=null;backState=null;pBack.style.display="none";if(c)map.flyTo({...c,duration:650})}
 const pCloseBtn=document.getElementById("pClose"),pCloseTxt=pCloseBtn.textContent,pCloseLbl=pCloseBtn.getAttribute("aria-label")||"Close";
 function setMini(on){if(isPhone())return phMini(on);panel.classList.toggle("mini",on);pCloseBtn.textContent=on?"+":"–";pCloseBtn.setAttribute("aria-label",on?"Expand":"Minimise");pCloseBtn.title=on?"Expand":"Minimise"}
 pCloseBtn.onclick=()=>{if(isPhone()){   // phones: ✕ always closes; a map mode (On demand, projects, vendors, heat map) switches off too
@@ -516,7 +516,7 @@ function drawPaths(ids,col){const f=[];let bb=null;ids.forEach(i=>R[i].d.forEach
 function showRoute(i,fromStop,veh,hint){focusRoutes=new Set([i]);drawVehicles();const keep=fromStop?ctx:null;rememberStop(fromStop);ctx=null;setSel(null);const r=R[i];drawPaths([i]);
   const tl=r.t==="tram"?"G:link light rail":r.t==="ferry"?"Ferry":r.t==="train"?"Train":"Bus";
   let di0=0;const hk=hint&&r.d.length>1?dirByHead(i,hint,backState&&backState.id):-1;if(veh){const k=vehDir(i,veh,hint);if(k>=0)di0=k;if(hk>=0&&k!==hk){di0=hk;veh=null}}else if(hk>=0)di0=hk;else if(backState&&r.d.length>1){const k=r.d.findIndex(d=>{const x=d.s.indexOf(backState.id);return x>=0&&x<d.s.length-1});if(k>=0)di0=k}
-  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
+  openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route`+(veh&&veh.fleet?` · <b>${r.t==="ferry"?"Vessel":"Fleet number"} ${esc(veh.fleet)}</b>`:""),`<div class="webrow"><button class="btn" id="fullTT">Full timetable</button><button class="btn" id="trkBtn" data-ri="${i}" title="Follow one ${r.t==="ferry"?"ferry":r.t==="tram"?"tram":"bus"} on this route live on the map">📍 Track live</button></div><div id="trkBox"></div>`+routeBody(i,di0),{star:{list:"routes",key:r.n},veh:veh?{ri:i,di:di0,trip:veh.trip}:null});
   rcState={key:r.n,i,di:di0,line:false};if(/^rail replacement bus$/i.test(r.l||"")&&typeof rbRouteBanner==="function"){pB.insertAdjacentHTML("afterbegin",rbRouteBanner(r.n));rbWireNotes();requestAnimationFrame(()=>{pB.scrollTop=0})}wireFullTT();tvKey=r.n;drawVariants(i,di0);applyTravel();applyVehStatus();insertAlerts([],[i]);wireDirs(i);routeArrows(i,di0);if(backState)pBack.style.display="block"}
 // on a train line, the route and direction that runs towards the tapped row's destination from the station the card was opened from
 function lineDirFor(nm,hint,sid){if(!hint||!sid||!ST[sid])return null;const all=lineRoutes[nm]||[];const base=x=>ST[x]?ST[x][0].toLowerCase().replace(/,.*$/,"").replace(/ (busway |bus )?station$/,"").trim():"";const b0=base(sid);
@@ -538,12 +538,12 @@ const LIVE={veh:[],vehAt:0,trips:null,tripsAt:0,alerts:[],alertsAt:0};
 async function getFeed(name){const r=await fetch(RELAY+"/"+name,{cache:"no-store"});if(!r.ok)throw new Error(name+" "+r.status);return decodeGTFSRT(await r.arrayBuffer())}
 function drawVehicles(){if(!map.getSource("veh"))return;const f=[];const now=Date.now()/1000;
   const liveOn=chipState.live==="on";
-  for(const v of LIVE.veh){if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
-    f.push({type:"Feature",properties:{trip:v.trip,c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
+  for(const v of LIVE.veh){if(TRK){if(v.trip!==TRK.trip)continue}else if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
+    f.push({type:"Feature",properties:{trip:v.trip,trk:TRK&&v.trip===TRK.trip?1:0,c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
   if(focusRoutes)f.sort((a,b)=>a.properties.dim-b.properties.dim).reverse();
   map.getSource("veh").setData(FC(f))}
 async function pollVehicles(force){if(!force&&document.hidden||!force&&(map.getLayoutProperty("veh-dot","visibility")==="none"&&!(panel.style.display!=="none"&&(view==="rt"||view==="favs"||vehFocus||ctx))))return;
-  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),trip:e.vp.trip.trip,dir:e.vp.trip.dir,stop:e.vp.stop,fleet:(e.vp.veh&&e.vp.veh.label)||"",start:e.vp.trip.start||"",lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles();if(view==="rt"&&rtState)renderRTLive();if(vehFocus)applyVehStatus();if(ctx&&ctx.rows&&ctx.id)applyLive(ctx.id)}catch(e){console.warn(e)}}
+  try{const d=await getFeed("vehicles");LIVE.veh=d.entity.filter(e=>e.vp&&e.vp.pos&&e.vp.trip).map(e=>({ri:riOfRoute(e.vp.trip.route),trip:e.vp.trip.trip,dir:e.vp.trip.dir,stop:e.vp.stop,fleet:(e.vp.veh&&e.vp.veh.label)||"",start:e.vp.trip.start||"",lat:e.vp.pos.lat,lon:e.vp.pos.lon,ts:e.vp.ts||d.header.ts})).filter(v=>v.ri>=0);LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles();if(view==="rt"&&rtState)renderRTLive();if(vehFocus)applyVehStatus();if(ctx&&ctx.rows&&ctx.id)applyLive(ctx.id);if(typeof TRK!=="undefined"&&TRK)trkFollow()}catch(e){console.warn(e)}}
 let vehFocus=null;
 const fleetOf=trip=>{const v=LIVE.byTrip&&LIVE.byTrip.get(trip);return v&&v.fleet?v.fleet:""};
 const fleetWord=ri=>{const t=R[ri]&&R[ri].t;return t==="train"?"Service":t==="tram"?"Tram":t==="ferry"?"Ferry":"Bus"};
@@ -1410,13 +1410,17 @@ async function mRoute(key){if(key in MC)return MC[key];const ix=await mIndex();i
 const mMin=s=>Math.round(s/60);
 const mSigned=s=>{const m=Math.round(s/60);return m===0?(Math.abs(s)<30?"on time":(s>0?"+":"−")+"<1 min"):(m>0?"+":"−")+Math.abs(m)+" min"};
 const mDate=d=>d?new Date(d+"T00:00:00+10:00").toLocaleDateString("en-AU",{day:"numeric",month:"short",timeZone:"Australia/Brisbane"}):"";
-const mBandName=b=>b==="am"?"AM window (6:30–9:30 am)":"PM window (3:30–6:30 pm)";
+const mBandName=b=>b==="all"?"AM and PM windows together":b==="am"?"AM window (6:30–9:30 am)":"PM window (3:30–6:30 pm)";
+// "All": the AM and PM figures for a route direction combined, each stretch weighted by its number of trips
+function mBoth(dd){if(!dd)return null;const A=dd.am,P=dd.pm;if(!A||!P)return A||P||null;const seg={};
+  for(const k of new Set([...Object.keys(A.seg),...Object.keys(P.seg)])){const a=A.seg[k],p=P.seg[k];if(!a||!p){seg[k]=a||p;continue}const n=a[2]+p[2];seg[k]=a.map((v,j)=>j===2?n:Math.round((v*a[2]+p[j]*p[2])/n))}
+  return {...A,seg,trips:(A.trips||0)+(P.trips||0)}}
 function mSince(ix){const m=ix&&ix.meta||{};return !m.from?"nothing recorded yet":m.from===m.to?`weekday ${mDate(m.from)}`:`weekdays ${mDate(m.from)} to ${mDate(m.to)}`}
 // route cards: the fourth column, measured minutes from the first stop
 async function applyMeasured(ol,key,best,dkey){const head=document.getElementById("tvHead");if(!head||!ol.isConnected)return;
   const band=mBand||mPeakNow();head.querySelectorAll("[data-mb]").forEach(b=>b.classList.toggle("on",b.dataset.mb===band));
   const lis=[...ol.querySelectorAll("li")];const data=await mRoute(key);if(!ol.isConnected)return;const ix=MI||{meta:{}};
-  const x=data&&data[dkey]&&data[dkey][band];const a0=best.t[3+best.idx[0]];let cum=0,approx=false,have=0;
+  const x=data&&data[dkey]&&(band==="all"?mBoth(data[dkey]):data[dkey][band]);const a0=best.t[3+best.idx[0]];let cum=0,approx=false,have=0;
   lis.forEach((li,n)=>{let el=li.querySelector(".tm");if(!el){el=document.createElement("span");el.className="tm";li.insertBefore(el,li.firstChild)}
     el.className="tm";el.title="";if(!x){el.textContent="—";return}
     if(n===0){el.textContent="Start";return}
@@ -1427,8 +1431,8 @@ async function applyMeasured(ol,key,best,dkey){const head=document.getElementByI
     el.title=`Measured in the ${mBandName(band)}: ${mMin(cum)} min from the first stop`+(tt!=null?` (timetabled ${mMin(tt)} min)`:"")+(sg?`, ${sg[2]} trip${sg[2]>1?"s":""} on this stretch`:"")+(approx?". ≈: a stretch before this stop has no recordings yet, so its timetabled time is used":"")});
   const note=document.getElementById("tvNote");if(note){let m=note.querySelector(".mnote");if(!m){m=document.createElement("span");m.className="mnote";note.appendChild(m)}
     m.textContent=x?` Measured: the median time from the first stop in the ${mBandName(band)}, ${mSince(ix)} (${x.trips} trips). Orange is 2 min or more slower than timetabled.`+(have<lis.length-1?" ≈ marks stops after a stretch with no recordings yet.":"")
-      :` Measured: ${ix.meta&&ix.meta.from?"not enough recordings yet for this route in the "+(band==="am"?"AM":"PM")+" peak.":"recordings start with the next weekday peak."}`}}
-function mHeadHTML(){return `<div class="tvh" id="tvHead" style="display:none"><span class="mbs">Measured <button data-mb="am">AM</button><button data-mb="pm">PM</button></span><span class="tm">Measured</span><span class="tv">From start</span><span class="tf">Here</span><span class="tc">Timetable</span></div>`}
+      :` Measured: ${ix.meta&&ix.meta.from?"not enough recordings yet for this route in "+(band==="all"?"the AM or PM windows":"the "+(band==="am"?"AM":"PM")+" window")+".":"recordings start with the next weekday peak."}`}}
+function mHeadHTML(){return `<div class="tvh" id="tvHead" style="display:none"><span class="mbs">Measured <button data-mb="all">All</button><button data-mb="am">AM</button><button data-mb="pm">PM</button></span><span class="tm">Measured</span><span class="tv">From start</span><span class="tf">Here</span><span class="tc">Timetable</span></div>`}
 function mWireHead(){const h=document.getElementById("tvHead");if(!h)return;h.querySelectorAll("[data-mb]").forEach(b=>b.onclick=e=>{e.stopPropagation();mBand=b.dataset.mb;applyTravel()})}
 
 // ---------- period and kind-of-day filters, shared by Real time average and the delay heat map
@@ -1747,6 +1751,34 @@ map.on("click",e=>{if(!rbOn||!rbSel||view!=="rbv")return;const box=[[e.point.x-7
   const d=document.createElement("div");d.innerHTML=`<div class="rbpt">Which route?</div>`+ns.map(n=>`<button class="rb rbr" data-pk="${esc(n)}" style="background:${RBC};color:#fff">${esc(n)}</button>`).join("");
   d.querySelectorAll("[data-pk]").forEach(b=>b.onclick=()=>rbOpenRoute(b.dataset.pk,cid));rbPop.setLngLat(e.lngLat).setDOMContent(d).addTo(map)});
 map.on("click",e=>{if(!rbOn||rbSel)return;const box=[[e.point.x-6,e.point.y-6],[e.point.x+6,e.point.y+6]];const f=map.queryRenderedFeatures(box,{layers:["rb-all"]});if(f.length)rbCard(f[0].properties.c,true)});
+// ---------- live tracking of one vehicle from a route card: clears the other map layers, shows the route with its stops
+// and just that vehicle, and follows it (drag the map to look around; Re-centre to follow again)
+let TRK=null,trkTimer=null,trkSnap=null;
+function trkLayers(on){if(on){if(trkSnap)return;trkSnap={};soloSnap=null;soloKey=null;GROUPS.forEach(([g])=>{trkSnap[g]=chipState[g];chipState[g]="off";setGroup(g,false);renderChip(g)})}
+  else if(trkSnap){Object.entries(trkSnap).forEach(([g,v])=>{const st=v==="only"?"on":v;chipState[g]=st;if(g==="live")syncVehVis();else setGroup(g,st!=="off");renderChip(g)});trkSnap=null}
+  renderAll();hint()}
+function trkStop(keepCard){if(!TRK)return;TRK=null;clearInterval(trkTimer);trkTimer=null;trkLayers(false);rtFocus=false;syncVehVis();const b=document.getElementById("trkBar");if(b&&keepCard)b.remove()}
+function trkVehs(i,di){return (LIVE.veh||[]).filter(v=>v.ri===i&&vehDir(i,v)===di)}
+const trkWord=i=>R[i].t==="ferry"?"ferry":R[i].t==="tram"?"tram":R[i].t==="train"?"train":"bus";
+function trkPick(i){const di=rcState&&rcState.i===i?rcState.di:0;const box=document.getElementById("trkBox");if(!box)return;
+  const go=()=>{const vs=trkVehs(i,di),w=trkWord(i),r=R[i];
+    if(!vs.length){box.innerHTML=`<div class="sub">No ${w}es${w==="bus"?"":""} on route ${esc(r.n)} are reporting their position in this direction right now. Try the other direction, or again in a minute.</div>`.replace("buses","buses").replace("ferryes","ferries").replace("trames","trams");return}
+    if(vs.length===1)return trkStart(i,vs[0]);
+    box.innerHTML=`<div class="grp">Which ${w}?</div>`+vs.map((v,k)=>{const ns=v.stop&&ST[stopKey(v.stop)];return `<button class="btn trkv" data-trk="${k}">${v.fleet?esc((w==="bus"?"Bus ":w==="ferry"?"Vessel ":"")+v.fleet):"Service "+(k+1)}${ns?` · next: ${esc(shortName(ns[0]))}`:""}</button>`}).join("");
+    box.querySelectorAll("[data-trk]").forEach(b=>b.onclick=()=>trkStart(i,vs[+b.dataset.trk]))};
+  if(!LIVE.vehAt||Date.now()-LIVE.vehAt>30000){box.innerHTML=`<div class="sub">Finding live positions…</div>`;pollVehicles(true).then(go)}else go()}
+function trkStart(i,v){const back=backState;trkStop();showRoute(i,false,v);if(back)setBack(back);TRK={trip:v.trip,ri:i,follow:true};rtFocus=true;trkLayers(true);syncVehVis();
+  map.easeTo({center:[v.lon,v.lat],zoom:Math.max(map.getZoom(),14.5),duration:700});trkBar();clearInterval(trkTimer);trkTimer=setInterval(()=>pollVehicles(true),10000)}
+function trkBar(){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);let b=document.getElementById("trkBar");
+  if(!b){b=document.createElement("div");b.id="trkBar";b.className="trk";pB.insertAdjacentElement("afterbegin",b)}
+  const w=trkWord(TRK.ri);const ns=v&&v.stop&&ST[stopKey(v.stop)];
+  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkEnd">Stop</button>`
+    :`<div class="trkt"><b>This ${w} has stopped reporting its position</b><span>It may have finished its trip.</span></div><button class="btn" id="trkEnd">Stop</button>`;
+  const c=document.getElementById("trkCtr");if(c)c.onclick=()=>{TRK.follow=true;trkFollow(true)};document.getElementById("trkEnd").onclick=()=>trkStop(true)}
+function trkFollow(now){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);if(v&&TRK.follow)map.easeTo({center:[v.lon,v.lat],duration:now?600:1200});trkBar()}
+map.on("dragstart",()=>{if(TRK&&TRK.follow){TRK.follow=false;trkBar()}});
+// the button lives on every route card (also after switching direction, which redraws the card)
+pB.addEventListener("click",e=>{const b=e.target.closest("#trkBtn");if(!b)return;e.stopPropagation();trkPick(+b.dataset.ri)},true);
 document.getElementById("cnBtn").onclick=()=>showConnections();
 // ---------- status of saved stops / routes (orange = alert, red = cancelled trip still to come)
 const CX={routes:{},stops:{}};
@@ -1917,7 +1949,7 @@ pMinBtn.onclick=e=>{e.stopPropagation();cardMini(!panel.classList.contains("mini
 (()=>{let t=null;const fix=()=>{clearTimeout(t);t=setTimeout(()=>{if(window.scrollY||window.scrollX||document.documentElement.scrollTop||document.body.scrollTop){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0}map.resize()},120)};
   if(window.visualViewport){visualViewport.addEventListener("resize",fix);visualViewport.addEventListener("scroll",fix)}
   addEventListener("orientationchange",fix);document.addEventListener("focusout",e=>{if(e.target.matches&&e.target.matches("input,textarea,select"))fix()});addEventListener("pageshow",fix)})();
-window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};   // for tests
+window.__ready=true;window.__map=map;window.__openStop=openStop;window.__setAlerts=l=>{LIVE.alerts=l;updateAlertBtn();pjAlertsChanged()};window.__setVeh=l=>{LIVE.veh=l.map(v=>{const i=nameIdx[v.r];const d=R[i].d[v.di||0];const sid=d.s[v.k||3],st=ST[sid];return {ri:i,trip:v.trip,dir:v.di||0,stop:sid,fleet:v.fleet||"",start:"",lat:st[1]-0.001,lon:st[2],ts:Date.now()/1000}});LIVE.vehAt=Date.now();LIVE.byTrip=new Map(LIVE.veh.map(v=>[v.trip,v]));drawVehicles()};   // for tests
 })().catch(err=>{console.error(err);const l=document.getElementById("loading");if(l)l.textContent="The map could not load. Please refresh the page.";});
 
 // ---------- "More" menu (School routes, On demand, future extras)
