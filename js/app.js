@@ -259,7 +259,9 @@ function upstreamVeh(b){const tr=b.closest(".tr[data-k]");if(!tr||!ctx||!ctx.row
   return best?best.v:null}
 const rowHead=b=>{const tr=b.closest(".tr[data-k]");const row=tr&&ctx&&ctx.rows&&ctx.rows[+tr.dataset.k];return row?cleanHead(TT.cal.hs[row.hi]||""):null};
 async function rowVehFor(b){let v=rowVeh(b);if(v)return v;const tr=b.closest(".tr");if(tr&&tr.querySelector("[data-trip]")||!LIVE.vehAt||Date.now()-LIVE.vehAt>15000){await pollVehicles(true);v=rowVeh(b)}return v||upstreamVeh(b)}
-function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=>openStop(a.dataset.s2,true));pB.querySelectorAll("[data-var]").forEach(a=>a.onclick=e=>{e.preventDefault();const [i,di,k]=a.dataset.var.split(",").map(Number);showVariant(R[i].n,di,k)});pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b),rowHead(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b),rowHead(b)));
+function wire(){pB.querySelectorAll(".varst [data-s2]").forEach(a=>a.onclick=()=>openStop(a.dataset.s2,true));pB.querySelectorAll("[data-var]").forEach(a=>a.onclick=e=>{e.preventDefault();const [i,di,k]=a.dataset.var.split(",").map(Number);
+    // ‹ from the variant goes back to the route card it was opened from
+    const b=rcState&&rcState.vi==null?{kind:"rcard",rs:{...rcState},prev:backState,cam:{center:map.getCenter(),zoom:map.getZoom()}}:null;showVariant(R[i].n,di,k);if(b)setBack(b)});pB.querySelectorAll("[data-r]").forEach(b=>b.onclick=async()=>showRoute(+b.dataset.r,true,await rowVehFor(b),rowHead(b)));pB.querySelectorAll("[data-line]").forEach(b=>b.onclick=async()=>showLine(b.dataset.line,true,await rowVehFor(b),rowHead(b)));
   pB.querySelectorAll("[data-near]").forEach(el=>el.onclick=()=>openStop(el.dataset.near,true));pB.querySelectorAll("[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true))}
 function setSel(id){const s=id&&ST[id];map.getSource("sel").setData(FC(s?[{type:"Feature",properties:{},geometry:{type:"Point",coordinates:[s[2],s[1]]}}]:[]))}
 function clearHL(){webLegs=[];map.getSource("hlvar").setData(FC([]));map.getSource("hl").setData(FC([]));map.getSource("arrows").setData(FC([]));map.getSource("hlstops").setData(FC([]));map.getSource("ends").setData(FC([]))}
@@ -409,10 +411,10 @@ async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const
   map.getSource("hlstops").setData(FC(v.x.filter(id=>ST[id]).map(id=>({type:"Feature",properties:{c:r.c,id},geometry:{type:"Point",coordinates:[ST[id][2],ST[id][1]]}}))));
   let bb=null;vp.forEach(([x,y])=>{bb=bb?[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)]:[x,y,x,y]});
   if(bb)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:{top:170,bottom:60,left:innerWidth>640?560:30,right:40},duration:700,maxZoom:14});
-  const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;const tl=r.t==="tram"?"G:link":r.t==="ferry"?"Ferry":"Bus";
-  const h=`<div class="odhow">The dashed line shows a <b>variant</b> of route ${esc(r.n)}: some trips${(v.h||d.h)?" towards "+esc(v.h||d.h):""} leave the main route to serve ${v.x.length} extra stop${v.x.length>1?"s":""}${pct!=null?`, about ${pct}% of trips in this direction`:""}. Other trips skip these stops, so check the times below.</div>
+  const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;const pctT=pct==null?"":pct<1?"under 1% of trips in this direction":`about ${pct}% of trips in this direction`;const tl=r.t==="tram"?"G:link":r.t==="ferry"?"Ferry":"Bus";
+  const h=`<div class="odhow">The dashed line shows a <b>variant</b> of route ${esc(r.n)}: some trips${(v.h||d.h)?" towards "+esc(v.h||d.h):""} leave the main route to serve ${v.x.length} extra stop${v.x.length>1?"s":""}${pctT?", "+pctT:""}. Other trips skip these stops, so check the times below.</div>
     <div class="webrow"><button class="btn" id="fullTT">Full timetable</button><button class="btn" id="mainRt">Main route</button></div>
-    <div class="grp">Today at ${esc(ST[v.x[0]]?ST[v.x[0]][0]:"the first extra stop")}</div><div id="varTimes" class="odhow">Loading…</div>
+    <div class="grp">When these trips run</div><div id="varWhen" class="odhow">Loading…</div><div class="grp">Today at ${esc(ST[v.x[0]]?ST[v.x[0]][0]:"the first extra stop")}</div><div id="varTimes" class="odhow">Loading…</div>
     <div class="grp">Extra stops on this variant</div><ol class="stops" style="--rc:${r.c}">${v.x.map(id=>ST[id]?`<li data-s="${id}">${esc(ST[id][0])}${ST[id][4]?`<span class="s2">${esc(ST[id][4])}</span>`:""}</li>`:"").join("")}</ol>`;
   openPanel(`${r.t==="tram"?"G:link":r.n} — ${r.l}`,`${tl} route · variant (some trips only)`,h,{star:{list:"routes",key:r.n}});wire();
   pB.querySelectorAll("ol.stops li[data-s]").forEach(li=>li.onclick=()=>openStop(li.dataset.s,true));
@@ -424,6 +426,15 @@ async function showVariant(rn,di,vi){const i=nameIdx[rn];if(i==null)return;const
       data[k].t.forEach(t=>{if(t[3+j]>=0&&t[1].some(si=>svcOn(si,now)))times.push(t[2]+t[3+j])})}
     times=[...new Set(times)].sort((a,b)=>a-b);const up=times.filter(m=>m>=now.min);
     if(!box.isConnected)return;
+    // the pattern over the coming weeks (as far as the timetable goes): days, times, and until when
+    {const wb=document.getElementById("varWhen");if(wb){const dow=new Set(),tms=new Map(),dates=[];let wk=0;
+      for(let k=0;k<70;k++){const dd=shiftDay(now.ymd,now.dow,k);let any=false;
+        for(const kk of Object.keys(data)){const j=data[kk].o.indexOf(v.x[0]);if(j<0)continue;data[kk].t.forEach(t=>{if(t[3+j]>=0&&t[1].some(si=>svcOn(si,dd))){any=true;const m=t[2]+t[3+j];tms.set(m,(tms.get(m)||0)+1);if(k<7)wk++}})}
+        if(any){dow.add(dd.dow);dates.push(dd.ymd)}}
+      const DN=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],ds=[...dow].sort();const dl=ds.length===7?"every day":ds.join()==="0,1,2,3,4"?"weekdays":ds.join()==="5,6"?"weekends":ds.map(x=>DN[x]).join(", ");
+      const fd=y=>new Date(Date.UTC(+y.slice(0,4),+y.slice(4,6)-1,+y.slice(6,8))).toLocaleDateString("en-AU",{weekday:"short",day:"numeric",month:"short",timeZone:"UTC"});
+      const T=[...tms.keys()].sort((a,b)=>a-b),last=dates[dates.length-1],horizon=shiftDay(now.ymd,now.dow,62).ymd;
+      wb.innerHTML=!dates.length?"No trips in the timetable for the next ten weeks.":`${T.length<=6?"At "+T.map(clock).join(", "):T.length+" times a day, from "+clock(T[0])+" to "+clock(T[T.length-1])}, ${dl}${dates[0]!==now.ymd?", from "+fd(dates[0]):""}${last<horizon?", until "+fd(last):""}${wk?` (${wk} trip${wk>1?"s":""} in the next 7 days)`:""}.`}}
     box.innerHTML=times.length?`${times.length} trip${times.length>1?"s":""} stop here today${up.length?`; next: ${up.slice(0,8).map(clock).join(", ")}${up.length>8?" …":""}`:"; none left today"}.`:"No trips stop here today. Open the full timetable and pick another day.";
   }catch(e){box.textContent="Timetable unavailable."}}
 // live vehicle progress along the stop list: Departed / Arriving (within 500 m) / Not arrived
@@ -492,7 +503,7 @@ async function applyTravel(){const ol=pB.querySelector("ol.stops[data-ri]");if(!
   const note=document.getElementById("tvNote");if(note)note.textContent=(best.own?`Scheduled times for this service (departs ${clock(best.dep)}) and minutes from its first stop.`:`Scheduled times and minutes from the first stop, based on ${best.today?(best.dep>=now.min?"the next trip, at ":"today's "):"the "}${clock(best.dep)} trip${best.today?"":" (not running today)"}. Times vary through the day.`)+(fromNm?` The blue column counts minutes from ${fromNm}.`:"");applyMeasured(ol,key,best,best.k)}
 function variantHTML(i,di){const d=R[i].d[di];if(!d||!d.v||!d.v.length)return "";
   return `<div class="grp">Some trips also run via</div>`+d.v.map((v,k)=>{const pct=d.nt?Math.round(100*v.n/(v.n+d.nt)):null;
-    return `<div class="varbox"><div class="varh"><a href="#" data-var="${i},${di},${k}">${esc(v.x.length)} extra stop${v.x.length>1?"s":""}${v.h&&v.h!==d.h?" · to "+esc(v.h):""}</a>${pct!=null?`<span class="varpct">about ${pct}% of trips</span>`:""}</div>
+    return `<div class="varbox"><div class="varh"><a href="#" data-var="${i},${di},${k}">${esc(v.x.length)} extra stop${v.x.length>1?"s":""}${v.h&&v.h!==d.h?" · to "+esc(v.h):""}</a>${pct!=null?`<span class="varpct">${pct<1?"under 1% of trips":`about ${pct}% of trips`}</span>`:""}</div>
       <div class="varst">${v.x.slice(0,6).map(id=>ST[id]?`<a data-s2="${id}">${esc(ST[id][0])}</a>`:"").join(" · ")}${v.x.length>6?` · and ${v.x.length-6} more`:""}</div></div>`}).join("")}
 function drawVariants(i,di){const d=R[i].d[di];map.getSource("hlvar").setData(FC(d&&d.v?d.v.map(v=>({type:"Feature",properties:{c:R[i].c},geometry:{type:"LineString",coordinates:dec(v.p)}})):[]))}
 function routeBody(i,di){const r=R[i];const dirs=r.d.length>1?`<div class="dirs">${r.d.map((d,k)=>`<button data-d="${k}" class="${k===di?"on":""}">To ${esc(d.h||("direction "+(k+1)))}</button>`).join("")}</div>`:(r.d[0]&&r.d[0].h?`<div class="sub" style="margin-bottom:8px">To ${esc(r.d[0].h)}</div>`:"");
