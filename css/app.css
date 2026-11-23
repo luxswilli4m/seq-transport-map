@@ -580,3 +580,4 @@ body:not(.light) .trk{background:#14532d55;color:#dcfce7;border-color:#166534}
 .trkdot{width:11px;height:11px;border-radius:50%;background:#16a34a;flex:none;animation:trkp 1.6s infinite}
 @keyframes trkp{0%{box-shadow:0 0 0 0 #16a34a88}70%{box-shadow:0 0 0 9px #16a34a00}100%{box-shadow:0 0 0 0 #16a34a00}}
 .trkv{margin:3px 6px 3px 0}#trkBox:empty{display:none}#trkBox{margin:2px 0 8px}
+.trko{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}.trko>span{width:100%;font-size:12px;font-weight:600;opacity:.8}.trko .trkv{margin:0;padding:6px 10px;font-size:13px}

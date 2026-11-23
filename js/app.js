@@ -538,7 +538,7 @@ const LIVE={veh:[],vehAt:0,trips:null,tripsAt:0,alerts:[],alertsAt:0};
 async function getFeed(name){const r=await fetch(RELAY+"/"+name,{cache:"no-store"});if(!r.ok)throw new Error(name+" "+r.status);return decodeGTFSRT(await r.arrayBuffer())}
 function drawVehicles(){if(!map.getSource("veh"))return;const f=[];const now=Date.now()/1000;
   const liveOn=chipState.live==="on";
-  for(const v of LIVE.veh){if(TRK){if(v.trip!==TRK.trip)continue}else if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
+  for(const v of LIVE.veh){if(TRK){if(v.trip!==TRK.trip&&!(v.ri===TRK.ri&&vehDir(v.ri,v)===TRK.di))continue}else if(!liveOn&&!(rtFocus&&focusRoutes&&focusRoutes.has(v.ri)))continue;const r=R[v.ri];const dim=TRK?v.trip!==TRK.trip:!!(focusRoutes&&!focusRoutes.has(v.ri));const lab=r.t==="train"?(lineOf[v.ri]||["T"])[0]:r.t==="tram"?"G":r.n;
     f.push({type:"Feature",properties:{trip:v.trip,trk:TRK&&v.trip===TRK.trip?1:0,c:r.c,tc:r.t==="train"&&/T2|T5/.test(lab)?"#111":(r.tc||"#fff"),n:lab,ri:v.ri,dim,tip:`${r.t==="train"?lab+" "+TNAME[lab]:r.t==="tram"?"G:link":r.n+" "+r.l} · updated ${Math.max(0,Math.round(now-v.ts))} s ago`},geometry:{type:"Point",coordinates:[v.lon,v.lat]}})}
   if(focusRoutes)f.sort((a,b)=>a.properties.dim-b.properties.dim).reverse();
   map.getSource("veh").setData(FC(f))}
@@ -1767,13 +1767,16 @@ function trkPick(i){const di=rcState&&rcState.i===i?rcState.di:0;const box=docum
     box.innerHTML=`<div class="grp">Which ${w}?</div>`+vs.map((v,k)=>{const ns=v.stop&&ST[stopKey(v.stop)];return `<button class="btn trkv" data-trk="${k}">${v.fleet?esc((w==="bus"?"Bus ":w==="ferry"?"Vessel ":"")+v.fleet):"Service "+(k+1)}${ns?` · next: ${esc(shortName(ns[0]))}`:""}</button>`}).join("");
     box.querySelectorAll("[data-trk]").forEach(b=>b.onclick=()=>trkStart(i,vs[+b.dataset.trk]))};
   if(!LIVE.vehAt||Date.now()-LIVE.vehAt>30000){box.innerHTML=`<div class="sub">Finding live positions…</div>`;pollVehicles(true).then(go)}else go()}
-function trkStart(i,v){const back=backState;trkStop();showRoute(i,false,v);if(back)setBack(back);TRK={trip:v.trip,ri:i,follow:true};rtFocus=true;trkLayers(true);syncVehVis();
+function trkStart(i,v){const back=backState;trkStop();showRoute(i,false,v);if(back)setBack(back);TRK={trip:v.trip,ri:i,di:vehDir(i,v),follow:true};rtFocus=true;trkLayers(true);syncVehVis();
   map.easeTo({center:[v.lon,v.lat],zoom:Math.max(map.getZoom(),14.5),duration:700});trkBar();clearInterval(trkTimer);trkTimer=setInterval(()=>pollVehicles(true),10000)}
 function trkBar(){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);let b=document.getElementById("trkBar");
   if(!b){b=document.createElement("div");b.id="trkBar";b.className="trk";pB.insertAdjacentElement("afterbegin",b)}
   const w=trkWord(TRK.ri);const ns=v&&v.stop&&ST[stopKey(v.stop)];
-  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkEnd">Stop</button>`
-    :`<div class="trkt"><b>This ${w} has stopped reporting its position</b><span>It may have finished its trip.</span></div><button class="btn" id="trkEnd">Stop</button>`;
+  const others=TRK?trkVehs(TRK.ri,TRK.di).filter(x=>x.trip!==TRK.trip):[];
+  const chips=others.length?`<div class="trko"><span>Other ${w==="bus"?"buses":w==="ferry"?"ferries":w+"s"} on this route, this direction:</span>${others.map(x=>{const n=x.stop&&ST[stopKey(x.stop)];return `<button class="btn trkv" data-trks="${esc(x.trip)}">${x.fleet?esc(x.fleet):"Service"}${n?` · ${esc(shortName(n[0]))}`:""}</button>`}).join("")}</div>`:"";
+  b.innerHTML=v?`<span class="trkdot"></span><div class="trkt"><b>Tracking ${w}${v.fleet?" "+esc(v.fleet):""} live</b><span>${ns?"Next stop: "+esc(ns[0])+" · ":""}position updated ${Math.max(0,Math.round(Date.now()/1000-v.ts))} s ago</span></div>${TRK.follow?"":`<button class="btn" id="trkCtr">Re-centre</button>`}<button class="btn" id="trkEnd">Stop</button>${chips}`
+    :`<div class="trkt"><b>This ${w} has stopped reporting its position</b><span>It may have finished its trip.</span></div><button class="btn" id="trkEnd">Stop</button>${chips}`;
+  b.querySelectorAll("[data-trks]").forEach(x=>x.onclick=()=>{const nv=LIVE.byTrip&&LIVE.byTrip.get(x.dataset.trks);if(nv)trkStart(TRK.ri,nv)});
   const c=document.getElementById("trkCtr");if(c)c.onclick=()=>{TRK.follow=true;trkFollow(true)};document.getElementById("trkEnd").onclick=()=>trkStop(true)}
 function trkFollow(now){if(!TRK)return;const v=LIVE.byTrip&&LIVE.byTrip.get(TRK.trip);if(v&&TRK.follow)map.easeTo({center:[v.lon,v.lat],duration:now?600:1200});trkBar()}
 map.on("dragstart",()=>{if(TRK&&TRK.follow){TRK.follow=false;trkBar()}});
@@ -1816,6 +1819,7 @@ const CLICK=["veh-dot","busway-pt","train-pt","busstn-pt","ferry-pt","tram-pt","
 map.on("click",e=>{const box=[[e.point.x-7,e.point.y-7],[e.point.x+7,e.point.y+7]];
   const f=map.queryRenderedFeatures(box,{layers:CLICK.filter(id=>map.getLayer(id)&&map.getLayoutProperty(id,"visibility")!=="none")});if(!f.length)return;
   f.sort((a,b)=>CLICK.indexOf(a.layer.id)-CLICK.indexOf(b.layer.id));const top=f[0];
+  if(top.layer.id==="veh-dot"&&TRK&&top.properties.trip!==TRK.trip){const v=LIVE.byTrip&&LIVE.byTrip.get(top.properties.trip);if(v){trkStart(TRK.ri,v);return}}
   if(top.layer.id==="veh-dot"){const ri=+top.properties.ri;if(R[ri]){webCam={center:map.getCenter(),zoom:map.getZoom()};const keep=webCam;const v=LIVE.byTrip&&LIVE.byTrip.get(top.properties.trip);if(R[ri].t==="train")showLine((lineOf[ri]||["T1"])[0],false,v);else showRoute(ri,false,v);webCam=keep}return}
   if(["hl-line","ends","ends-dot"].includes(top.layer.id)){const ri=+top.properties.ri;if(ctx&&ctx.web)showRoute(ri,true);return}
   if(top.layer.id==="dots"){const p=top.properties;if(p.r){webCam={center:map.getCenter(),zoom:map.getZoom()};const keep=webCam;showVariant(p.r,+p.d,+p.v);webCam=keep}return}
