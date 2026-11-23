@@ -60,7 +60,7 @@ const map = new maplibregl.Map({
   center:[153.03,-27.48],zoom:9.3,minZoom:7.5,maxZoom:18,maxBounds:[[151.4,-28.9],[154.3,-25.6]],attributionControl:{compact:true},dragRotate:false,pitchWithRotate:false
 });
 map.touchZoomRotate.disableRotation();
-map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
+// no + / − zoom buttons: pinch, scroll or double-tap to zoom
 await new Promise(r=>map.on("load",r));
 document.getElementById("loading").style.display="none";
 const attribEl=document.querySelector(".maplibregl-ctrl-attrib");if(attribEl&&innerWidth<=640){attribEl.classList.remove("maplibregl-compact-show");attribEl.removeAttribute("open")}
