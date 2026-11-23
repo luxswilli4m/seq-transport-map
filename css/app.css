@@ -604,3 +604,6 @@ html.see #panel,html.see .moremenu,html.see .alertbtn,html.see .roundbtn,html.se
   body:not(.phone) #chips{flex-wrap:wrap;overflow:visible;row-gap:6px}
 }
 #infoBtn[hidden]{display:none!important}
+.mls{display:inline-flex;gap:3px;margin:0 8px 0 auto;flex:none}.mls:empty{display:none}.mls+.ty{margin-left:0}
+.ml{font-style:normal;font-size:11px;font-weight:800;line-height:18px;width:18px;text-align:center;border-radius:4px;color:#fff}
+.ml-B{background:#E463A4}.ml-F{background:#0e7490}.ml-L{background:#e5b700;color:#111}.ml-T{background:#1e40af}

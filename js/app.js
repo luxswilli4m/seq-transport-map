@@ -1183,7 +1183,7 @@ async function cnOnline(q){const u="https://nominatim.openstreetmap.org/search?f
   const ql=q.toLowerCase();const named=r.filter(x=>x.sb&&ql.includes(x.sb));if(named.length)r=named;
   return r.map(x=>({g:"Found online (OpenStreetMap)",t:x.t,sub:x.sub,ty:"Online",ep:{ll:x.ll,label:x.t+(x.sb?", "+x.sub.split(", ").slice(-2,-1)[0]:""),sub:x.sub}}))}
 function placePicker(inpId,resId,onPick,onClear){const inp=document.getElementById(inpId),res=document.getElementById(resId);let items=[],act=-1,seq=0,chosen=inp.value;
-  const row=(e,k)=>`<div class="r" data-k="${k}"><span class="rt"><span>${esc(e.t)}</span>${e.sub?`<span class="rs">${esc(e.sub)}</span>`:""}</span><span class="ty">${esc(e.ty)}</span></div>`;
+  const row=(e,k)=>`<div class="r" data-k="${k}"><span class="rt"><span>${esc(e.t)}</span>${e.sub?`<span class="rs">${esc(e.sub)}</span>`:""}</span>${typeof e.ep==="string"&&ST[e.ep]?`<span class="mls">${modeLetters(e.ep)}</span>`:""}<span class="ty">${esc(e.ty)}</span></div>`;
   const draw=(list,extra)=>{items=list;act=-1;let g="";res.innerHTML=list.map((e,k)=>(e.g!==g?`<div class="rg">${esc(g=e.g)}</div>`:"")+row(e,k)).join("")+(extra||"");res.style.display=res.innerHTML?"block":"none";
     res.querySelectorAll(".r").forEach(d=>d.onclick=()=>choose(items[+d.dataset.k]));const w=res.querySelector(".rweb");if(w)w.onclick=online};
   async function online(){const q=inp.value.trim(),my=++seq;res.innerHTML=`<div class="empty">Searching OpenStreetMap…</div>`;const r=await cnOnline(q);if(my!==seq)return;
@@ -1881,6 +1881,12 @@ function norm(s){return String(s).toLowerCase().replace(/\bstation\b/g,"").repla
 const routeIndex=[];
 R.forEach((r,i)=>{if(r.t==="train")return;const lab=r.t==="tram"?"G:link":r.n;routeIndex.push({k:"r",i,key:norm(lab+" "+r.l),n:lab.toLowerCase(),html:`${badge(i,lab)}<span>${esc(r.l)}</span>`,ty:r.t})});
 LINE_ORDER.filter(nm=>lineRoutes[nm]).forEach(nm=>{const dests=[...new Set(lineRoutes[nm].map(i=>R[i].l))].join(" ");routeIndex.push({k:"l",nm,key:norm(nm+" "+TNAME[nm]+" line train "+dests),n:nm.toLowerCase(),html:`${lineBadge(nm)}<span>${esc(TNAME[nm])}</span>`,ty:"train"})});
+// letters for the modes at a station and the stops linked to it: B bus, F ferry, L light rail (G:link), T train
+const MODE_L={bus:"B",ferry:"F",tram:"L",train:"T"},modeLC={};
+function modeLetters(id){if(id in modeLC)return modeLC[id];const s=ST[id];if(!s)return "";const set=new Set();
+  const add=x=>{const o=ST[x];if(!o)return;(o[5]||[]).forEach(ri=>{const t=R[ri]&&R[ri].t;if(MODE_L[t])set.add(t)})};
+  add(id);(KIDS[id]||[]).forEach(add);if(s[3]!=="bus")Object.values(linkedStops(id)).flat().forEach(x=>{add(x);(KIDS[x]||[]).forEach(add)});
+  return modeLC[id]=["bus","ferry","tram","train"].filter(m=>set.has(m)).map(m=>`<i class="ml ml-${MODE_L[m]}" title="${m==="tram"?"Light rail (G:link)":m.charAt(0).toUpperCase()+m.slice(1)}">${MODE_L[m]}</i>`).join("")}
 const placeIndex=[];
 for(const [id,s] of Object.entries(ST))placeIndex.push({k:"s",id,key:norm(s[0]),rank:{train:0,busway:0,busstn:1,ferry:2,tram:2,bus:5}[s[3]],html:`<span>${esc(s[0])}</span>`,ty:KIND[s[3]]+(s[4]?" · "+s[4]:"")});
 DATA.suburbs.forEach(([n,la,lo])=>placeIndex.push({k:"sub",c:[lo,la],key:norm(n),rank:-1,html:`<span><b>${esc(n)}</b></span>`,ty:"Suburb"}));
@@ -1891,7 +1897,7 @@ function searchPlaces(q){q=norm(q);if(q.length<2)return[];const out=[];const w=q
   const seenK=new Set();return out.sort((a,b)=>a[0]-b[0]).map(x=>x[1]).filter(e=>{const k=e.key+e.ty;if(seenK.has(k))return false;seenK.add(k);return true}).slice(0,40)}
 function setupSearch(inpId,resId,fn,pick){const inp=document.getElementById(inpId),res=document.getElementById(resId),clr=document.querySelector(`.clr[data-for="${inpId}"]`);let items=[],act=-1;
   function render(){const q=inp.value;clr.style.display=q?"block":"none";items=fn(q);act=-1;if(!q){res.style.display="none";return}
-    res.innerHTML=items.length?items.map((e,k)=>`<div class="r" data-k="${k}">${e.html}<span class="ty">${esc(e.ty)}</span></div>`).join(""):`<div class="empty">No matches</div>`;res.style.display="block";
+    res.innerHTML=items.length?items.map((e,k)=>`<div class="r" data-k="${k}">${e.html}${e.k==="s"?`<span class="mls">${modeLetters(e.id)}</span>`:""}<span class="ty">${esc(e.ty)}</span></div>`).join(""):`<div class="empty">No matches</div>`;res.style.display="block";
     res.querySelectorAll(".r").forEach(d=>d.onclick=()=>choose(items[+d.dataset.k]))}
   function choose(e){if(!e)return;res.style.display="none";inp.blur();pick(e)}
   inp.addEventListener("input",render);inp.addEventListener("focus",()=>{if(inp.value)render()});
